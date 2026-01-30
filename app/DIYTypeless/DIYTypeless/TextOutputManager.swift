@@ -50,7 +50,7 @@ final class TextOutputManager {
         let allowedRoles = [
             kAXTextFieldRole as String,
             kAXTextAreaRole as String,
-            kAXSearchFieldRole as String,
+            "AXSearchField",
             kAXComboBoxRole as String
         ]
 
@@ -61,7 +61,7 @@ final class TextOutputManager {
         var editableValue: CFTypeRef?
         let editableResult = AXUIElementCopyAttributeValue(
             element,
-            kAXEditableAttribute as CFString,
+            "AXEditable" as CFString,
             &editableValue
         )
         if editableResult == .success, let isEditable = editableValue as? Bool {

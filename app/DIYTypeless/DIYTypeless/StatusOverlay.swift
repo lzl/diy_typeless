@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 final class StatusOverlayViewModel: ObservableObject {
     @Published var status: RecordingStatus = .idle
