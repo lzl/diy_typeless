@@ -1,0 +1,4 @@
+ [bindings.swift]
+ module_name = "DIYTypelessCore"
+ cdylib_name = "diy_typeless_core"
+ 
