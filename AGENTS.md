@@ -13,3 +13,47 @@ Required workflow:
 5. If the app changes break the CLI or the core logic, fix the core and CLI first.
 
 If there is uncertainty, extend the CLI with additional flags or diagnostics so the agent can re-run and confirm fixes.
+
+## Xcode Build & Debug (Command Line)
+
+When working with the macOS app, use `xcodebuild` command line tool instead of opening the Xcode GUI. This enables automated error collection and debugging.
+
+### Project Location
+
+The Xcode project is located at:
+```
+/Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless/DIYTypeless.xcodeproj
+```
+
+### Build Commands
+
+**Debug build:**
+```bash
+cd /Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless
+xcodebuild -scheme DIYTypeless -configuration Debug build 2>&1
+```
+
+**Release archive (arm64 only):**
+```bash
+cd /Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless
+xcodebuild archive -scheme DIYTypeless -archivePath ~/Downloads/DIYTypeless.xcarchive ARCHS=arm64 ONLY_ACTIVE_ARCH=NO 2>&1
+```
+
+### Error Handling Workflow
+
+1. Run the build command and capture output
+2. If build fails, parse the error output (look for `error:` lines)
+3. Common issues:
+   - **Architecture mismatch**: Rust library only supports arm64. Use `ARCHS=arm64` flag.
+   - **Missing entitlements**: Ensure Release config has `CODE_SIGN_ENTITLEMENTS` set.
+   - **Library not found**: Run `cargo build -p diy_typeless_core --release` first.
+4. Fix issues and re-run build to verify
+
+### Creating DMG for Distribution
+
+Use the provided script:
+```bash
+./scripts/build-dmg.sh
+```
+
+This builds the app, creates a DMG, and outputs to `~/Downloads/DIYTypeless.dmg`.
