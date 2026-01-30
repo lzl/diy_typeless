@@ -19,11 +19,12 @@
  - Groq API key
  - Gemini API key
  
- ## Repository Structure
- 
- - `core/` — Rust core library (audio capture + Groq + Gemini)
- - `cli/` — CLI for end-to-end testing
- - `app/DIYTypeless/` — Swift UI layer + UniFFI bindings
+## Repository Structure
+
+- `core/` — Rust core library (audio capture + Groq + Gemini)
+- `cli/` — CLI for end-to-end testing
+- `app/DIYTypeless/` — Swift UI layer + UniFFI bindings
+- `scripts/` — Setup and utility scripts
  
  ## Setup
  
@@ -39,14 +40,14 @@
  cargo build -p diy_typeless_core --release
  ```
  
- 3. Generate Swift bindings:
- 
- ```bash
- uniffi-bindgen generate \
-   --library target/release/libdiy_typeless_core.dylib \
-   --language swift \
-   --out-dir app/DIYTypeless/RustCore
- ```
+3. Generate Swift bindings:
+
+```bash
+uniffi-bindgen generate \
+  --library target/release/libdiy_typeless_core.dylib \
+  --language swift \
+  --out-dir app/DIYTypeless/DIYTypeless
+```
  
  ## CLI Usage (Closing the Loop)
  
@@ -73,32 +74,75 @@
  echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
  ```
  
- ## macOS App Setup
+## macOS App Setup
+
+The Swift sources live in `app/DIYTypeless/DIYTypeless/`. A separate Xcode project (`diy_typeless_mac`) uses these sources via symlink.
+
+### Linking Xcode Project to Source (Recommended)
+
+Run the setup script to create a symlink so the Xcode project uses sources from this repository:
+
+```bash
+./scripts/setup-xcode-symlink.sh
+```
+
+This creates a symlink so editing files in either location updates both projects.
+
+### Manual Xcode Project Setup
+
+If creating a new Xcode project:
+
+1. Add all Swift files from `app/DIYTypeless/DIYTypeless` to your target.
+2. Include the UniFFI-generated files (`DIYTypelessCore.swift`, `DIYTypelessCoreFFI.h`, `DIYTypelessCoreFFI.modulemap`).
+3. Link the Rust dynamic library:
+   - Add `target/release/libdiy_typeless_core.dylib` to **Link Binary With Libraries**.
+   - Copy the dylib into the app bundle **Frameworks** folder via a Copy Files build phase.
+4. Set up the bridging header pointing to `DIYTypelessCoreFFI.h`.
+5. Add the entitlements file `DIYTypeless.entitlements` to the target.
+6. Ensure `Info.plist` includes `NSMicrophoneUsageDescription`.
+7. Disable App Sandbox in Signing & Capabilities (required for Accessibility).
+8. Enable Hardened Runtime.
  
- This repository provides the Swift sources but not a fully generated Xcode project file. Create a new macOS App project in Xcode and point it at `app/DIYTypeless/DIYTypeless` for sources.
- 
- In Xcode:
- 
- 1. Add all Swift files from `app/DIYTypeless/DIYTypeless` to your target.
- 2. Add the UniFFI-generated files from `app/DIYTypeless/RustCore`.
- 3. Link the Rust dynamic library:
-    - Add `target/release/libdiy_typeless_core.dylib` to **Link Binary With Libraries**.
-    - Copy the dylib into the app bundle **Frameworks** folder.
- 4. Ensure `Info.plist` includes `NSMicrophoneUsageDescription`.
- 
- ## Permissions
- 
- The app requires:
- 
- - **Accessibility** (global key monitoring + paste simulation)
- - **Input Monitoring** (global keyboard events)
- - **Microphone** (audio recording)
- 
- Open **System Settings → Privacy & Security** and enable:
- 
- - Accessibility
- - Input Monitoring
- - Microphone
+## Permissions
+
+The app requires:
+
+- **Accessibility** (global key monitoring + paste simulation)
+- **Input Monitoring** (global keyboard events)
+- **Microphone** (audio recording)
+
+### Granting Permissions
+
+Open **System Settings → Privacy & Security** and enable the app under:
+
+- Accessibility
+- Input Monitoring
+- Microphone
+
+### App Not Appearing in Permission Lists?
+
+If the app doesn't appear in the Accessibility or Input Monitoring lists:
+
+1. **Run from Xcode first** — When you run the app from Xcode, macOS registers it for permission requests. Click "Request Permissions" in the app.
+
+2. **Quit and reopen System Settings** — Sometimes the Settings app needs to be fully closed and reopened to refresh the list.
+
+3. **Check signing** — The app must be code-signed (at least with a local development certificate). In Xcode:
+   - Go to **Signing & Capabilities**
+   - Ensure "Automatically manage signing" is enabled
+   - Select your development team
+
+4. **Manual addition** — If the app still doesn't appear:
+   - Click the **+** button in the permission list
+   - Navigate to `~/Library/Developer/Xcode/DerivedData/DIYTypeless-*/Build/Products/Debug/DIYTypeless.app`
+   - (The exact path depends on your build configuration)
+
+5. **Reset permissions (last resort)**:
+   ```bash
+   tccutil reset Accessibility com.lizunlong.DIYTypeless
+   tccutil reset ListenEvent com.lizunlong.DIYTypeless
+   ```
+   Then run the app again and request permissions.
  
  ## Usage
  
