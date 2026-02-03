@@ -14,5 +14,7 @@
     <string>13.0</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>DIY Typeless needs microphone access to record your voice.</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
 </dict>
 </plist>

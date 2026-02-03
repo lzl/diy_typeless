@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-XCODE_PROJECT="/Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless"
+XCODE_PROJECT="$PROJECT_ROOT/app/DIYTypeless"
 OUTPUT_DIR="$HOME/Downloads"
 ARCHIVE_PATH="$OUTPUT_DIR/DIYTypeless.xcarchive"
 APP_PATH="$OUTPUT_DIR/DIYTypeless.app"
@@ -16,20 +16,20 @@ DMG_CONTENTS="$OUTPUT_DIR/DMG_Contents_tmp"
 echo "=== DIYTypeless DMG Builder ==="
 echo ""
 
-# Step 1: Build Rust core library
-echo "[1/5] Building Rust core library..."
+# Step 1: Build Rust core library (universal binary)
+echo "[1/5] Building Rust core library (universal binary)..."
 cd "$PROJECT_ROOT"
-cargo build -p diy_typeless_core --release
-echo "      Rust library built successfully."
+"$SCRIPT_DIR/build-rust-universal.sh"
+echo "      Rust universal library built successfully."
 echo ""
 
-# Step 2: Build Xcode archive
-echo "[2/5] Building Xcode archive (arm64)..."
+# Step 2: Build Xcode archive (universal binary)
+echo "[2/5] Building Xcode archive (universal binary)..."
 cd "$XCODE_PROJECT"
 xcodebuild archive \
     -scheme DIYTypeless \
     -archivePath "$ARCHIVE_PATH" \
-    ARCHS=arm64 \
+    ARCHS="arm64 x86_64" \
     ONLY_ACTIVE_ARCH=NO \
     -quiet
 
@@ -77,5 +77,5 @@ echo ""
 echo "Output: $DMG_PATH"
 echo "Size:   $DMG_SIZE"
 echo ""
-echo "Note: This build only supports Apple Silicon Macs (M1/M2/M3/M4)."
-echo "      To distribute to Intel Mac users, build a universal binary."
+echo "Note: This build supports both Apple Silicon (M1/M2/M3/M4) and Intel Macs."
+echo "      Verified architectures: arm64, x86_64"
