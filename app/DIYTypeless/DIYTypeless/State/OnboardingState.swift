@@ -67,6 +67,25 @@ final class OnboardingState: ObservableObject {
     var onCompletion: (() -> Void)?
     var onRequestRestart: (() -> Void)?
 
+    var canProceed: Bool {
+        switch step {
+        case .welcome:
+            return true
+        case .microphone:
+            return permissions.microphone
+        case .accessibility:
+            return permissions.accessibility
+        case .inputMonitoring:
+            return permissions.inputMonitoring
+        case .groqKey:
+            return groqValidation.isSuccess
+        case .geminiKey:
+            return geminiValidation.isSuccess
+        case .completion:
+            return true
+        }
+    }
+
     private let permissionManager: PermissionManager
     private let keyStore: ApiKeyStore
     private var permissionTimer: Timer?

@@ -9,7 +9,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     init(state: OnboardingState) {
         let hosting = NSHostingController(rootView: OnboardingWindow(state: state))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 480),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -43,33 +43,31 @@ struct OnboardingWindow: View {
     @ObservedObject var state: OnboardingState
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.93, green: 0.96, blue: 1.0),
-                    Color(red: 0.94, green: 0.98, blue: 0.94)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        VStack(spacing: 0) {
+            stepIndicator
+                .padding(.top, 24)
+                .padding(.bottom, 32)
 
-            VStack(spacing: 20) {
-                header
-                stepView
-            }
-            .padding(32)
+            stepView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            navigationButtons
+                .padding(.top, 24)
+                .padding(.bottom, 28)
         }
-        .frame(minWidth: 720, minHeight: 520)
+        .padding(.horizontal, 40)
+        .frame(minWidth: 480, minHeight: 440)
+        .background(Color(NSColor.windowBackgroundColor))
         .animation(.easeInOut(duration: 0.2), value: state.step)
     }
 
-    private var header: some View {
-        HStack {
-            Text("Step \(state.step.rawValue + 1) of \(OnboardingStep.allCases.count)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
+    private var stepIndicator: some View {
+        HStack(spacing: 8) {
+            ForEach(OnboardingStep.allCases, id: \.self) { step in
+                Capsule()
+                    .fill(step.rawValue <= state.step.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .frame(width: step == state.step ? 24 : 8, height: 8)
+            }
         }
     }
 
@@ -92,81 +90,65 @@ struct OnboardingWindow: View {
             CompletionStepView(state: state)
         }
     }
-}
 
-struct OnboardingCard<Content: View, Actions: View>: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    let description: String
-    let content: Content
-    let actions: Actions
-
-    init(
-        icon: String,
-        iconColor: Color,
-        title: String,
-        description: String,
-        @ViewBuilder content: () -> Content,
-        @ViewBuilder actions: () -> Actions
-    ) {
-        self.icon = icon
-        self.iconColor = iconColor
-        self.title = title
-        self.description = description
-        self.content = content()
-        self.actions = actions()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Image(systemName: icon)
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundColor(iconColor)
-                .padding(.top, 8)
-
-            Text(title)
-                .font(.system(size: 28, weight: .semibold))
-
-            Text(description)
+    private var navigationButtons: some View {
+        HStack {
+            if state.step != .welcome {
+                Button("Back") {
+                    state.goBack()
+                }
+                .buttonStyle(.plain)
                 .foregroundColor(.secondary)
-
-            content
+            }
 
             Spacer()
 
-            actions
+            if state.step == .completion {
+                Button("Finish") {
+                    state.complete()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            } else {
+                Button("Continue") {
+                    state.goNext()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!state.canProceed)
+            }
         }
-        .padding(36)
-        .frame(maxWidth: .infinity, minHeight: 420, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(.regularMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 8)
     }
 }
 
-struct PermissionIndicator: View {
-    let title: String
-    let granted: Bool
+struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
 
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .strokeBorder(granted ? Color.clear : Color.secondary, lineWidth: 1)
-                .background(Circle().fill(granted ? Color.green : Color.clear))
-                .frame(width: 10, height: 10)
-            Text(title)
-                .font(.subheadline)
-            Spacer()
-            Text(granted ? "Granted" : "Not granted")
-                .font(.caption)
-                .foregroundColor(granted ? .green : .secondary)
-        }
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isEnabled ? Color.accentColor : Color.secondary.opacity(0.5))
+            )
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(isEnabled ? .primary : .secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+            )
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
     }
 }

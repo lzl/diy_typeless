@@ -4,41 +4,37 @@ struct GeminiKeyStepView: View {
     @ObservedObject var state: OnboardingState
 
     var body: some View {
-        OnboardingCard(
-            icon: "sparkles",
-            iconColor: .teal,
-            title: "Gemini API Key",
-            description: "Gemini polishes your transcript into clean, readable text."
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                SecureField("Gemini API Key", text: $state.geminiKey)
-                    .textFieldStyle(.roundedBorder)
-                ValidationStatusView(state: state.geminiValidation)
-                Text("We validate your key with a lightweight API request.")
-                    .font(.footnote)
+        VStack(spacing: 24) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundColor(.teal)
+
+            VStack(spacing: 8) {
+                Text("Gemini API Key")
+                    .font(.system(size: 24, weight: .semibold))
+
+                Text("Polishes your transcript into clean text.")
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
-        } actions: {
-            HStack {
-                Button("Back") {
-                    state.goBack()
-                }
-                .buttonStyle(.bordered)
 
-                Spacer()
+            VStack(spacing: 16) {
+                SecureField("Enter your Gemini API key", text: $state.geminiKey)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
 
-                Button("Validate Key") {
-                    state.validateGeminiKey()
-                }
-                .buttonStyle(.bordered)
-                .disabled(state.geminiValidation == .validating)
+                HStack(spacing: 12) {
+                    Button("Validate") {
+                        state.validateGeminiKey()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(state.geminiValidation == .validating || state.geminiKey.isEmpty)
 
-                Button("Next") {
-                    state.goNext()
+                    ValidationStatusView(state: state.geminiValidation)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!state.geminiValidation.isSuccess)
             }
+            .padding(.top, 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -4,41 +4,37 @@ struct GroqKeyStepView: View {
     @ObservedObject var state: OnboardingState
 
     var body: some View {
-        OnboardingCard(
-            icon: "waveform.circle.fill",
-            iconColor: .pink,
-            title: "Groq API Key",
-            description: "Groq powers fast speech-to-text with Whisper."
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                SecureField("Groq API Key", text: $state.groqKey)
-                    .textFieldStyle(.roundedBorder)
-                ValidationStatusView(state: state.groqValidation)
-                Text("We validate your key with a lightweight API request.")
-                    .font(.footnote)
+        VStack(spacing: 24) {
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.pink)
+
+            VStack(spacing: 8) {
+                Text("Groq API Key")
+                    .font(.system(size: 24, weight: .semibold))
+
+                Text("Powers fast speech-to-text with Whisper.")
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
-        } actions: {
-            HStack {
-                Button("Back") {
-                    state.goBack()
-                }
-                .buttonStyle(.bordered)
 
-                Spacer()
+            VStack(spacing: 16) {
+                SecureField("Enter your Groq API key", text: $state.groqKey)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
 
-                Button("Validate Key") {
-                    state.validateGroqKey()
-                }
-                .buttonStyle(.bordered)
-                .disabled(state.groqValidation == .validating)
+                HStack(spacing: 12) {
+                    Button("Validate") {
+                        state.validateGroqKey()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(state.groqValidation == .validating || state.groqKey.isEmpty)
 
-                Button("Next") {
-                    state.goNext()
+                    ValidationStatusView(state: state.groqValidation)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!state.groqValidation.isSuccess)
             }
+            .padding(.top, 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

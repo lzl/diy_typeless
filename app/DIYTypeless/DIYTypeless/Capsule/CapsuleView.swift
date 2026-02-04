@@ -27,17 +27,17 @@ struct CapsuleView: View {
                 LoadingDotsView()
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .background(
             Capsule(style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
+                .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 8)
         )
         .overlay(
             Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
         )
-        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
         .frame(maxWidth: 380)
     }
 

@@ -9,6 +9,9 @@ final class CapsuleWindowController {
 
     init(state: RecordingState) {
         let hosting = NSHostingController(rootView: CapsuleView(state: state))
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = .clear
+
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 64),
             styleMask: [.borderless],
@@ -17,7 +20,7 @@ final class CapsuleWindowController {
         )
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.hasShadow = true
+        window.hasShadow = false
         window.level = .floating
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
