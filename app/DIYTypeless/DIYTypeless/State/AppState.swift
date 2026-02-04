@@ -65,11 +65,22 @@ final class AppState: ObservableObject {
         configureWindows()
         evaluateReadiness()
         startReadinessTimer()
+        observeShowSettings()
     }
 
     func showOnboarding() {
         isForcedOnboarding = true
         setPhase(.onboarding, force: true)
+    }
+
+    private func observeShowSettings() {
+        NotificationCenter.default.addObserver(
+            forName: .showSettings,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.showOnboarding()
+        }
     }
 
     private func configureWindows() {

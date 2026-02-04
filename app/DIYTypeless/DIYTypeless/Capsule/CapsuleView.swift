@@ -3,131 +3,105 @@ import SwiftUI
 
 struct CapsuleView: View {
     @ObservedObject var state: RecordingState
+    @StateObject private var audioMonitor = AudioLevelMonitor()
+    @State private var progress: CGFloat = 0
+
+    private let capsuleWidth: CGFloat = 160
+    private let capsuleHeight: CGFloat = 36
 
     var body: some View {
-        let presentation = presentation(for: state.capsuleState)
+        ZStack {
+            // Background with progress
+            Capsule(style: .continuous)
+                .fill(Color(white: 0.12))
 
-        HStack(spacing: 12) {
-            Image(systemName: presentation.icon)
-                .foregroundColor(presentation.color)
-                .font(.system(size: 18, weight: .semibold))
-
-            Text(presentation.text)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            if presentation.showsWaveform {
-                WaveformView()
-                    .frame(height: 20)
+            // Progress overlay for transcribing/polishing
+            if case .transcribing = state.capsuleState {
+                progressOverlay
+            } else if case .polishing = state.capsuleState {
+                progressOverlay
             }
 
-            if presentation.showsDots {
-                LoadingDotsView()
-            }
+            // Content
+            content
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 8)
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
-        )
-        .frame(maxWidth: 380)
+        .frame(width: capsuleWidth, height: capsuleHeight)
+        .onChange(of: state.capsuleState) { _, newState in
+            handleStateChange(newState)
+        }
     }
 
-    private func presentation(for state: CapsuleState) -> CapsulePresentation {
-        switch state {
+    @ViewBuilder
+    private var content: some View {
+        switch state.capsuleState {
         case .recording:
-            return CapsulePresentation(
-                icon: "mic.fill",
-                text: "Recording",
-                color: .red,
-                showsWaveform: true,
-                showsDots: false
-            )
+            WaveformView(levels: audioMonitor.levels)
+                .frame(width: capsuleWidth - 32)
+
         case .transcribing:
-            return CapsulePresentation(
-                icon: "text.bubble",
-                text: "Transcribing",
-                color: .blue,
-                showsWaveform: false,
-                showsDots: true
-            )
+            Text("Transcribing")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+
         case .polishing:
-            return CapsulePresentation(
-                icon: "sparkles",
-                text: "Polishing",
-                color: .purple,
-                showsWaveform: false,
-                showsDots: true
-            )
+            Text("Polishing")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+
         case .done(let result):
-            switch result {
-            case .pasted:
-                return CapsulePresentation(
-                    icon: "checkmark.circle.fill",
-                    text: "Pasted",
-                    color: .green,
-                    showsWaveform: false,
-                    showsDots: false
-                )
-            case .copied:
-                return CapsulePresentation(
-                    icon: "doc.on.clipboard",
-                    text: "Copied",
-                    color: .green,
-                    showsWaveform: false,
-                    showsDots: false
-                )
-            }
+            Text(result == .pasted ? "Pasted" : "Copied")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+
         case .error(let message):
-            return CapsulePresentation(
-                icon: "exclamationmark.triangle.fill",
-                text: "Error: \(message)",
-                color: .orange,
-                showsWaveform: false,
-                showsDots: false
-            )
+            Text(message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.orange)
+                .lineLimit(1)
+
         case .hidden:
-            return CapsulePresentation(
-                icon: "mic.fill",
-                text: "",
-                color: .clear,
-                showsWaveform: false,
-                showsDots: false
-            )
+            EmptyView()
         }
     }
-}
 
-private struct CapsulePresentation {
-    let icon: String
-    let text: String
-    let color: Color
-    let showsWaveform: Bool
-    let showsDots: Bool
-}
-
-private struct LoadingDotsView: View {
-    @State private var phase: Int = 0
-    private let timer = Timer.publish(every: 0.35, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3) { index in
-                Circle()
-                    .fill(Color.primary.opacity(index == phase ? 0.9 : 0.3))
-                    .frame(width: 4, height: 4)
-            }
+    private var progressOverlay: some View {
+        GeometryReader { geo in
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .frame(width: geo.size.width * progress)
         }
-        .onReceive(timer) { _ in
-            phase = (phase + 1) % 3
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    private func handleStateChange(_ newState: CapsuleState) {
+        switch newState {
+        case .recording:
+            audioMonitor.start()
+            progress = 0
+
+        case .transcribing:
+            audioMonitor.stop()
+            startProgressAnimation(duration: 2.5)
+
+        case .polishing:
+            startProgressAnimation(duration: 2.0)
+
+        case .done, .error:
+            audioMonitor.stop()
+            withAnimation(.easeOut(duration: 0.2)) {
+                progress = 1.0
+            }
+
+        case .hidden:
+            audioMonitor.stop()
+            progress = 0
+        }
+    }
+
+    private func startProgressAnimation(duration: Double) {
+        progress = 0
+        withAnimation(.easeInOut(duration: duration)) {
+            progress = 0.85
         }
     }
 }

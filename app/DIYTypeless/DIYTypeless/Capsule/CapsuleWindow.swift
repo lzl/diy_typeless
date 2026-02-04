@@ -13,7 +13,7 @@ final class CapsuleWindowController {
         hosting.view.layer?.backgroundColor = .clear
 
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 64),
+            contentRect: NSRect(x: 0, y: 0, width: 180, height: 50),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -48,10 +48,10 @@ final class CapsuleWindowController {
     private func positionWindow() {
         guard let screen = NSScreen.main else { return }
         let frame = screen.visibleFrame
-        let width: CGFloat = 420
-        let height: CGFloat = 64
+        let width: CGFloat = 180
+        let height: CGFloat = 50
         let x = frame.midX - width / 2
-        let y = frame.minY + 28
+        let y = frame.minY + 24
         window.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
     }
 }
