@@ -91,8 +91,14 @@ final class OnboardingState: ObservableObject {
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
-    private var hasCompletedWelcome = false
     private var lastInputMonitoring = false
+
+    private static let hasCompletedWelcomeKey = "hasCompletedWelcome"
+
+    private var hasCompletedWelcome: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.hasCompletedWelcomeKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.hasCompletedWelcomeKey) }
+    }
 
     init(permissionManager: PermissionManager, keyStore: ApiKeyStore) {
         self.permissionManager = permissionManager

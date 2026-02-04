@@ -23,6 +23,11 @@ final class AudioLevelMonitor: ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var isMonitoring = false
 
+    deinit {
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine?.stop()
+    }
+
     func start() {
         guard !isMonitoring else { return }
         isMonitoring = true
