@@ -34,17 +34,29 @@ struct InputMonitoringStepView: View {
                         StatusBadge(granted: true)
                     }
                 } else {
-                    Button("Grant Access") {
-                        state.requestInputMonitoringPermission()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Steps to enable:")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("1. Click \"Open System Settings\" below")
+                            Text("2. Click the + button to add DIYTypeless")
+                            Text("3. Check the box next to DIYTypeless")
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .padding(.horizontal, 16)
 
                     Button("Open System Settings") {
                         state.openInputMonitoringSettings()
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .buttonStyle(SecondaryButtonStyle())
+
+                    Text("Permission will be detected automatically.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
             }
             .padding(.top, 8)

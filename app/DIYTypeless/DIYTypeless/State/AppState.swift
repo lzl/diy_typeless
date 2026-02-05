@@ -19,6 +19,9 @@ final class AppState: ObservableObject {
         case ready
     }
 
+    /// Delay before terminating app during restart to ensure new instance starts
+    private static let restartTerminationDelay: TimeInterval = 0.5
+
     @Published private(set) var phase: Phase = .onboarding
     let onboarding: OnboardingState
     let recording: RecordingState
@@ -32,6 +35,7 @@ final class AppState: ObservableObject {
     private var onboardingWindow: OnboardingWindowController?
     private var capsuleWindow: CapsuleWindowController?
     private var isForcedOnboarding = false
+    private var hasShownReadyConfirmation = false
 
     init() {
         permissionManager = PermissionManager()
@@ -49,6 +53,7 @@ final class AppState: ObservableObject {
 
         onboarding.onCompletion = { [weak self] in
             self?.isForcedOnboarding = false
+            self?.onboardingWindow?.hide()
             self?.evaluateReadiness()
         }
         onboarding.onRequestRestart = { [weak self] in
@@ -58,12 +63,17 @@ final class AppState: ObservableObject {
             self?.isForcedOnboarding = false
             self?.setPhase(.onboarding, force: true)
         }
+        onboarding.onNeedsFocus = { [weak self] in
+            self?.onboardingWindow?.show()
+        }
     }
 
     func start() {
         uniffiEnsureDiyTypelessCoreInitialized()
+        keyStore.preloadKeys()
         configureWindows()
-        evaluateReadiness()
+        // Force initial phase setup since phase defaults to .onboarding
+        setPhase(checkReadiness() ? .ready : .onboarding, force: true)
         startReadinessTimer()
         observeShowSettings()
     }
@@ -79,7 +89,10 @@ final class AppState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.showOnboarding()
+            guard let self else { return }
+            Task { @MainActor [self] in
+                self.showOnboarding()
+            }
         }
     }
 
@@ -108,16 +121,19 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Checks if all requirements are met for the app to be ready.
+    private func checkReadiness() -> Bool {
+        let status = permissionManager.currentStatus()
+        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
+    }
+
     private func evaluateReadiness() {
         if isForcedOnboarding {
             return
         }
-
-        let status = permissionManager.currentStatus()
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let isReady = status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
-        setPhase(isReady ? .ready : .onboarding)
+        setPhase(checkReadiness() ? .ready : .onboarding)
     }
 
     private func setPhase(_ newPhase: Phase, force: Bool = false) {
@@ -134,16 +150,35 @@ final class AppState: ObservableObject {
             onboardingWindow?.show()
         case .ready:
             onboarding.stopPolling()
-            onboardingWindow?.hide()
             recording.activate()
+            // Show completion window on first ready state entry
+            if !hasShownReadyConfirmation {
+                hasShownReadyConfirmation = true
+                onboarding.showCompletion()
+                onboardingWindow?.show()
+            } else {
+                onboardingWindow?.hide()
+            }
         }
     }
 
     private func restartApp() {
         let bundleURL = Bundle.main.bundleURL
-        let config = NSWorkspace.OpenConfiguration()
-        NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, _ in
-            NSApp.terminate(nil)
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", bundleURL.path]
+        do {
+            try task.run()
+            // Delay exit to ensure new instance starts
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartTerminationDelay) {
+                NSApp.terminate(nil)
+            }
+        } catch {
+            // Fallback to original method if Process fails
+            let config = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, _ in
+                NSApp.terminate(nil)
+            }
         }
     }
 }

@@ -44,6 +44,9 @@ enum ValidationState: Equatable {
 
 @MainActor
 final class OnboardingState: ObservableObject {
+    /// Delay before refocusing window after opening system settings
+    private static let refocusDelay: TimeInterval = 0.5
+
     @Published var step: OnboardingStep = .welcome
     @Published var permissions = PermissionStatus(accessibility: false, inputMonitoring: false, microphone: false)
     @Published var groqKey: String = "" {
@@ -66,6 +69,7 @@ final class OnboardingState: ObservableObject {
 
     var onCompletion: (() -> Void)?
     var onRequestRestart: (() -> Void)?
+    var onNeedsFocus: (() -> Void)?
 
     var canProceed: Bool {
         switch step {
@@ -149,6 +153,10 @@ final class OnboardingState: ObservableObject {
         onCompletion?()
     }
 
+    func showCompletion() {
+        step = .completion
+    }
+
     func requestRestart() {
         onRequestRestart?()
     }
@@ -174,14 +182,24 @@ final class OnboardingState: ObservableObject {
 
     func openAccessibilitySettings() {
         permissionManager.openAccessibilitySettings()
+        scheduleRefocus()
     }
 
     func openInputMonitoringSettings() {
         permissionManager.openInputMonitoringSettings()
+        scheduleRefocus()
     }
 
     func openMicrophoneSettings() {
         permissionManager.openMicrophoneSettings()
+        scheduleRefocus()
+    }
+
+    private func scheduleRefocus() {
+        // Delay to refocus window after system settings opens
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.refocusDelay) { [weak self] in
+            self?.onNeedsFocus?()
+        }
     }
 
     func validateGroqKey() {
