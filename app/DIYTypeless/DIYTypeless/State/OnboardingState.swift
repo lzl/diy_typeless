@@ -66,6 +66,7 @@ final class OnboardingState: ObservableObject {
 
     var onCompletion: (() -> Void)?
     var onRequestRestart: (() -> Void)?
+    var onNeedsFocus: (() -> Void)?
 
     var canProceed: Bool {
         switch step {
@@ -149,6 +150,10 @@ final class OnboardingState: ObservableObject {
         onCompletion?()
     }
 
+    func showCompletion() {
+        step = .completion
+    }
+
     func requestRestart() {
         onRequestRestart?()
     }
@@ -174,14 +179,24 @@ final class OnboardingState: ObservableObject {
 
     func openAccessibilitySettings() {
         permissionManager.openAccessibilitySettings()
+        scheduleRefocus()
     }
 
     func openInputMonitoringSettings() {
         permissionManager.openInputMonitoringSettings()
+        scheduleRefocus()
     }
 
     func openMicrophoneSettings() {
         permissionManager.openMicrophoneSettings()
+        scheduleRefocus()
+    }
+
+    private func scheduleRefocus() {
+        // Delay 0.5s to refocus window after system settings opens
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.onNeedsFocus?()
+        }
     }
 
     func validateGroqKey() {

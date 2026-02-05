@@ -25,6 +25,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
+        // Switch to regular policy to show Dock icon
+        NSApp.setActivationPolicy(.regular)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -32,9 +34,13 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     func hide() {
         window.orderOut(nil)
+        // Switch back to accessory policy to hide Dock icon
+        NSApp.setActivationPolicy(.accessory)
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Switch back to accessory policy when window closes
+        NSApp.setActivationPolicy(.accessory)
         onClose?()
     }
 }
