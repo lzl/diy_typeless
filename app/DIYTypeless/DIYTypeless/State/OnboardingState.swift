@@ -44,6 +44,9 @@ enum ValidationState: Equatable {
 
 @MainActor
 final class OnboardingState: ObservableObject {
+    /// Delay before refocusing window after opening system settings
+    private static let refocusDelay: TimeInterval = 0.5
+
     @Published var step: OnboardingStep = .welcome
     @Published var permissions = PermissionStatus(accessibility: false, inputMonitoring: false, microphone: false)
     @Published var groqKey: String = "" {
@@ -193,8 +196,8 @@ final class OnboardingState: ObservableObject {
     }
 
     private func scheduleRefocus() {
-        // Delay 0.5s to refocus window after system settings opens
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        // Delay to refocus window after system settings opens
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.refocusDelay) { [weak self] in
             self?.onNeedsFocus?()
         }
     }

@@ -8,6 +8,8 @@ final class ApiKeyStore {
     private let legacyGroqAccount = "groq_api_key"
     private let legacyGeminiAccount = "gemini_api_key"
 
+    // Thread synchronization lock for cache access
+    private let lock = NSLock()
     private var cachedGroqKey: String?
     private var cachedGeminiKey: String?
     private var cacheLoaded = false
@@ -15,6 +17,9 @@ final class ApiKeyStore {
     /// Call once at startup to preload all keys into memory cache.
     /// This triggers only one Keychain authorization prompt.
     func preloadKeys() {
+        lock.lock()
+        defer { lock.unlock() }
+
         guard !cacheLoaded else { return }
 
         // Try loading from combined storage first
@@ -28,11 +33,12 @@ final class ApiKeyStore {
             cachedGeminiKey = loadStringFromKeychain(account: legacyGeminiAccount)
 
             // If we found legacy keys, migrate to combined storage
+            // Only delete legacy keys after confirming save succeeded
             if cachedGroqKey != nil || cachedGeminiKey != nil {
-                saveAllKeys()
-                // Clean up legacy entries
-                deleteFromKeychain(account: legacyGroqAccount)
-                deleteFromKeychain(account: legacyGeminiAccount)
+                if saveAllKeysInternal() {
+                    deleteFromKeychain(account: legacyGroqAccount)
+                    deleteFromKeychain(account: legacyGeminiAccount)
+                }
             }
         }
 
@@ -40,30 +46,46 @@ final class ApiKeyStore {
     }
 
     func saveGroqKey(_ key: String) {
+        lock.lock()
         cachedGroqKey = key
-        saveAllKeys()
+        _ = saveAllKeysInternal()
+        lock.unlock()
     }
 
     func saveGeminiKey(_ key: String) {
+        lock.lock()
         cachedGeminiKey = key
-        saveAllKeys()
+        _ = saveAllKeysInternal()
+        lock.unlock()
     }
 
     func loadGroqKey() -> String? {
-        if !cacheLoaded {
-            preloadKeys()
-        }
+        ensureCacheLoaded()
+        lock.lock()
+        defer { lock.unlock() }
         return cachedGroqKey
     }
 
     func loadGeminiKey() -> String? {
-        if !cacheLoaded {
-            preloadKeys()
-        }
+        ensureCacheLoaded()
+        lock.lock()
+        defer { lock.unlock() }
         return cachedGeminiKey
     }
 
-    private func saveAllKeys() {
+    private func ensureCacheLoaded() {
+        lock.lock()
+        let needsLoad = !cacheLoaded
+        lock.unlock()
+        if needsLoad {
+            preloadKeys()
+        }
+    }
+
+    /// Internal save method, must be called with lock held.
+    /// Returns true if save succeeded.
+    @discardableResult
+    private func saveAllKeysInternal() -> Bool {
         var dict: [String: String] = [:]
         if let groq = cachedGroqKey, !groq.isEmpty {
             dict["groq"] = groq
@@ -71,8 +93,8 @@ final class ApiKeyStore {
         if let gemini = cachedGeminiKey, !gemini.isEmpty {
             dict["gemini"] = gemini
         }
-        guard let data = try? JSONEncoder().encode(dict) else { return }
-        saveDataToKeychain(data: data, account: combinedAccount)
+        guard let data = try? JSONEncoder().encode(dict) else { return false }
+        return saveDataToKeychain(data: data, account: combinedAccount)
     }
 
     @discardableResult

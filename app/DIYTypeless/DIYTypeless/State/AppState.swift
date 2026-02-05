@@ -19,6 +19,9 @@ final class AppState: ObservableObject {
         case ready
     }
 
+    /// Delay before terminating app during restart to ensure new instance starts
+    private static let restartTerminationDelay: TimeInterval = 0.5
+
     @Published private(set) var phase: Phase = .onboarding
     let onboarding: OnboardingState
     let recording: RecordingState
@@ -70,11 +73,7 @@ final class AppState: ObservableObject {
         keyStore.preloadKeys()
         configureWindows()
         // Force initial phase setup since phase defaults to .onboarding
-        let status = permissionManager.currentStatus()
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let isReady = status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
-        setPhase(isReady ? .ready : .onboarding, force: true)
+        setPhase(checkReadiness() ? .ready : .onboarding, force: true)
         startReadinessTimer()
         observeShowSettings()
     }
@@ -122,16 +121,19 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Checks if all requirements are met for the app to be ready.
+    private func checkReadiness() -> Bool {
+        let status = permissionManager.currentStatus()
+        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
+    }
+
     private func evaluateReadiness() {
         if isForcedOnboarding {
             return
         }
-
-        let status = permissionManager.currentStatus()
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let isReady = status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
-        setPhase(isReady ? .ready : .onboarding)
+        setPhase(checkReadiness() ? .ready : .onboarding)
     }
 
     private func setPhase(_ newPhase: Phase, force: Bool = false) {
@@ -168,7 +170,7 @@ final class AppState: ObservableObject {
         do {
             try task.run()
             // Delay exit to ensure new instance starts
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartTerminationDelay) {
                 NSApp.terminate(nil)
             }
         } catch {
