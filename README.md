@@ -1,10 +1,10 @@
  # DIY Typeless
  
- DIY Typeless is a macOS app that lets you hold the **Right Option** key to record speech, release to transcribe with Groq Whisper, and polish with Gemini. The final text is pasted into the active text field or copied to the clipboard.
+ DIY Typeless is a macOS app that lets you hold the **Fn** key to record speech, release to transcribe with Groq Whisper, and polish with Gemini. The final text is pasted into the active text field or copied to the clipboard.
  
  ## Features
  
- - Push-to-talk voice capture (Right Option key)
+ - Push-to-talk voice capture (Fn key)
  - Groq Whisper v3 transcription
  - Gemini Flash Lite text polishing
  - Automatic paste into focused input field (or clipboard fallback)
@@ -105,7 +105,7 @@ Useful flags:
 # Build/install only (no launch)
 ./scripts/dev-loop.sh --skip-launch
 
-# Reset Accessibility + Input Monitoring before launch
+# Reset Accessibility before launch
 ./scripts/dev-loop.sh --reset-permissions
 
 # Also reset Microphone
@@ -150,7 +150,6 @@ The Xcode project and Swift sources are in this repository:
 The app requires:
 
 - **Accessibility** (global key monitoring + paste simulation)
-- **Input Monitoring** (global keyboard events)
 - **Microphone** (audio recording)
 
 ### Granting Permissions
@@ -158,12 +157,11 @@ The app requires:
 Open **System Settings → Privacy & Security** and enable the app under:
 
 - Accessibility
-- Input Monitoring
 - Microphone
 
 ### App Not Appearing in Permission Lists?
 
-If the app doesn't appear in the Accessibility or Input Monitoring lists:
+If the app doesn't appear in the Accessibility list:
 
 1. **Run from Xcode first** — When you run the app from Xcode, macOS registers it for permission requests. Click "Request Permissions" in the app.
 
@@ -193,12 +191,12 @@ If the app doesn't appear in the Accessibility or Input Monitoring lists:
  1. Launch the app.
  2. Grant required permissions.
  3. Save Groq and Gemini API keys.
- 4. Hold **Right Option** to record; release to finish.
+ 4. Hold **Fn** to record; release to finish.
  5. The polished text will be pasted into the active field or copied.
  
  ## Notes
  
- - If Input Monitoring or Accessibility is missing, key capture will not work.
+ - If Accessibility is missing, key capture will not work.
  - If no input field is focused, text is copied to the clipboard.
  - Re-generate UniFFI bindings whenever the Rust API changes.
  

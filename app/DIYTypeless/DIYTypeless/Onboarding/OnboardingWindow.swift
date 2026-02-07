@@ -87,8 +87,6 @@ struct OnboardingWindow: View {
             MicrophoneStepView(state: state)
         case .accessibility:
             AccessibilityStepView(state: state)
-        case .inputMonitoring:
-            InputMonitoringStepView(state: state)
         case .groqKey:
             GroqKeyStepView(state: state)
         case .geminiKey:

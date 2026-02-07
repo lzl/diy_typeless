@@ -4,11 +4,10 @@ import Foundation
 
 struct PermissionStatus {
     var accessibility: Bool
-    var inputMonitoring: Bool
     var microphone: Bool
 
     var allGranted: Bool {
-        accessibility && inputMonitoring && microphone
+        accessibility && microphone
     }
 }
 

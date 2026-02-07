@@ -37,12 +37,12 @@ final class RecordingState: ObservableObject {
         self.keyMonitor = keyMonitor
         self.outputManager = outputManager
 
-        keyMonitor.onRightOptionDown = { [weak self] in
+        keyMonitor.onFnDown = { [weak self] in
             Task { @MainActor in
                 self?.handleKeyDown()
             }
         }
-        keyMonitor.onRightOptionUp = { [weak self] in
+        keyMonitor.onFnUp = { [weak self] in
             Task { @MainActor in
                 self?.handleKeyUp()
             }
