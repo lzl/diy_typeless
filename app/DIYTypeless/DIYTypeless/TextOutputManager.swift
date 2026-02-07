@@ -1,6 +1,6 @@
 import AppKit
 
-enum OutputResult {
+enum OutputResult: Equatable {
     case pasted
     case copied
 }

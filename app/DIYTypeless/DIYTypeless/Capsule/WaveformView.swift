@@ -11,6 +11,7 @@ struct WaveformView: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(Color.white.opacity(0.9))
                     .frame(width: 2, height: max(3, 16 * levels[index]))
+                    .animation(.linear(duration: 0.05), value: levels[index])
             }
         }
     }
@@ -64,7 +65,7 @@ final class AudioLevelMonitor: ObservableObject {
         levels = Array(repeating: 0.1, count: 20)
     }
 
-    private func calculateLevel(buffer: AVAudioPCMBuffer) -> CGFloat {
+    nonisolated private func calculateLevel(buffer: AVAudioPCMBuffer) -> CGFloat {
         guard let channelData = buffer.floatChannelData?[0] else { return 0 }
         let frameLength = Int(buffer.frameLength)
 

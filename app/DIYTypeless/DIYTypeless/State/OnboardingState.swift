@@ -109,6 +109,35 @@ final class OnboardingState: ObservableObject {
         geminiValidation = geminiKey.isEmpty ? .idle : .success
         refreshPermissions()
         syncStep()
+        revalidateStoredKeys()
+    }
+
+    private func revalidateStoredKeys() {
+        let groqTrimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !groqTrimmed.isEmpty {
+            Task {
+                do {
+                    try await validateGroqKeyValue(groqTrimmed)
+                } catch {
+                    if !Task.isCancelled {
+                        groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
+                    }
+                }
+            }
+        }
+
+        let geminiTrimmed = geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !geminiTrimmed.isEmpty {
+            Task {
+                do {
+                    try await validateGeminiKeyValue(geminiTrimmed)
+                } catch {
+                    if !Task.isCancelled {
+                        geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
+                    }
+                }
+            }
+        }
     }
 
     func startPolling() {
