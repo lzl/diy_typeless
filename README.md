@@ -135,34 +135,12 @@ cargo run -p diy_typeless_cli -- full --duration-seconds 4
 ./scripts/dev-loop.sh --reset-permissions
 ```
 
-## macOS App Setup
+## macOS App
 
-The Swift sources live in `app/DIYTypeless/DIYTypeless/`. A separate Xcode project (`diy_typeless_mac`) uses these sources via symlink.
+The Xcode project and Swift sources are in this repository:
 
-### Linking Xcode Project to Source (Recommended)
-
-Run the setup script to create a symlink so the Xcode project uses sources from this repository:
-
-```bash
-./scripts/setup-xcode-symlink.sh
-```
-
-This creates a symlink so editing files in either location updates both projects.
-
-### Manual Xcode Project Setup
-
-If creating a new Xcode project:
-
-1. Add all Swift files from `app/DIYTypeless/DIYTypeless` to your target.
-2. Include the UniFFI-generated files (`DIYTypelessCore.swift`, `DIYTypelessCoreFFI.h`, `DIYTypelessCoreFFI.modulemap`).
-3. Link the Rust dynamic library:
-   - Add `target/release/libdiy_typeless_core.dylib` to **Link Binary With Libraries**.
-   - Copy the dylib into the app bundle **Frameworks** folder via a Copy Files build phase.
-4. Set up the bridging header pointing to `DIYTypelessCoreFFI.h`.
-5. Add the entitlements file `DIYTypeless.entitlements` to the target.
-6. Ensure `Info.plist` includes `NSMicrophoneUsageDescription`.
-7. Disable App Sandbox in Signing & Capabilities (required for Accessibility).
-8. Enable Hardened Runtime.
+- `app/DIYTypeless/DIYTypeless.xcodeproj`
+- `app/DIYTypeless/DIYTypeless/`
  
 ## Permissions
 
