@@ -63,9 +63,6 @@ final class AppState: ObservableObject {
             self?.isForcedOnboarding = false
             self?.setPhase(.onboarding, force: true)
         }
-        onboarding.onNeedsFocus = { [weak self] in
-            self?.onboardingWindow?.show()
-        }
     }
 
     func start() {
