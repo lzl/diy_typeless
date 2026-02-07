@@ -94,7 +94,7 @@ Use one command to rebuild Rust core, build the app with `xcodebuild`, install t
 
 By default it:
 
-1. Builds `diy_typeless_core` in release mode (matches current Xcode link path).
+1. Builds `diy_typeless_core` with a profile inferred from `--configuration` (`Debug -> debug`, `Release -> release`).
 2. Builds the app in Debug with `xcodebuild`.
 3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
 4. Launches the copied app.
@@ -113,6 +113,9 @@ Useful flags:
 
 # Install somewhere else
 ./scripts/dev-loop.sh --destination-dir ./.context/apps
+
+# Build Release app + release Rust dylib
+./scripts/dev-loop.sh --configuration Release --skip-launch
 ```
 
 Reset permissions only:
@@ -156,7 +159,8 @@ If creating a new Xcode project:
 1. Add all Swift files from `app/DIYTypeless/DIYTypeless` to your target.
 2. Include the UniFFI-generated files (`DIYTypelessCore.swift`, `DIYTypelessCoreFFI.h`, `DIYTypelessCoreFFI.modulemap`).
 3. Link the Rust dynamic library:
-   - Add `target/release/libdiy_typeless_core.dylib` to **Link Binary With Libraries**.
+   - For Debug builds, use `target/debug/libdiy_typeless_core.dylib`; for Release builds, use `target/release/libdiy_typeless_core.dylib`.
+   - If possible, set library/search paths with a build setting (for example `target/$(RUST_PROFILE)`) so Debug/Release stay aligned automatically.
    - Copy the dylib into the app bundle **Frameworks** folder via a Copy Files build phase.
 4. Set up the bridging header pointing to `DIYTypelessCoreFFI.h`.
 5. Add the entitlements file `DIYTypeless.entitlements` to the target.
