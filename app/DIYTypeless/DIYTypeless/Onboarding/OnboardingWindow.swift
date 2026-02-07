@@ -25,11 +25,12 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        // Switch to regular policy to show Dock icon
+        // Switch to regular mode before activation so AppKit can promote this window reliably.
         NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         window.center()
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window.orderFrontRegardless()
     }
 
     func hide() {

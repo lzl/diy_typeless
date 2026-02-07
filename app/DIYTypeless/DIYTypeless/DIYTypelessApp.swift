@@ -21,8 +21,10 @@ struct DIYTypelessApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu bar app - no dock icon
-        NSApp.setActivationPolicy(.accessory)
+        // Keep onboarding/completion visible on first launch; only force accessory mode when no window is shown.
+        if NSApp.windows.allSatisfy({ !$0.isVisible }) {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
