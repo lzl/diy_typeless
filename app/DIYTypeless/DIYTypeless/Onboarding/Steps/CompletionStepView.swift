@@ -19,7 +19,7 @@ struct CompletionStepView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                UsageRow(step: "1", text: "Hold Right Option to record")
+                UsageRow(step: "1", text: "Hold Fn to record")
                 UsageRow(step: "2", text: "Release to transcribe and polish")
                 UsageRow(step: "3", text: "Text is pasted or copied")
             }

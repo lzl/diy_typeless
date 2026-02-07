@@ -4,11 +4,9 @@ import AVFoundation
 final class PermissionManager {
     func currentStatus() -> PermissionStatus {
         let accessibility = AXIsProcessTrusted()
-        let inputMonitoring = CGPreflightListenEventAccess()
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         return PermissionStatus(
             accessibility: accessibility,
-            inputMonitoring: inputMonitoring,
             microphone: microphone
         )
     }
@@ -19,21 +17,12 @@ final class PermissionManager {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    @discardableResult
-    func requestInputMonitoring() -> Bool {
-        return CGRequestListenEventAccess()
-    }
-
     func requestMicrophone(completion: @escaping (Bool) -> Void) {
         AVCaptureDevice.requestAccess(for: .audio, completionHandler: completion)
     }
 
     func openAccessibilitySettings() {
         openSettingsPane(anchor: "Privacy_Accessibility")
-    }
-
-    func openInputMonitoringSettings() {
-        openSettingsPane(anchor: "Privacy_ListenEvent")
     }
 
     func openMicrophoneSettings() {
@@ -47,4 +36,3 @@ final class PermissionManager {
         }
     }
 }
-

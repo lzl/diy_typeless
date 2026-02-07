@@ -5,7 +5,6 @@ enum OnboardingStep: Int, CaseIterable {
     case welcome
     case microphone
     case accessibility
-    case inputMonitoring
     case groqKey
     case geminiKey
     case completion
@@ -45,7 +44,7 @@ enum ValidationState: Equatable {
 @MainActor
 final class OnboardingState: ObservableObject {
     @Published var step: OnboardingStep = .welcome
-    @Published var permissions = PermissionStatus(accessibility: false, inputMonitoring: false, microphone: false)
+    @Published var permissions = PermissionStatus(accessibility: false, microphone: false)
     @Published var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
@@ -62,7 +61,6 @@ final class OnboardingState: ObservableObject {
     }
     @Published var groqValidation: ValidationState = .idle
     @Published var geminiValidation: ValidationState = .idle
-    @Published var needsRestart: Bool = false
 
     var onCompletion: (() -> Void)?
     var onRequestRestart: (() -> Void)?
@@ -75,8 +73,6 @@ final class OnboardingState: ObservableObject {
             return permissions.microphone
         case .accessibility:
             return permissions.accessibility
-        case .inputMonitoring:
-            return permissions.inputMonitoring
         case .groqKey:
             return groqValidation.isSuccess
         case .geminiKey:
@@ -91,7 +87,6 @@ final class OnboardingState: ObservableObject {
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
-    private var lastInputMonitoring = false
 
     private static let hasCompletedWelcomeKey = "hasCompletedWelcome"
 
@@ -103,7 +98,7 @@ final class OnboardingState: ObservableObject {
     init(permissionManager: PermissionManager, keyStore: ApiKeyStore) {
         self.permissionManager = permissionManager
         self.keyStore = keyStore
-        refreshPermissions(initial: true)
+        refreshPermissions()
         refresh()
     }
 
@@ -112,7 +107,7 @@ final class OnboardingState: ObservableObject {
         geminiKey = keyStore.loadGeminiKey() ?? ""
         groqValidation = groqKey.isEmpty ? .idle : .success
         geminiValidation = geminiKey.isEmpty ? .idle : .success
-        refreshPermissions(initial: false)
+        refreshPermissions()
         syncStep()
     }
 
@@ -120,7 +115,7 @@ final class OnboardingState: ObservableObject {
         permissionTimer?.invalidate()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                self?.refreshPermissions(initial: false)
+                self?.refreshPermissions()
             }
         }
     }
@@ -160,28 +155,18 @@ final class OnboardingState: ObservableObject {
     func requestMicrophonePermission() {
         permissionManager.requestMicrophone { [weak self] _ in
             DispatchQueue.main.async {
-                self?.refreshPermissions(initial: false)
+                self?.refreshPermissions()
             }
         }
     }
 
     func requestAccessibilityPermission() {
         _ = permissionManager.requestAccessibility()
-        refreshPermissions(initial: false)
-    }
-
-    func requestInputMonitoringPermission() {
-        _ = permissionManager.requestInputMonitoring()
-        refreshPermissions(initial: false)
-        permissionManager.openInputMonitoringSettings()
+        refreshPermissions()
     }
 
     func openAccessibilitySettings() {
         permissionManager.openAccessibilitySettings()
-    }
-
-    func openInputMonitoringSettings() {
-        permissionManager.openInputMonitoringSettings()
     }
 
     func openMicrophoneSettings() {
@@ -250,11 +235,6 @@ final class OnboardingState: ObservableObject {
             return
         }
 
-        if !permissions.inputMonitoring {
-            step = .inputMonitoring
-            return
-        }
-
         if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             step = .groqKey
             return
@@ -268,13 +248,8 @@ final class OnboardingState: ObservableObject {
         step = .completion
     }
 
-    private func refreshPermissions(initial: Bool) {
-        let status = permissionManager.currentStatus()
-        if !initial, status.inputMonitoring, !lastInputMonitoring {
-            needsRestart = true
-        }
-        lastInputMonitoring = status.inputMonitoring
-        permissions = status
+    private func refreshPermissions() {
+        permissions = permissionManager.currentStatus()
     }
 
     private func errorMessage(for error: Error, provider: String) -> String {

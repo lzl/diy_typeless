@@ -8,7 +8,7 @@ RESET_MICROPHONE=0
 DRY_RUN=0
 
 usage() {
-    cat <<'EOF'
+    cat <<'USAGE'
 Usage: ./scripts/reset-permissions.sh [options]
 
 Options:
@@ -19,9 +19,9 @@ Options:
   -h, --help               Show this help message.
 
 Notes:
-  - Accessibility and Input Monitoring (ListenEvent) are always reset.
+  - Accessibility is always reset.
   - macOS may require you to quit/reopen System Settings to refresh UI.
-EOF
+USAGE
 }
 
 while [[ $# -gt 0 ]]; do
@@ -59,7 +59,7 @@ if ! command -v tccutil >/dev/null 2>&1; then
     exit 1
 fi
 
-SERVICES=(Accessibility ListenEvent)
+SERVICES=(Accessibility)
 if [[ "$RESET_MICROPHONE" -eq 1 ]]; then
     SERVICES+=(Microphone)
 fi
@@ -79,4 +79,3 @@ done
 if [[ "$DRY_RUN" -eq 0 ]]; then
     echo "Done. Launch the app and request permissions again."
 fi
-

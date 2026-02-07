@@ -41,7 +41,7 @@ Options:
                                Default: inferred from --configuration
                                (Debug->debug, Release->release)
   --skip-rust-build            Skip cargo build step.
-  --reset-permissions          Reset Accessibility/Input Monitoring before launch.
+  --reset-permissions          Reset Accessibility before launch.
   --include-microphone-reset   With --reset-permissions, also reset microphone.
   --skip-launch                Build/install only; do not launch app.
   -h, --help                   Show this help message.
