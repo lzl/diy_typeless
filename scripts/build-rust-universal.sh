@@ -21,11 +21,10 @@ cargo build -p diy_typeless_core --release --target x86_64-apple-darwin
 echo "      x86_64 build complete"
 echo ""
 
-# Step 3: Create universal binary directory
+# Step 3: Create universal binary
 echo "[3/4] Creating universal binary..."
 mkdir -p "$PROJECT_ROOT/target/release"
 
-# Step 4: Use lipo to create universal binary
 lipo -create \
     "$PROJECT_ROOT/target/aarch64-apple-darwin/release/libdiy_typeless_core.a" \
     "$PROJECT_ROOT/target/x86_64-apple-darwin/release/libdiy_typeless_core.a" \
@@ -39,7 +38,7 @@ lipo -create \
 echo "      Universal binary created"
 echo ""
 
-# Step 5: Verify
+# Step 4: Verify
 echo "[4/4] Verifying universal binary..."
 lipo -info "$PROJECT_ROOT/target/release/libdiy_typeless_core.a"
 lipo -info "$PROJECT_ROOT/target/release/libdiy_typeless_core.dylib"

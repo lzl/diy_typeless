@@ -47,16 +47,16 @@ final class ApiKeyStore {
 
     func saveGroqKey(_ key: String) {
         lock.lock()
+        defer { lock.unlock() }
         cachedGroqKey = key
         _ = saveAllKeysInternal()
-        lock.unlock()
     }
 
     func saveGeminiKey(_ key: String) {
         lock.lock()
+        defer { lock.unlock() }
         cachedGeminiKey = key
         _ = saveAllKeysInternal()
-        lock.unlock()
     }
 
     func loadGroqKey() -> String? {
