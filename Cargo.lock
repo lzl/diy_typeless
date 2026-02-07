@@ -490,6 +490,7 @@ dependencies = [
  "dirs",
  "diy_typeless_core",
  "dotenvy",
+ "hound",
 ]
 
 [[package]]

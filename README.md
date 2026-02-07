@@ -72,6 +72,16 @@ uniffi-bindgen generate \
  
  # Polish a text string (reads stdin if --text not provided)
  echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
+ 
+ # Print environment diagnostics (keys/tooling/path checks)
+ cargo run -p diy_typeless_cli -- diagnose env
+ 
+ # Capture a timed diagnostic clip and print WAV metrics
+ cargo run -p diy_typeless_cli -- diagnose audio --duration-seconds 2
+ 
+ # Run pipeline diagnostics on an existing wav file
+ GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
+ cargo run -p diy_typeless_cli -- diagnose pipeline ./audio.wav
  ```
  
 ## Fast Debug Loop (CLI + xcodebuild)
