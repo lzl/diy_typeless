@@ -94,7 +94,7 @@ Use one command to rebuild Rust core, build the app with `xcodebuild`, install t
 
 By default it:
 
-1. Builds `diy_typeless_core` in release mode (matches current Xcode link path).
+1. Builds `diy_typeless_core` with a profile inferred from `--configuration` (`Debug -> debug`, `Release -> release`).
 2. Builds the app in Debug with `xcodebuild`.
 3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
 4. Launches the copied app.
@@ -113,6 +113,9 @@ Useful flags:
 
 # Install somewhere else
 ./scripts/dev-loop.sh --destination-dir ./.context/apps
+
+# Build Release app + release Rust dylib
+./scripts/dev-loop.sh --configuration Release --skip-launch
 ```
 
 Reset permissions only:

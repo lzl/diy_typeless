@@ -423,7 +423,9 @@ fn max_int_amplitude(bits_per_sample: u16) -> f64 {
     if bits_per_sample <= 1 {
         return 1.0;
     }
-    let shift = (bits_per_sample - 1).min(30) as u32;
+
+    // Keep diagnostic normalization valid for 24/32-bit PCM and avoid shift overflow.
+    let shift = (bits_per_sample - 1).min(62) as u32;
     ((1i64 << shift) - 1) as f64
 }
 
@@ -537,4 +539,19 @@ fn copy_to_clipboard(text: &str) {
 
 fn timestamp() -> String {
     chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::max_int_amplitude;
+
+    #[test]
+    fn max_int_amplitude_handles_16_bit_pcm() {
+        assert!((max_int_amplitude(16) - 32767.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn max_int_amplitude_handles_32_bit_pcm() {
+        assert!((max_int_amplitude(32) - 2_147_483_647.0).abs() < f64::EPSILON);
+    }
 }

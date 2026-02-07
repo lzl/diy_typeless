@@ -13,7 +13,7 @@ DERIVED_DATA_PATH="$PROJECT_ROOT/.context/DerivedData"
 DESTINATION_DIR="$HOME/Applications"
 APP_NAME="DIYTypeless Dev.app"
 BUNDLE_ID="com.lizunlong.DIYTypeless"
-RUST_PROFILE="release"
+RUST_PROFILE=""
 
 SKIP_RUST_BUILD=0
 RESET_PERMISSIONS=0
@@ -38,7 +38,8 @@ Options:
   --bundle-id <id>             Bundle ID used when resetting permissions.
                                Default: com.lizunlong.DIYTypeless
   --rust-profile <profile>     Rust profile for diy_typeless_core (debug|release).
-                               Default: release
+                               Default: inferred from --configuration
+                               (Debug->debug, Release->release)
   --skip-rust-build            Skip cargo build step.
   --reset-permissions          Reset Accessibility/Input Monitoring before launch.
   --include-microphone-reset   With --reset-permissions, also reset microphone.
@@ -117,6 +118,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -z "$RUST_PROFILE" ]]; then
+    config_lc="$(printf '%s' "$CONFIGURATION" | tr '[:upper:]' '[:lower:]')"
+    case "$config_lc" in
+        debug)
+            RUST_PROFILE="debug"
+            ;;
+        release)
+            RUST_PROFILE="release"
+            ;;
+        *)
+            echo "Error: --configuration '$CONFIGURATION' requires explicit --rust-profile (debug|release)." >&2
+            exit 1
+            ;;
+    esac
+fi
+
 if [[ "$RUST_PROFILE" != "debug" && "$RUST_PROFILE" != "release" ]]; then
     echo "Error: --rust-profile must be 'debug' or 'release'." >&2
     exit 1
@@ -132,6 +149,8 @@ if [[ ! -d "$XCODE_PROJECT_PATH" ]]; then
     exit 1
 fi
 
+RUST_LIB_PATH="$PROJECT_ROOT/target/$RUST_PROFILE/libdiy_typeless_core.dylib"
+
 if [[ "$SKIP_RUST_BUILD" -eq 0 ]]; then
     echo "=== [1/4] Building Rust core ($RUST_PROFILE) ==="
     if [[ "$RUST_PROFILE" == "release" ]]; then
@@ -141,6 +160,11 @@ if [[ "$SKIP_RUST_BUILD" -eq 0 ]]; then
     fi
 else
     echo "=== [1/4] Skipping Rust build ==="
+    if [[ ! -f "$RUST_LIB_PATH" ]]; then
+        echo "Error: expected Rust dylib not found at $RUST_LIB_PATH" >&2
+        echo "Run without --skip-rust-build or choose a matching --rust-profile." >&2
+        exit 1
+    fi
 fi
 
 echo "=== [2/4] Building macOS app ($CONFIGURATION) ==="
