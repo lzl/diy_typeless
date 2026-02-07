@@ -74,6 +74,57 @@ uniffi-bindgen generate \
  echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
  ```
  
+## Fast Debug Loop (CLI + xcodebuild)
+
+Use one command to rebuild Rust core, build the app with `xcodebuild`, install to a stable path, and relaunch.
+
+```bash
+./scripts/dev-loop.sh
+```
+
+By default it:
+
+1. Builds `diy_typeless_core` in release mode (matches current Xcode link path).
+2. Builds the app in Debug with `xcodebuild`.
+3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
+4. Launches the copied app.
+
+Useful flags:
+
+```bash
+# Build/install only (no launch)
+./scripts/dev-loop.sh --skip-launch
+
+# Reset Accessibility + Input Monitoring before launch
+./scripts/dev-loop.sh --reset-permissions
+
+# Also reset Microphone
+./scripts/dev-loop.sh --reset-permissions --include-microphone-reset
+
+# Install somewhere else
+./scripts/dev-loop.sh --destination-dir ./.context/apps
+```
+
+Reset permissions only:
+
+```bash
+./scripts/reset-permissions.sh
+./scripts/reset-permissions.sh --include-microphone
+```
+
+Recommended day-to-day debug flow:
+
+```bash
+# 1) Validate Rust core behavior first (closing the loop)
+cargo run -p diy_typeless_cli -- full --duration-seconds 4
+
+# 2) Rebuild + reinstall + relaunch macOS app
+./scripts/dev-loop.sh
+
+# 3) If permission UI does not refresh after an update
+./scripts/dev-loop.sh --reset-permissions
+```
+
 ## macOS App Setup
 
 The Swift sources live in `app/DIYTypeless/DIYTypeless/`. A separate Xcode project (`diy_typeless_mac`) uses these sources via symlink.
@@ -139,10 +190,12 @@ If the app doesn't appear in the Accessibility or Input Monitoring lists:
 
 5. **Reset permissions (last resort)**:
    ```bash
-   tccutil reset Accessibility com.lizunlong.DIYTypeless
-   tccutil reset ListenEvent com.lizunlong.DIYTypeless
+   ./scripts/reset-permissions.sh
+
+   # Also reset microphone if needed
+   ./scripts/reset-permissions.sh --include-microphone
    ```
-   Then run the app again and request permissions.
+   Then run `./scripts/dev-loop.sh` and request permissions again.
  
  ## Usage
  
