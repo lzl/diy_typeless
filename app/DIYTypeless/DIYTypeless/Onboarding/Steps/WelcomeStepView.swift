@@ -6,7 +6,7 @@ struct WelcomeStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
+                .font(.system(size: 80))
                 .foregroundStyle(.linearGradient(
                     colors: [.blue, .purple],
                     startPoint: .topLeading,

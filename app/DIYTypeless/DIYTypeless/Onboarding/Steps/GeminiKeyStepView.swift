@@ -6,7 +6,7 @@ struct GeminiKeyStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "sparkles")
-                .font(.system(size: 48))
+                .font(.system(size: 80))
                 .foregroundColor(.teal)
 
             VStack(spacing: 8) {
