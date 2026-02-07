@@ -6,7 +6,7 @@ struct CompletionStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
+                .font(.system(size: 80))
                 .foregroundColor(.green)
 
             VStack(spacing: 8) {

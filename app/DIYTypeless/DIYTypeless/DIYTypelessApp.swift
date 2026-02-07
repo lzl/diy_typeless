@@ -12,7 +12,7 @@ struct DIYTypelessApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("DIY Typeless", systemImage: "mic.fill") {
+        MenuBarExtra("DIY Typeless", systemImage: "waveform") {
             MenuBarView()
                 .environmentObject(appState)
         }

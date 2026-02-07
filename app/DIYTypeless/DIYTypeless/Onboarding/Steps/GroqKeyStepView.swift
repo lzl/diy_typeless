@@ -6,7 +6,7 @@ struct GroqKeyStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 48))
+                .font(.system(size: 80))
                 .foregroundColor(.pink)
 
             VStack(spacing: 8) {
