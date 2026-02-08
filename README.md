@@ -195,8 +195,17 @@ If the app doesn't appear in the Accessibility list:
  5. The polished text will be pasted into the active field or copied.
  
  ## Notes
- 
+
  - If Accessibility is missing, key capture will not work.
  - If no input field is focused, text is copied to the clipboard.
  - Re-generate UniFFI bindings whenever the Rust API changes.
- 
+
+## License
+
+This project is dual-licensed under either:
+
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+
+at your option.
+
