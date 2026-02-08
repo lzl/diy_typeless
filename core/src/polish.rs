@@ -33,7 +33,7 @@ pub fn polish_text(api_key: &str, raw_text: &str) -> Result<String, CoreError> {
 
     let client = Client::builder().timeout(Duration::from_secs(90)).build()?;
 
-    let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent?key={api_key}");
+    let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 
     for attempt in 0..3 {
         let body = serde_json::json!({
@@ -45,7 +45,7 @@ pub fn polish_text(api_key: &str, raw_text: &str) -> Result<String, CoreError> {
             ]
         });
 
-        let response = client.post(&url).json(&body).send();
+        let response = client.post(&url).header("x-goog-api-key", api_key).json(&body).send();
 
         match response {
             Ok(resp) if resp.status() == StatusCode::OK => {
