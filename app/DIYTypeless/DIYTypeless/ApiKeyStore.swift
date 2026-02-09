@@ -2,9 +2,10 @@ import Foundation
 import Security
 
 final class ApiKeyStore {
-    private let service = "com.diytypeless.api"
+    private let service = "com.lizunlong.DIYTypeless"
     private let combinedAccount = "api_keys"
-    // Legacy accounts for migration
+    // Legacy identifiers for migration
+    private let legacyService = "com.diytypeless.api"
     private let legacyGroqAccount = "groq_api_key"
     private let legacyGeminiAccount = "gemini_api_key"
 
@@ -22,22 +23,28 @@ final class ApiKeyStore {
 
         guard !cacheLoaded else { return }
 
-        // Try loading from combined storage first
+        // Try loading from combined storage (current service) first
         if let data = loadDataFromKeychain(account: combinedAccount),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             cachedGroqKey = dict["groq"]
             cachedGeminiKey = dict["gemini"]
+        } else if let data = loadDataFromKeychain(account: combinedAccount, service: legacyService),
+                  let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+            // Migrate from legacy service (com.diytypeless.api) combined storage
+            cachedGroqKey = dict["groq"]
+            cachedGeminiKey = dict["gemini"]
+            if saveAllKeysInternal() {
+                deleteFromKeychain(account: combinedAccount, service: legacyService)
+            }
         } else {
-            // Migrate from legacy separate accounts
-            cachedGroqKey = loadStringFromKeychain(account: legacyGroqAccount)
-            cachedGeminiKey = loadStringFromKeychain(account: legacyGeminiAccount)
+            // Migrate from legacy separate accounts (oldest format)
+            cachedGroqKey = loadStringFromKeychain(account: legacyGroqAccount, service: legacyService)
+            cachedGeminiKey = loadStringFromKeychain(account: legacyGeminiAccount, service: legacyService)
 
-            // If we found legacy keys, migrate to combined storage
-            // Only delete legacy keys after confirming save succeeded
             if cachedGroqKey != nil || cachedGeminiKey != nil {
                 if saveAllKeysInternal() {
-                    deleteFromKeychain(account: legacyGroqAccount)
-                    deleteFromKeychain(account: legacyGeminiAccount)
+                    deleteFromKeychain(account: legacyGroqAccount, service: legacyService)
+                    deleteFromKeychain(account: legacyGeminiAccount, service: legacyService)
                 }
             }
         }
@@ -121,10 +128,10 @@ final class ApiKeyStore {
         }
     }
 
-    private func loadDataFromKeychain(account: String) -> Data? {
+    private func loadDataFromKeychain(account: String, service svc: String? = nil) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: svc ?? service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
@@ -138,17 +145,17 @@ final class ApiKeyStore {
         return data
     }
 
-    private func loadStringFromKeychain(account: String) -> String? {
-        guard let data = loadDataFromKeychain(account: account) else {
+    private func loadStringFromKeychain(account: String, service svc: String? = nil) -> String? {
+        guard let data = loadDataFromKeychain(account: account, service: svc) else {
             return nil
         }
         return String(data: data, encoding: .utf8)
     }
 
-    private func deleteFromKeychain(account: String) {
+    private func deleteFromKeychain(account: String, service svc: String? = nil) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: svc ?? service,
             kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
