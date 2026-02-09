@@ -26,7 +26,7 @@ final class RecordingState: ObservableObject {
     private var geminiKey: String = ""
     private var isRecording = false
     private var isProcessing = false
-    private var currentGeneration: Int = 0
+    nonisolated(unsafe) private var currentGeneration: Int = 0
 
     init(
         permissionManager: PermissionManager,
