@@ -28,6 +28,7 @@ echo "[2/5] Building Xcode archive (universal binary)..."
 cd "$XCODE_PROJECT"
 xcodebuild archive \
     -scheme DIYTypeless \
+    -destination 'generic/platform=macOS' \
     -archivePath "$ARCHIVE_PATH" \
     ARCHS="arm64 x86_64" \
     ONLY_ACTIVE_ARCH=NO \
