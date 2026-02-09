@@ -15,6 +15,7 @@ final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
 
     var onRequireOnboarding: (() -> Void)?
+    var onWillDeliverText: (() -> Void)?
 
     private let permissionManager: PermissionManager
     private let keyStore: ApiKeyStore
@@ -25,6 +26,7 @@ final class RecordingState: ObservableObject {
     private var geminiKey: String = ""
     private var isRecording = false
     private var isProcessing = false
+    private var currentGeneration: Int = 0
 
     init(
         permissionManager: PermissionManager,
@@ -62,10 +64,40 @@ final class RecordingState: ObservableObject {
 
     func deactivate() {
         keyMonitor.stop()
+        if isRecording {
+            _ = try? stopRecording()
+            isRecording = false
+        }
+        currentGeneration += 1
+        isProcessing = false
         capsuleState = .hidden
     }
 
+    func handleCancel() {
+        switch capsuleState {
+        case .recording:
+            isRecording = false
+            isProcessing = false
+            currentGeneration += 1
+            _ = try? stopRecording()
+            capsuleState = .hidden
+
+        case .transcribing, .polishing:
+            currentGeneration += 1
+            isProcessing = false
+            capsuleState = .hidden
+
+        case .hidden, .done, .error:
+            break
+        }
+    }
+
     private func handleKeyDown() {
+        if isProcessing, !isRecording {
+            handleCancel()
+            return
+        }
+
         let status = permissionManager.currentStatus()
         guard status.allGranted else {
             showError("Permissions required")
@@ -97,26 +129,41 @@ final class RecordingState: ObservableObject {
         isProcessing = true
         capsuleState = .transcribing
 
+        currentGeneration += 1
+        let gen = currentGeneration
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey] in
             guard let self else { return }
             do {
                 let wavData = try stopRecording()
+                guard self.currentGeneration == gen else { return }
+
                 let rawText = try transcribeWavBytes(
                     apiKey: groqKey,
                     wavBytes: wavData.bytes,
                     language: nil
                 )
+                guard self.currentGeneration == gen else { return }
 
                 DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
                     self.capsuleState = .polishing
                 }
 
-                let polished = try polishText(apiKey: geminiKey, rawText: rawText)
+                let outputText: String
+                do {
+                    outputText = try polishText(apiKey: geminiKey, rawText: rawText)
+                } catch {
+                    outputText = rawText
+                }
+
                 DispatchQueue.main.async {
-                    self.finishOutput(raw: rawText, polished: polished)
+                    guard self.currentGeneration == gen else { return }
+                    self.finishOutput(raw: rawText, polished: outputText)
                 }
             } catch {
                 DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
                     self.showError(error.localizedDescription)
                     self.isProcessing = false
                 }
@@ -125,6 +172,7 @@ final class RecordingState: ObservableObject {
     }
 
     private func finishOutput(raw: String, polished: String) {
+        onWillDeliverText?()
         let result = outputManager.deliver(text: polished)
         capsuleState = .done(result)
         isProcessing = false

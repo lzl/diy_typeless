@@ -57,3 +57,15 @@ Use the provided script:
 ```
 
 This builds the app, creates a DMG, and outputs to `~/Downloads/DIYTypeless.dmg`.
+
+## Key Event Capture (Important)
+
+This app does NOT have Input Monitoring permission (deliberately dropped in PR #10). This means:
+
+- **`NSEvent.addGlobalMonitorForEvents(matching: .keyDown)`** will silently fail for non-modifier keys (Esc, letters, etc.)
+- **`CGEvent.tapCreate`** for `.keyDown` events will return nil
+- **Only `.flagsChanged`** global monitoring works (modifier keys like Fn)
+
+**Correct approach for capturing non-modifier keys (e.g. Esc):** Use an `NSPanel` subclass with `.nonactivatingPanel` style mask and `canBecomeKey = true`. When the panel is made key via `makeKey()`, it receives local keyboard events without activating the app or stealing focus from the user's text field. Override `sendEvent(_:)` on the panel to intercept specific keys. See `CapsulePanel` in `CapsuleWindow.swift` for the working implementation.
+
+Do NOT attempt: `NSEvent` global `.keyDown` monitors, `CGEventTap`, or `IOHIDManager` for key capture — they all require Input Monitoring permission.
