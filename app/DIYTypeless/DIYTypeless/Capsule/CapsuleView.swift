@@ -25,7 +25,7 @@ struct CapsuleView: View {
             content
         }
         .frame(width: capsuleWidth, height: capsuleHeight)
-        .onChange(of: state.capsuleState) { _, newState in
+        .onChange(of: state.capsuleState) { newState in
             handleStateChange(newState)
         }
     }
