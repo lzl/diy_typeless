@@ -21,11 +21,13 @@ final class RecordingState: ObservableObject {
     private let keyStore: ApiKeyStore
     private let keyMonitor: KeyMonitor
     private let outputManager: TextOutputManager
+    private let contextDetector = AppContextDetector()
 
     private var groqKey: String = ""
     private var geminiKey: String = ""
     private var isRecording = false
     private var isProcessing = false
+    private var capturedContext: String?
     nonisolated(unsafe) private var currentGeneration: Int = 0
 
     init(
@@ -70,6 +72,7 @@ final class RecordingState: ObservableObject {
         }
         currentGeneration += 1
         isProcessing = false
+        capturedContext = nil
         capsuleState = .hidden
     }
 
@@ -79,12 +82,14 @@ final class RecordingState: ObservableObject {
             isRecording = false
             isProcessing = false
             currentGeneration += 1
+            capturedContext = nil
             _ = try? stopRecording()
             capsuleState = .hidden
 
         case .transcribing, .polishing:
             currentGeneration += 1
             isProcessing = false
+            capturedContext = nil
             capsuleState = .hidden
 
         case .hidden, .done, .error:
@@ -118,6 +123,7 @@ final class RecordingState: ObservableObject {
             try startRecording()
             isRecording = true
             capsuleState = .recording
+            capturedContext = contextDetector.captureContext().formatted
         } catch {
             showError(error.localizedDescription)
         }
@@ -132,7 +138,7 @@ final class RecordingState: ObservableObject {
         currentGeneration += 1
         let gen = currentGeneration
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey] in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext] in
             guard let self else { return }
             do {
                 let wavData = try stopRecording()
@@ -152,7 +158,7 @@ final class RecordingState: ObservableObject {
 
                 let outputText: String
                 do {
-                    outputText = try polishText(apiKey: geminiKey, rawText: rawText)
+                    outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)
                 } catch {
                     outputText = rawText
                 }

@@ -13,9 +13,10 @@ pub fn process_wav_bytes(
     gemini_api_key: &str,
     wav_bytes: &[u8],
     language: Option<&str>,
+    context: Option<&str>,
 ) -> Result<PipelineResult, CoreError> {
     let raw = transcribe_wav_bytes(groq_api_key, wav_bytes, language)?;
-    let polished = polish_text(gemini_api_key, &raw)?;
+    let polished = polish_text(gemini_api_key, &raw, context)?;
     Ok(PipelineResult {
         raw_text: raw,
         polished_text: polished,

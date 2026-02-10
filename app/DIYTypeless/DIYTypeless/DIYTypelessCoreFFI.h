@@ -245,12 +245,12 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
-RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_WAV_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_WAV_BYTES
-RustBuffer uniffi_diy_typeless_core_fn_func_process_wav_bytes(RustBuffer groq_api_key, RustBuffer gemini_api_key, RustBuffer wav_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_process_wav_bytes(RustBuffer groq_api_key, RustBuffer gemini_api_key, RustBuffer wav_bytes, RustBuffer language, RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING

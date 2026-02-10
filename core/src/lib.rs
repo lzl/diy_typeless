@@ -29,8 +29,12 @@ pub fn transcribe_wav_bytes(
 }
 
 #[uniffi::export]
-pub fn polish_text(api_key: String, raw_text: String) -> Result<String, CoreError> {
-    polish::polish_text(&api_key, &raw_text)
+pub fn polish_text(
+    api_key: String,
+    raw_text: String,
+    context: Option<String>,
+) -> Result<String, CoreError> {
+    polish::polish_text(&api_key, &raw_text, context.as_deref())
 }
 
 #[uniffi::export]
@@ -39,12 +43,14 @@ pub fn process_wav_bytes(
     gemini_api_key: String,
     wav_bytes: Vec<u8>,
     language: Option<String>,
+    context: Option<String>,
 ) -> Result<PipelineResult, CoreError> {
     pipeline::process_wav_bytes(
         &groq_api_key,
         &gemini_api_key,
         &wav_bytes,
         language.as_deref(),
+        context.as_deref(),
     )
 }
 
