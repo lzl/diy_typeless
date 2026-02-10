@@ -443,7 +443,7 @@
 					"$(PROJECT_DIR)/../../target/$(RUST_PROFILE)",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypeless;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypeless.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUST_PROFILE = debug;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
