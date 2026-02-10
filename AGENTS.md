@@ -1,5 +1,18 @@
 # Agent Guidance
 
+## Language Convention
+
+All code, documentation, comments, commit messages, and technical writing in this project must be in English. This includes:
+- Rust code and comments
+- Swift code and comments
+- CLI output and error messages
+- Documentation files (README, AGENTS.md, etc.)
+- Git commit messages
+- Test case descriptions and evolution logs
+- Skill documentation
+
+The only exception is user-facing content that is intentionally localized (e.g., test cases for Chinese language processing).
+
 ## Closing the Loop (Primary Rule)
 
 This project prioritizes closing the loop. Any core logic changes must be verified through an executable path that the agent can run end-to-end without opening the macOS app UI.
