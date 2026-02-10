@@ -1,0 +1,1 @@
+hey so um I just pushed the fix for that bug we were talking about yesterday the one where the the upload would fail if the file was over 10 megs so basically I increased the limit to 50 megs and also added a progress bar so users can see whats happening can you review it when you get a chance

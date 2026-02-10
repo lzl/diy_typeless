@@ -1,0 +1,1 @@
+Hey, just pushed the fix for that upload bug we discussed yesterday — the one where uploads over 10MB would fail. I increased the limit to 50MB and added a progress bar. Can you review when you get a chance?

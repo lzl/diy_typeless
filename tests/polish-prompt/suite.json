@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "001-chinese-casual",
+      "description": "Chinese casual speech with filler words and repetition",
+      "has_context": false,
+      "scores": []
+    },
+    {
+      "id": "002-english-filler",
+      "description": "English speech with heavy filler words and run-on sentences",
+      "has_context": false,
+      "scores": []
+    },
+    {
+      "id": "003-english-with-context",
+      "description": "English speech with context parameter (Slack message)",
+      "has_context": true,
+      "scores": []
+    }
+  ]
+}
