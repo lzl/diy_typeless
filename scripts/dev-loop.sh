@@ -12,7 +12,7 @@ CONFIGURATION="Debug"
 DERIVED_DATA_PATH="$PROJECT_ROOT/.context/DerivedData"
 DESTINATION_DIR="$HOME/Applications"
 APP_NAME="DIYTypeless Dev.app"
-BUNDLE_ID="com.lizunlong.DIYTypeless"
+BUNDLE_ID="com.lizunlong.DIYTypeless.dev"
 RUST_PROFILE=""
 
 SKIP_RUST_BUILD=0
