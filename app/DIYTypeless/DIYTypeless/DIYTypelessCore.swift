@@ -760,21 +760,23 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
-public func polishText(apiKey: String, rawText: String)throws  -> String  {
+public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
         FfiConverterString.lower(apiKey),
-        FfiConverterString.lower(rawText),$0
+        FfiConverterString.lower(rawText),
+        FfiConverterOptionString.lower(context),$0
     )
 })
 }
-public func processWavBytes(groqApiKey: String, geminiApiKey: String, wavBytes: Data, language: String?)throws  -> PipelineResult  {
+public func processWavBytes(groqApiKey: String, geminiApiKey: String, wavBytes: Data, language: String?, context: String?)throws  -> PipelineResult  {
     return try  FfiConverterTypePipelineResult_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_process_wav_bytes(
         FfiConverterString.lower(groqApiKey),
         FfiConverterString.lower(geminiApiKey),
         FfiConverterData.lower(wavBytes),
-        FfiConverterOptionString.lower(language),$0
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionString.lower(context),$0
     )
 })
 }
@@ -814,10 +816,10 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 19799) {
+    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_process_wav_bytes() != 9044) {
+    if (uniffi_diy_typeless_core_checksum_func_process_wav_bytes() != 61710) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {

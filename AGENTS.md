@@ -69,3 +69,18 @@ This app does NOT have Input Monitoring permission (deliberately dropped in PR #
 **Correct approach for capturing non-modifier keys (e.g. Esc):** Use an `NSPanel` subclass with `.nonactivatingPanel` style mask and `canBecomeKey = true`. When the panel is made key via `makeKey()`, it receives local keyboard events without activating the app or stealing focus from the user's text field. Override `sendEvent(_:)` on the panel to intercept specific keys. See `CapsulePanel` in `CapsuleWindow.swift` for the working implementation.
 
 Do NOT attempt: `NSEvent` global `.keyDown` monitors, `CGEventTap`, or `IOHIDManager` for key capture — they all require Input Monitoring permission.
+
+## UniFFI Generated Files (Important)
+
+UniFFI auto-generates C header and modulemap files for the Rust-Swift bridge. These files must live in **one and only one** location:
+
+```
+app/DIYTypeless/DIYTypeless/DIYTypelessCoreFFI.h
+app/DIYTypeless/DIYTypeless/DIYTypelessCoreFFI.modulemap
+```
+
+This is because:
+- The bridging header (`DIYTypeless-Bridging-Header.h`) does `#import "DIYTypelessCoreFFI.h"` relative to itself in the same directory.
+- `SWIFT_INCLUDE_PATHS` in `project.pbxproj` is set to `$(SRCROOT)/DIYTypeless`, which resolves to `app/DIYTypeless/DIYTypeless/`.
+
+Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory). That path is not referenced by the Xcode project and creates confusing duplicates.

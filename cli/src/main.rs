@@ -36,6 +36,8 @@ enum Commands {
         gemini_key: Option<String>,
         #[arg(long)]
         text: Option<String>,
+        #[arg(long)]
+        context: Option<String>,
     },
     Full {
         #[arg(long)]
@@ -48,6 +50,8 @@ enum Commands {
         language: Option<String>,
         #[arg(long)]
         duration_seconds: Option<u64>,
+        #[arg(long)]
+        context: Option<String>,
     },
     Diagnose {
         #[command(subcommand)]
@@ -76,6 +80,8 @@ enum DiagnoseCommands {
         language: Option<String>,
         #[arg(long)]
         transcribe_only: bool,
+        #[arg(long)]
+        context: Option<String>,
     },
 }
 
@@ -133,13 +139,17 @@ fn main() -> Result<()> {
             let text = diy_typeless_core::transcribe_wav_bytes(api_key, wav_bytes, language)?;
             println!("{text}");
         }
-        Commands::Polish { gemini_key, text } => {
+        Commands::Polish {
+            gemini_key,
+            text,
+            context,
+        } => {
             let api_key = resolve_gemini_key(gemini_key)?;
             let raw_text = match text {
                 Some(text) => text,
                 None => read_stdin()?,
             };
-            let polished = diy_typeless_core::polish_text(api_key, raw_text)?;
+            let polished = diy_typeless_core::polish_text(api_key, raw_text, context)?;
             println!("{polished}");
             copy_to_clipboard(&polished);
         }
@@ -149,6 +159,7 @@ fn main() -> Result<()> {
             gemini_key,
             language,
             duration_seconds,
+            context,
         } => {
             let groq_key = resolve_groq_key(groq_key)?;
             let gemini_key = resolve_gemini_key(gemini_key)?;
@@ -173,7 +184,7 @@ fn main() -> Result<()> {
             fs::write(&wav_path, &wav_data.bytes)?;
 
             println!("Transcribing...");
-            let result = process_wav_bytes(groq_key, gemini_key, wav_data.bytes, language)?;
+            let result = process_wav_bytes(groq_key, gemini_key, wav_data.bytes, language, context)?;
 
             let raw_path = output_dir.join(format!("{base}.txt"));
             fs::write(&raw_path, &result.raw_text)?;
@@ -204,6 +215,7 @@ fn main() -> Result<()> {
                 gemini_key,
                 language,
                 transcribe_only,
+                context,
             } => run_diagnose_pipeline(
                 file,
                 output_dir,
@@ -211,6 +223,7 @@ fn main() -> Result<()> {
                 gemini_key,
                 language,
                 transcribe_only,
+                context,
             )?,
         },
     }
@@ -298,6 +311,7 @@ fn run_diagnose_pipeline(
     gemini_key: Option<String>,
     language: Option<String>,
     transcribe_only: bool,
+    context: Option<String>,
 ) -> Result<()> {
     let wav_bytes = fs::read(&file).context("Failed to read WAV file")?;
     let metrics = inspect_wav_bytes(&wav_bytes)
@@ -338,7 +352,7 @@ fn run_diagnose_pipeline(
     let gemini_key = resolve_gemini_key(gemini_key)?;
     let polish_start = Instant::now();
     let polished_text =
-        diy_typeless_core::polish_text(gemini_key, raw_text).context("Polish step failed")?;
+        diy_typeless_core::polish_text(gemini_key, raw_text, context).context("Polish step failed")?;
     let polish_elapsed = polish_start.elapsed();
     let polished_path = output_dir.join(format!("{base}_polished.txt"));
     fs::write(&polished_path, &polished_text)?;

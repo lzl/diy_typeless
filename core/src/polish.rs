@@ -26,9 +26,20 @@ struct GeminiPart {
     text: Option<String>,
 }
 
-pub fn polish_text(api_key: &str, raw_text: &str) -> Result<String, CoreError> {
+pub fn polish_text(
+    api_key: &str,
+    raw_text: &str,
+    context: Option<&str>,
+) -> Result<String, CoreError> {
+    let context_section = match context {
+        Some(ctx) if !ctx.trim().is_empty() => format!(
+            "\n\nContext about where this text will be used:\n{ctx}\nAdapt the tone, format and style to match the target application. For example: chat/messaging apps should be casual and concise; email should use appropriate email tone; code editors should preserve technical terms; social media should follow platform conventions.\n"
+        ),
+        _ => String::new(),
+    };
+
     let prompt = format!(
-         "You are a professional text editor. Transform the following speech transcript into well-structured written text.\n\nRules:\n1. Keep the SAME language as the original - do NOT translate\n2. Convert spoken language to written language:\n   - Remove filler words (e.g., \"um\", \"uh\", \"like\", \"you know\", or equivalents in other languages)\n   - Transform colloquial expressions into formal written style\n   - Fix transcription errors (misheard words, typos)\n3. Reorganize content logically:\n   - Group related information together\n   - Separate different topics into paragraphs with blank lines\n   - Use numbered lists when content describes steps, features, or multiple points\n4. Preserve ALL substantive information - only remove verbal fillers, not actual content\n5. Add proper punctuation and spacing\n6. Output ONLY the final polished text - no comments or annotations\n\nOriginal transcript:\n{raw_text}\n\nOutput the polished text directly.",
+         "You are a professional text editor. Transform the following speech transcript into well-structured written text.\n\nRules:\n1. Keep the SAME language as the original - do NOT translate\n2. Convert spoken language to written language:\n   - Remove filler words (e.g., \"um\", \"uh\", \"like\", \"you know\", or equivalents in other languages)\n   - Transform colloquial expressions into formal written style\n   - Fix transcription errors (misheard words, typos)\n3. Reorganize content logically:\n   - Group related information together\n   - Separate different topics into paragraphs with blank lines\n   - Use numbered lists when content describes steps, features, or multiple points\n4. Preserve ALL substantive information - only remove verbal fillers, not actual content\n5. Add proper punctuation and spacing\n6. Output ONLY the final polished text - no comments or annotations\n{context_section}\nOriginal transcript:\n{raw_text}\n\nOutput the polished text directly.",
      );
 
     let client = Client::builder().timeout(Duration::from_secs(90)).build()?;
