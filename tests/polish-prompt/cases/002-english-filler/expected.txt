@@ -1,0 +1,6 @@
+The new authentication system needs to support both OAuth and API keys. The current implementation only handles basic auth, which is not secure enough for production.
+
+Additional requirements:
+
+1. Add rate limiting to prevent abuse
+2. Ensure tokens expire after 24 hours
