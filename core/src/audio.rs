@@ -1,6 +1,6 @@
 use crate::config::{
-    HIGHPASS_FREQ_HZ, MAX_GAIN, PEAK_NORMALIZE_TARGET, SOFT_LIMIT_THRESHOLD, TARGET_RMS_DB,
-    WHISPER_CHANNELS, WHISPER_SAMPLE_RATE,
+    CHUNK_DURATION_SECS, HIGHPASS_FREQ_HZ, MAX_GAIN, PEAK_NORMALIZE_TARGET,
+    SOFT_LIMIT_THRESHOLD, TARGET_RMS_DB, WHISPER_CHANNELS, WHISPER_SAMPLE_RATE,
 };
 use crate::error::CoreError;
 use biquad::{Biquad, Coefficients, DirectForm1, ToHertz, Type, Q_BUTTERWORTH_F32};
@@ -21,6 +21,7 @@ struct RecordingState {
     samples: Arc<Mutex<Vec<f32>>>,
     sample_rate: u32,
     channels: u16,
+    chunk_cursor: usize,
 }
 
 impl RecordingState {
@@ -31,6 +32,7 @@ impl RecordingState {
             samples: Arc::new(Mutex::new(Vec::new())),
             sample_rate: WHISPER_SAMPLE_RATE,
             channels: WHISPER_CHANNELS,
+            chunk_cursor: 0,
         }
     }
 }
@@ -98,6 +100,7 @@ pub fn start_recording() -> Result<(), CoreError> {
     state.samples = samples;
     state.sample_rate = sample_rate;
     state.channels = channels;
+    state.chunk_cursor = 0;
 
     Ok(())
 }
@@ -123,17 +126,26 @@ pub fn stop_recording() -> Result<WavData, CoreError> {
         .samples
         .lock()
         .map_err(|_| CoreError::AudioCapture("Sample lock poisoned".to_string()))?;
-    if samples.is_empty() {
-        return Err(CoreError::AudioCapture("No audio captured".to_string()));
+
+    let chunk_cursor = state.chunk_cursor;
+    let sample_rate = state.sample_rate;
+
+    // Only process samples after chunk_cursor (remaining audio not yet chunked)
+    if chunk_cursor >= samples.len() {
+        drop(samples);
+        return Ok(WavData {
+            bytes: vec![],
+            duration_seconds: 0.0,
+        });
     }
 
-    let mut captured = samples.clone();
+    let mut captured = samples[chunk_cursor..].to_vec();
     drop(samples);
 
-    let duration_seconds = captured.len() as f32 / state.sample_rate as f32;
+    let duration_seconds = captured.len() as f32 / sample_rate as f32;
 
-    if state.sample_rate != WHISPER_SAMPLE_RATE {
-        captured = resample_linear(&captured, state.sample_rate, WHISPER_SAMPLE_RATE);
+    if sample_rate != WHISPER_SAMPLE_RATE {
+        captured = resample_linear(&captured, sample_rate, WHISPER_SAMPLE_RATE);
     }
 
     let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE)?;
@@ -143,6 +155,54 @@ pub fn stop_recording() -> Result<WavData, CoreError> {
         bytes,
         duration_seconds,
     })
+}
+
+pub fn take_chunk() -> Result<Option<WavData>, CoreError> {
+    let mut state = RECORDING_STATE
+        .lock()
+        .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
+
+    if !state.is_recording {
+        return Ok(None);
+    }
+
+    let threshold = (CHUNK_DURATION_SECS * state.sample_rate as f32) as usize;
+    let sample_rate = state.sample_rate;
+
+    let captured = {
+        let samples = state
+            .samples
+            .lock()
+            .map_err(|_| CoreError::AudioCapture("Sample lock poisoned".to_string()))?;
+
+        if samples.len() - state.chunk_cursor < threshold {
+            return Ok(None);
+        }
+
+        let data = samples[state.chunk_cursor..].to_vec();
+        let new_cursor = samples.len();
+        drop(samples);
+        state.chunk_cursor = new_cursor;
+        data
+    };
+
+    // Release state lock before doing expensive work
+    let captured_len = captured.len();
+    drop(state);
+
+    let mut resampled = captured;
+    if sample_rate != WHISPER_SAMPLE_RATE {
+        resampled = resample_linear(&resampled, sample_rate, WHISPER_SAMPLE_RATE);
+    }
+
+    let enhanced = enhance_audio(&resampled, WHISPER_SAMPLE_RATE)?;
+    let duration_seconds = captured_len as f32 / sample_rate as f32;
+    let bytes = wav_bytes_from_samples(&enhanced)?;
+
+    Ok(Some(WavData {
+        bytes,
+        duration_seconds,
+    }))
 }
 
 fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {

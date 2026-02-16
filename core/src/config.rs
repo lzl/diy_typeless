@@ -1,6 +1,8 @@
 pub const WHISPER_SAMPLE_RATE: u32 = 16_000;
 pub const WHISPER_CHANNELS: u16 = 1;
 
+pub const CHUNK_DURATION_SECS: f32 = 10.0;
+
 pub const GROQ_TRANSCRIBE_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
 pub const GROQ_WHISPER_MODEL: &str = "whisper-large-v3-turbo";
 

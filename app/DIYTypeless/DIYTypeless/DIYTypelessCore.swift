@@ -760,6 +760,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeWavData: FfiConverterRustBuffer {
+    typealias SwiftType = WavData?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeWavData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeWavData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -788,6 +812,12 @@ public func startRecording()throws   {try rustCallWithError(FfiConverterTypeCore
 public func stopRecording()throws  -> WavData  {
     return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording($0
+    )
+})
+}
+public func takeChunk()throws  -> WavData?  {
+    return try  FfiConverterOptionTypeWavData.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_take_chunk($0
     )
 })
 }
@@ -826,6 +856,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 15390) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_take_chunk() != 3201) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {

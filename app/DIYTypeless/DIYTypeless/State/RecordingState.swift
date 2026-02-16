@@ -30,6 +30,12 @@ final class RecordingState: ObservableObject {
     private var capturedContext: String?
     nonisolated(unsafe) private var currentGeneration: Int = 0
 
+    private var chunkTimer: DispatchSourceTimer?
+    private let chunkQueue = DispatchQueue(label: "com.diytypeless.chunks")
+    private var partialTranscripts: [(index: Int, text: String)] = []
+    private var nextChunkIndex: Int = 0
+    private var chunkGroup = DispatchGroup()
+
     init(
         permissionManager: PermissionManager,
         keyStore: ApiKeyStore,
@@ -66,6 +72,8 @@ final class RecordingState: ObservableObject {
 
     func deactivate() {
         keyMonitor.stop()
+        stopChunkTimer()
+        resetChunkState()
         if isRecording {
             _ = try? stopRecording()
             isRecording = false
@@ -79,6 +87,8 @@ final class RecordingState: ObservableObject {
     func handleCancel() {
         switch capsuleState {
         case .recording:
+            stopChunkTimer()
+            resetChunkState()
             isRecording = false
             isProcessing = false
             currentGeneration += 1
@@ -124,6 +134,7 @@ final class RecordingState: ObservableObject {
             isRecording = true
             capsuleState = .recording
             capturedContext = contextDetector.captureContext().formatted
+            startChunkTimer()
         } catch {
             showError(error.localizedDescription)
         }
@@ -135,6 +146,8 @@ final class RecordingState: ObservableObject {
         isProcessing = true
         capsuleState = .transcribing
 
+        stopChunkTimer()
+
         currentGeneration += 1
         let gen = currentGeneration
 
@@ -144,12 +157,43 @@ final class RecordingState: ObservableObject {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                let rawText = try transcribeWavBytes(
-                    apiKey: groqKey,
-                    wavBytes: wavData.bytes,
-                    language: nil
-                )
+                // Transcribe remaining audio (tail chunk) if non-empty
+                if !wavData.bytes.isEmpty {
+                    let chunkIndex = self.chunkQueue.sync { self.nextChunkIndex }
+                    self.chunkQueue.sync { self.nextChunkIndex += 1 }
+                    self.chunkGroup.enter()
+                    let tailText = try transcribeWavBytes(
+                        apiKey: groqKey,
+                        wavBytes: wavData.bytes,
+                        language: nil
+                    )
+                    self.chunkQueue.sync {
+                        self.partialTranscripts.append((index: chunkIndex, text: tailText))
+                    }
+                    self.chunkGroup.leave()
+                }
+
                 guard self.currentGeneration == gen else { return }
+
+                // Wait for all in-flight chunks to complete
+                self.chunkGroup.wait()
+                guard self.currentGeneration == gen else { return }
+
+                let rawText = self.chunkQueue.sync {
+                    self.partialTranscripts
+                        .sorted { $0.index < $1.index }
+                        .map(\.text)
+                        .joined(separator: " ")
+                }
+
+                guard !rawText.isEmpty else {
+                    DispatchQueue.main.async {
+                        guard self.currentGeneration == gen else { return }
+                        self.showError("No audio captured")
+                        self.isProcessing = false
+                    }
+                    return
+                }
 
                 DispatchQueue.main.async {
                     guard self.currentGeneration == gen else { return }
@@ -204,5 +248,60 @@ final class RecordingState: ObservableObject {
     private func refreshKeys() {
         groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Chunk Timer
+
+    private func startChunkTimer() {
+        resetChunkState()
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .userInitiated))
+        timer.schedule(deadline: .now() + 2, repeating: 2)
+        let gen = currentGeneration
+        let groqKey = groqKey
+        timer.setEventHandler { [weak self] in
+            guard let self, self.currentGeneration == gen else { return }
+            do {
+                guard let wavData = try takeChunk() else { return }
+                guard self.currentGeneration == gen else { return }
+
+                let chunkIndex = self.chunkQueue.sync { () -> Int in
+                    let idx = self.nextChunkIndex
+                    self.nextChunkIndex += 1
+                    return idx
+                }
+                self.chunkGroup.enter()
+
+                let text = try transcribeWavBytes(
+                    apiKey: groqKey,
+                    wavBytes: wavData.bytes,
+                    language: nil
+                )
+                guard self.currentGeneration == gen else {
+                    self.chunkGroup.leave()
+                    return
+                }
+
+                self.chunkQueue.sync {
+                    self.partialTranscripts.append((index: chunkIndex, text: text))
+                }
+                self.chunkGroup.leave()
+            } catch {
+                // Chunk transcription failed — log but continue; remaining audio
+                // will still be processed on key-up.
+            }
+        }
+        timer.resume()
+        chunkTimer = timer
+    }
+
+    private func stopChunkTimer() {
+        chunkTimer?.cancel()
+        chunkTimer = nil
+    }
+
+    private func resetChunkState() {
+        partialTranscripts = []
+        nextChunkIndex = 0
+        chunkGroup = DispatchGroup()
     }
 }

@@ -265,6 +265,12 @@ RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording(RustCallStatus *_Nonn
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TAKE_CHUNK
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TAKE_CHUNK
+RustBuffer uniffi_diy_typeless_core_fn_func_take_chunk(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
 RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_wav_bytes(RustBuffer api_key, RustBuffer wav_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
@@ -551,6 +557,12 @@ uint16_t uniffi_diy_typeless_core_checksum_func_start_recording(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TAKE_CHUNK
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TAKE_CHUNK
+uint16_t uniffi_diy_typeless_core_checksum_func_take_chunk(void
     
 );
 #endif
