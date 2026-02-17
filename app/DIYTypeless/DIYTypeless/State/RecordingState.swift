@@ -10,6 +10,53 @@ enum CapsuleState: Equatable {
     case error(String)
 }
 
+// MARK: - Chunk Manager (Thread-safe)
+
+nonisolated final class ChunkManager: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.diytypeless.chunks")
+    private var _partialTranscripts: [(index: Int, text: String)] = []
+    private var _nextChunkIndex: Int = 0
+    private var _group = DispatchGroup()
+
+    var partialTranscripts: [(index: Int, text: String)] {
+        queue.sync { _partialTranscripts }
+    }
+
+    func getAndIncrementIndex() -> Int {
+        queue.sync {
+            let idx = _nextChunkIndex
+            _nextChunkIndex += 1
+            return idx
+        }
+    }
+
+    func appendTranscript(_ transcript: (index: Int, text: String)) {
+        queue.sync {
+            _partialTranscripts.append(transcript)
+        }
+    }
+
+    func reset() {
+        queue.sync {
+            _partialTranscripts = []
+            _nextChunkIndex = 0
+            _group = DispatchGroup()
+        }
+    }
+
+    func enter() {
+        _group.enter()
+    }
+
+    func leave() {
+        _group.leave()
+    }
+
+    func wait() {
+        _group.wait()
+    }
+}
+
 @MainActor
 final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
@@ -31,10 +78,7 @@ final class RecordingState: ObservableObject {
     nonisolated(unsafe) private var currentGeneration: Int = 0
 
     private var chunkTimer: DispatchSourceTimer?
-    private let chunkQueue = DispatchQueue(label: "com.diytypeless.chunks")
-    private var partialTranscripts: [(index: Int, text: String)] = []
-    private var nextChunkIndex: Int = 0
-    private var chunkGroup = DispatchGroup()
+    private let chunkManager = ChunkManager()
 
     init(
         permissionManager: PermissionManager,
@@ -151,52 +195,55 @@ final class RecordingState: ObservableObject {
         currentGeneration += 1
         let gen = currentGeneration
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext] in
-            guard let self else { return }
+        // Capture chunk manager for detached task
+        let chunkManager = self.chunkManager
+
+        Task.detached { [groqKey, geminiKey, capturedContext, gen] in
             do {
                 let wavData = try stopRecording()
-                guard self.currentGeneration == gen else { return }
+                await MainActor.run { [gen] in
+                    guard self.currentGeneration == gen else { return }
+                }
 
                 // Transcribe remaining audio (tail chunk) if non-empty
                 if !wavData.bytes.isEmpty {
-                    let chunkIndex = self.chunkQueue.sync { self.nextChunkIndex }
-                    self.chunkQueue.sync { self.nextChunkIndex += 1 }
-                    self.chunkGroup.enter()
+                    let chunkIndex = chunkManager.getAndIncrementIndex()
+                    chunkManager.enter()
                     let tailText = try transcribeWavBytes(
                         apiKey: groqKey,
                         wavBytes: wavData.bytes,
                         language: nil
                     )
-                    self.chunkQueue.sync {
-                        self.partialTranscripts.append((index: chunkIndex, text: tailText))
-                    }
-                    self.chunkGroup.leave()
+                    chunkManager.appendTranscript((index: chunkIndex, text: tailText))
+                    chunkManager.leave()
                 }
 
-                guard self.currentGeneration == gen else { return }
+                await MainActor.run { [gen] in
+                    guard self.currentGeneration == gen else { return }
+                }
 
                 // Wait for all in-flight chunks to complete
-                self.chunkGroup.wait()
-                guard self.currentGeneration == gen else { return }
-
-                let rawText = self.chunkQueue.sync {
-                    self.partialTranscripts
-                        .sorted { $0.index < $1.index }
-                        .map(\.text)
-                        .joined(separator: " ")
+                chunkManager.wait()
+                await MainActor.run { [gen] in
+                    guard self.currentGeneration == gen else { return }
                 }
 
+                let rawText = chunkManager.partialTranscripts
+                    .sorted { $0.index < $1.index }
+                    .map(\.text)
+                    .joined(separator: " ")
+
                 guard !rawText.isEmpty else {
-                    DispatchQueue.main.async {
-                        guard self.currentGeneration == gen else { return }
+                    await MainActor.run { [weak self, gen] in
+                        guard let self, currentGeneration == gen else { return }
                         self.showError("No audio captured")
                         self.isProcessing = false
                     }
                     return
                 }
 
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
+                await MainActor.run { [weak self, gen] in
+                    guard let self, currentGeneration == gen else { return }
                     self.capsuleState = .polishing
                 }
 
@@ -207,13 +254,13 @@ final class RecordingState: ObservableObject {
                     outputText = rawText
                 }
 
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
+                await MainActor.run { [weak self, gen] in
+                    guard let self, currentGeneration == gen else { return }
                     self.finishOutput(raw: rawText, polished: outputText)
                 }
             } catch {
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
+                await MainActor.run { [weak self, gen] in
+                    guard let self, currentGeneration == gen else { return }
                     self.showError(error.localizedDescription)
                     self.isProcessing = false
                 }
@@ -258,18 +305,15 @@ final class RecordingState: ObservableObject {
         timer.schedule(deadline: .now() + 2, repeating: 2)
         let gen = currentGeneration
         let groqKey = groqKey
+        let chunkManager = self.chunkManager
         timer.setEventHandler { [weak self] in
             guard let self, self.currentGeneration == gen else { return }
             do {
                 guard let wavData = try takeChunk() else { return }
                 guard self.currentGeneration == gen else { return }
 
-                let chunkIndex = self.chunkQueue.sync { () -> Int in
-                    let idx = self.nextChunkIndex
-                    self.nextChunkIndex += 1
-                    return idx
-                }
-                self.chunkGroup.enter()
+                let chunkIndex = chunkManager.getAndIncrementIndex()
+                chunkManager.enter()
 
                 let text = try transcribeWavBytes(
                     apiKey: groqKey,
@@ -277,14 +321,12 @@ final class RecordingState: ObservableObject {
                     language: nil
                 )
                 guard self.currentGeneration == gen else {
-                    self.chunkGroup.leave()
+                    chunkManager.leave()
                     return
                 }
 
-                self.chunkQueue.sync {
-                    self.partialTranscripts.append((index: chunkIndex, text: text))
-                }
-                self.chunkGroup.leave()
+                chunkManager.appendTranscript((index: chunkIndex, text: text))
+                chunkManager.leave()
             } catch {
                 // Chunk transcription failed — log but continue; remaining audio
                 // will still be processed on key-up.
@@ -300,8 +342,6 @@ final class RecordingState: ObservableObject {
     }
 
     private func resetChunkState() {
-        partialTranscripts = []
-        nextChunkIndex = 0
-        chunkGroup = DispatchGroup()
+        chunkManager.reset()
     }
 }
