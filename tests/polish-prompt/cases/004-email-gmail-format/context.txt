@@ -1,0 +1,1 @@
+app=Google Chrome; url=https://mail.google.com/mail/u/0/#inbox?compose=new
