@@ -45,15 +45,18 @@ nonisolated final class ChunkManager: @unchecked Sendable {
     }
 
     func enter() {
-        _group.enter()
+        let g = queue.sync { _group }
+        g.enter()
     }
 
     func leave() {
-        _group.leave()
+        let g = queue.sync { _group }
+        g.leave()
     }
 
     func wait() {
-        _group.wait()
+        let g = queue.sync { _group }
+        g.wait()
     }
 }
 
@@ -198,12 +201,11 @@ final class RecordingState: ObservableObject {
         // Capture chunk manager for detached task
         let chunkManager = self.chunkManager
 
-        Task.detached { [groqKey, geminiKey, capturedContext, gen] in
+        Task.detached { [weak self, groqKey, geminiKey, capturedContext, gen] in
             do {
                 let wavData = try stopRecording()
-                await MainActor.run { [gen] in
-                    guard self.currentGeneration == gen else { return }
-                }
+                let cancelled1 = await MainActor.run { self?.currentGeneration != gen }
+                guard !cancelled1 else { return }
 
                 // Transcribe remaining audio (tail chunk) if non-empty
                 if !wavData.bytes.isEmpty {
@@ -218,15 +220,13 @@ final class RecordingState: ObservableObject {
                     chunkManager.leave()
                 }
 
-                await MainActor.run { [gen] in
-                    guard self.currentGeneration == gen else { return }
-                }
+                let cancelled2 = await MainActor.run { self?.currentGeneration != gen }
+                guard !cancelled2 else { return }
 
                 // Wait for all in-flight chunks to complete
                 chunkManager.wait()
-                await MainActor.run { [gen] in
-                    guard self.currentGeneration == gen else { return }
-                }
+                let cancelled3 = await MainActor.run { self?.currentGeneration != gen }
+                guard !cancelled3 else { return }
 
                 let rawText = chunkManager.partialTranscripts
                     .sorted { $0.index < $1.index }
@@ -234,7 +234,7 @@ final class RecordingState: ObservableObject {
                     .joined(separator: " ")
 
                 guard !rawText.isEmpty else {
-                    await MainActor.run { [weak self, gen] in
+                    await MainActor.run { [weak self] in
                         guard let self, currentGeneration == gen else { return }
                         self.showError("No audio captured")
                         self.isProcessing = false
@@ -242,7 +242,7 @@ final class RecordingState: ObservableObject {
                     return
                 }
 
-                await MainActor.run { [weak self, gen] in
+                await MainActor.run { [weak self] in
                     guard let self, currentGeneration == gen else { return }
                     self.capsuleState = .polishing
                 }
@@ -254,12 +254,12 @@ final class RecordingState: ObservableObject {
                     outputText = rawText
                 }
 
-                await MainActor.run { [weak self, gen] in
+                await MainActor.run { [weak self] in
                     guard let self, currentGeneration == gen else { return }
                     self.finishOutput(raw: rawText, polished: outputText)
                 }
             } catch {
-                await MainActor.run { [weak self, gen] in
+                await MainActor.run { [weak self] in
                     guard let self, currentGeneration == gen else { return }
                     self.showError(error.localizedDescription)
                     self.isProcessing = false
