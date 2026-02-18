@@ -25,6 +25,11 @@ pub fn take_chunk() -> Result<Option<WavData>, CoreError> {
 }
 
 #[uniffi::export]
+pub fn export_full_recording() -> Result<WavData, CoreError> {
+    audio::export_full_recording()
+}
+
+#[uniffi::export]
 pub fn transcribe_wav_bytes(
     api_key: String,
     wav_bytes: Vec<u8>,

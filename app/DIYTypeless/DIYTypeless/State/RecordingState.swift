@@ -203,6 +203,13 @@ final class RecordingState: ObservableObject {
 
         Task.detached { [weak self, groqKey, geminiKey, capturedContext, gen] in
             do {
+                // Export full recording BEFORE stopping (must be called before stopRecording)
+                #if DEBUG
+                let fullWavData: WavData? = try exportFullRecording()
+                #else
+                let fullWavData: WavData? = nil
+                #endif
+
                 let wavData = try stopRecording()
                 let cancelled1 = await MainActor.run { self?.currentGeneration != gen }
                 guard !cancelled1 else { return }
@@ -253,6 +260,15 @@ final class RecordingState: ObservableObject {
                 } catch {
                     outputText = rawText
                 }
+
+                // Save artifacts before finishing output (Debug only)
+                #if DEBUG
+                if let fullWav = fullWavData {
+                    await MainActor.run { [weak self] in
+                        self?.saveArtifacts(wavData: fullWav, rawText: rawText, polishedText: outputText)
+                    }
+                }
+                #endif
 
                 await MainActor.run { [weak self] in
                     guard let self, currentGeneration == gen else { return }
@@ -343,5 +359,49 @@ final class RecordingState: ObservableObject {
 
     private func resetChunkState() {
         chunkManager.reset()
+    }
+
+    // MARK: - Save Artifacts (Debug only)
+
+    private func saveArtifacts(wavData: WavData, rawText: String, polishedText: String) {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyyMMdd_HHmmss"
+        let timestamp = dateFormatter.string(from: Date())
+
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let recordingsDir = homeDir.appendingPathComponent("diy_typeless_recordings")
+
+        do {
+            try FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
+        } catch {
+            print("Failed to create recordings directory: \(error)")
+            return
+        }
+
+        let basePath = recordingsDir.appendingPathComponent("recording_\(timestamp)")
+
+        // Save WAV
+        let wavPath = basePath.appendingPathExtension("wav")
+        do {
+            try wavData.bytes.write(to: wavPath)
+        } catch {
+            print("Failed to save WAV: \(error)")
+        }
+
+        // Save raw text
+        let rawPath = basePath.appendingPathExtension("txt")
+        do {
+            try rawText.write(to: rawPath, atomically: true, encoding: .utf8)
+        } catch {
+            print("Failed to save raw text: \(error)")
+        }
+
+        // Save polished text
+        let polishedPath = basePath.path + "_polished.txt"
+        do {
+            try polishedText.write(toFile: polishedPath, atomically: true, encoding: .utf8)
+        } catch {
+            print("Failed to save polished text: \(error)")
+        }
     }
 }
