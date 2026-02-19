@@ -1,11 +1,11 @@
 import Foundation
 
-/// ASR 提供商枚举
-enum AsrProvider: String, CaseIterable, Identifiable {
-    case groq = "groq"
-    case local = "local"
+/// ASR 提供商枚举 - 与 Rust FFI 兼容
+public enum AsrProvider: Int32, CaseIterable, Identifiable {
+    case groq = 0
+    case local = 1
 
-    var id: String { rawValue }
+    public var id: Int32 { rawValue }
 
     var displayName: String {
         switch self {
@@ -31,11 +31,11 @@ class AsrSettings {
 
     var currentProvider: AsrProvider {
         get {
-            let rawValue = defaults.string(forKey: asrProviderKey) ?? AsrProvider.groq.rawValue
-            return AsrProvider(rawValue: rawValue) ?? .groq
+            let rawValue = defaults.integer(forKey: asrProviderKey)
+            return AsrProvider(rawValue: Int32(rawValue)) ?? .groq
         }
         set {
-            defaults.set(newValue.rawValue, forKey: asrProviderKey)
+            defaults.set(Int(newValue.rawValue), forKey: asrProviderKey)
         }
     }
 

@@ -800,6 +800,17 @@ public func transcribeWavBytes(apiKey: String, wavBytes: Data, language: String?
     )
 })
 }
+public func initLocalAsr(modelDir: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_init_local_asr(
+        FfiConverterString.lower(modelDir),$0
+    )
+}
+}
+public func isLocalAsrAvailable() -> Bool {
+    var callStatus = RustCallStatus()
+    let result = uniffi_diy_typeless_core_fn_func_is_local_asr_available(&callStatus)
+    return result != 0
+}
 
 private enum InitializationResult {
     case ok
@@ -829,6 +840,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_init_local_asr() != 58840) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_is_local_asr_available() != 6687) {
         return InitializationResult.apiChecksumMismatch
     }
 

@@ -75,7 +75,7 @@ struct AsrProviderSelectionStepView: View {
                 }
             }
             .padding()
-            .background(isSelected ? Color.accentColor : Color(.systemGray6))
+            .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())

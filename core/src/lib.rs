@@ -10,13 +10,6 @@ pub use audio::WavData;
 pub use error::CoreError;
 pub use pipeline::PipelineResult;
 
-// 导出 ASR 提供商枚举
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
-pub enum AsrProvider {
-    Groq,
-    Local,
-}
-
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {
     audio::start_recording()
@@ -72,29 +65,6 @@ pub fn init_local_asr(model_dir: String) -> Result<(), CoreError> {
 #[uniffi::export]
 pub fn is_local_asr_available() -> bool {
     transcribe::is_local_asr_available()
-}
-
-#[uniffi::export]
-pub fn process_wav_bytes_with_provider(
-    provider: AsrProvider,
-    groq_api_key: Option<String>,
-    gemini_api_key: String,
-    wav_bytes: Vec<u8>,
-    language: Option<String>,
-    context: Option<String>,
-) -> Result<PipelineResult, CoreError> {
-    let internal_provider = match provider {
-        AsrProvider::Groq => pipeline::AsrProvider::Groq,
-        AsrProvider::Local => pipeline::AsrProvider::Local,
-    };
-    pipeline::process_wav_bytes_with_provider(
-        internal_provider,
-        groq_api_key.as_deref(),
-        &gemini_api_key,
-        &wav_bytes,
-        language.as_deref(),
-        context.as_deref(),
-    )
 }
 
 uniffi::setup_scaffolding!();

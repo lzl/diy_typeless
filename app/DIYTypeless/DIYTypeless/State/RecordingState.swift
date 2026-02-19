@@ -167,21 +167,17 @@ final class RecordingState: ObservableObject {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                // 根据提供商选择转录方式
-                let providerEnum: AsrProvider
-                let groqApiKey: String?
+                // 根据提供商选择转录方式：本地 ASR 时传递空字符串，会自动使用本地模型
+                let effectiveGroqKey: String
                 switch provider {
                 case .local:
-                    providerEnum = .local
-                    groqApiKey = nil
+                    effectiveGroqKey = ""  // 空字符串触发本地 ASR（如果已加载）
                 case .groq:
-                    providerEnum = .groq
-                    groqApiKey = groqKey
+                    effectiveGroqKey = groqKey
                 }
 
-                let result = try processWavBytesWithProvider(
-                    provider: providerEnum,
-                    groqApiKey: groqApiKey,
+                let result = try processWavBytes(
+                    groqApiKey: effectiveGroqKey,
                     geminiApiKey: geminiKey,
                     wavBytes: wavData.bytes,
                     language: nil,

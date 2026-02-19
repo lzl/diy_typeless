@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// 管理本地 Qwen3-ASR 模型下载和加载

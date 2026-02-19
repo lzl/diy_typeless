@@ -22,7 +22,12 @@ pub fn process_wav_bytes(
     language: Option<&str>,
     context: Option<&str>,
 ) -> Result<PipelineResult, CoreError> {
-    let raw = transcribe_wav_bytes(groq_api_key, wav_bytes, language)?;
+    // 如果 groq_api_key 为空且本地 ASR 可用，使用本地 ASR
+    let raw = if groq_api_key.is_empty() && crate::transcribe::is_local_asr_available() {
+        transcribe_wav_bytes_local(wav_bytes, language)?
+    } else {
+        transcribe_wav_bytes(groq_api_key, wav_bytes, language)?
+    };
     let polished = polish_text(gemini_api_key, &raw, context)?;
     Ok(PipelineResult {
         raw_text: raw,
