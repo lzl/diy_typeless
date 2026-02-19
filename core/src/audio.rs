@@ -145,6 +145,55 @@ pub fn stop_recording() -> Result<WavData, CoreError> {
     })
 }
 
+/// Export the full recording before stopping.
+/// Must be called BEFORE stop_recording() since stop_recording() drops the stream
+/// which locks samples internally.
+pub fn export_full_recording() -> Result<WavData, CoreError> {
+    // First, get sample_rate and clone samples Arc
+    let (sample_rate, samples) = {
+        let state = RECORDING_STATE
+            .lock()
+            .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
+
+        if !state.is_recording {
+            return Err(CoreError::RecordingNotActive);
+        }
+
+        (state.sample_rate, state.samples.clone())
+    };
+
+    // Now lock samples to copy all data (ignoring chunk_cursor)
+    let captured = {
+        let samples_guard = samples
+            .lock()
+            .map_err(|_| CoreError::AudioCapture("Sample lock poisoned".to_string()))?;
+        samples_guard[0..].to_vec()
+    };
+
+    if captured.is_empty() {
+        return Ok(WavData {
+            bytes: vec![],
+            duration_seconds: 0.0,
+        });
+    }
+
+    let duration_seconds = captured.len() as f32 / sample_rate as f32;
+
+    // Process: resample + enhance + encode to WAV
+    let mut processed = captured;
+    if sample_rate != WHISPER_SAMPLE_RATE {
+        processed = resample_linear(&processed, sample_rate, WHISPER_SAMPLE_RATE);
+    }
+
+    let enhanced = enhance_audio(&processed, WHISPER_SAMPLE_RATE)?;
+    let bytes = wav_bytes_from_samples(&enhanced)?;
+
+    Ok(WavData {
+        bytes,
+        duration_seconds,
+    })
+}
+
 fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
     let mut buffer = match samples.lock() {
         Ok(buffer) => buffer,

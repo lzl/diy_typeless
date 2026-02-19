@@ -243,6 +243,12 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_EXPORT_FULL_RECORDING
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_EXPORT_FULL_RECORDING
+RustBuffer uniffi_diy_typeless_core_fn_func_export_full_recording(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
@@ -528,6 +534,12 @@ void ffi_diy_typeless_core_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_RUST_FUTURE_COMPLETE_VOID
 void ffi_diy_typeless_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_EXPORT_FULL_RECORDING
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_EXPORT_FULL_RECORDING
+uint16_t uniffi_diy_typeless_core_checksum_func_export_full_recording(void
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
