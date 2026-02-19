@@ -120,9 +120,22 @@ final class AppState: ObservableObject {
     /// Checks if all requirements are met for the app to be ready.
     private func checkReadiness() -> Bool {
         let status = permissionManager.currentStatus()
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return status.allGranted && !groqKey.isEmpty && !geminiKey.isEmpty
+
+        // 总是需要 Gemini（用于润色）
+        guard status.allGranted && !geminiKey.isEmpty else {
+            return false
+        }
+
+        // 根据 ASR 提供商检查相应条件
+        let provider = AsrSettings.shared.currentProvider
+        switch provider {
+        case .groq:
+            let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return !groqKey.isEmpty
+        case .local:
+            return LocalAsrManager.shared.isModelLoaded
+        }
     }
 
     private func evaluateReadiness() {

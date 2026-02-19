@@ -20,6 +20,10 @@ pub enum CoreError {
     Serialization(String),
     #[error("Unexpected empty response")]
     EmptyResponse,
+    #[error("Transcription failed: {0}")]
+    Transcription(String),
+    #[error("Configuration error: {0}")]
+    Config(String),
 }
 
 impl From<reqwest::Error> for CoreError {

@@ -113,8 +113,29 @@ final class RecordingState: ObservableObject {
         guard !isRecording, !isProcessing else { return }
 
         refreshKeys()
-        guard !groqKey.isEmpty, !geminiKey.isEmpty else {
-            showError("API keys required")
+
+        // 检查当前 ASR 提供商的依赖
+        let provider = AsrSettings.shared.currentProvider
+        switch provider {
+        case .groq:
+            // Groq 需要 API Key
+            if groqKey.isEmpty {
+                showError("Groq API key required")
+                onRequireOnboarding?()
+                return
+            }
+        case .local:
+            // 本地 ASR 需要模型已加载
+            if !LocalAsrManager.shared.isModelLoaded {
+                showError("Local ASR model not loaded")
+                onRequireOnboarding?()
+                return
+            }
+        }
+
+        // Gemini 总是需要（用于润色）
+        if geminiKey.isEmpty {
+            showError("Gemini API key required")
             onRequireOnboarding?()
             return
         }
@@ -138,16 +159,33 @@ final class RecordingState: ObservableObject {
         currentGeneration += 1
         let gen = currentGeneration
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext] in
+        let provider = AsrSettings.shared.currentProvider
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext, provider] in
             guard let self else { return }
             do {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                let rawText = try transcribeWavBytes(
-                    apiKey: groqKey,
+                // 根据提供商选择转录方式
+                let providerEnum: AsrProvider
+                let groqApiKey: String?
+                switch provider {
+                case .local:
+                    providerEnum = .local
+                    groqApiKey = nil
+                case .groq:
+                    providerEnum = .groq
+                    groqApiKey = groqKey
+                }
+
+                let result = try processWavBytesWithProvider(
+                    provider: providerEnum,
+                    groqApiKey: groqApiKey,
+                    geminiApiKey: geminiKey,
                     wavBytes: wavData.bytes,
-                    language: nil
+                    language: nil,
+                    context: capturedContext
                 )
                 guard self.currentGeneration == gen else { return }
 
@@ -156,16 +194,17 @@ final class RecordingState: ObservableObject {
                     self.capsuleState = .polishing
                 }
 
+                // Gemini 润色
                 let outputText: String
                 do {
-                    outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)
+                    outputText = try polishText(apiKey: geminiKey, rawText: result.rawText, context: capturedContext)
                 } catch {
-                    outputText = rawText
+                    outputText = result.rawText
                 }
 
                 DispatchQueue.main.async {
                     guard self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: rawText, polished: outputText)
+                    self.finishOutput(raw: result.rawText, polished: outputText)
                 }
             } catch {
                 DispatchQueue.main.async {

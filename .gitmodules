@@ -1,0 +1,3 @@
+[submodule "core/libs/qwen-asr"]
+	path = core/libs/qwen-asr
+	url = https://github.com/antirez/qwen-asr.git

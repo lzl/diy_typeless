@@ -5,6 +5,7 @@ enum OnboardingStep: Int, CaseIterable {
     case welcome
     case microphone
     case accessibility
+    case asrProvider
     case groqKey
     case geminiKey
     case completion
@@ -45,6 +46,11 @@ enum ValidationState: Equatable {
 final class OnboardingState: ObservableObject {
     @Published var step: OnboardingStep = .welcome
     @Published var permissions = PermissionStatus(accessibility: false, microphone: false)
+    @Published var asrProvider: AsrProvider = AsrSettings.shared.currentProvider {
+        didSet {
+            AsrSettings.shared.currentProvider = asrProvider
+        }
+    }
     @Published var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
@@ -73,6 +79,12 @@ final class OnboardingState: ObservableObject {
             return permissions.microphone
         case .accessibility:
             return permissions.accessibility
+        case .asrProvider:
+            // 如果选择本地 ASR，需要模型已加载
+            if asrProvider == .local {
+                return LocalAsrManager.shared.isModelLoaded
+            }
+            return true
         case .groqKey:
             return groqValidation.isSuccess
         case .geminiKey:
@@ -262,6 +274,22 @@ final class OnboardingState: ObservableObject {
         if !permissions.accessibility {
             step = .accessibility
             return
+        }
+
+        // 检查是否已经选择了 ASR 提供商并完成相应设置
+        let settings = AsrSettings.shared
+        if settings.currentProvider == .local {
+            // 本地 ASR：检查模型是否已加载
+            if !LocalAsrManager.shared.isModelLoaded {
+                step = .asrProvider
+                return
+            }
+        } else {
+            // Groq ASR：检查 API Key
+            if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                step = .asrProvider
+                return
+            }
         }
 
         if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
