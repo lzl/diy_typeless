@@ -784,6 +784,12 @@ fileprivate struct FfiConverterOptionTypeWavData: FfiConverterRustBuffer {
         }
     }
 }
+public func exportFullRecording()throws  -> WavData  {
+    return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_export_full_recording($0
+    )
+})
+}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -845,6 +851,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_diy_typeless_core_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_export_full_recording() != 10861) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
