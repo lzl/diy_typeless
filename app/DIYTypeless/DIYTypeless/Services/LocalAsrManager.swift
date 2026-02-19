@@ -22,14 +22,16 @@ class LocalAsrManager: ObservableObject {
         return appSupport?.appendingPathComponent("DIYTypeless").appendingPathComponent(modelDirName)
     }
 
-    /// 需要下载的模型文件列表
+    /// 需要下载的模型文件列表 (Qwen3-ASR-0.6B 使用 GPT-2 类型分词器)
     private var modelFiles: [(name: String, size: Int64)] {
         [
-            ("config.json", 2_000),
-            ("model.safetensors", 1_200_000_000),
-            ("tokenizer.json", 2_000_000),
-            ("tokenizer_config.json", 5_000),
-            ("preprocessor_config.json", 2_000),
+            ("config.json", 6_000),
+            ("model.safetensors", 1_880_000_000),
+            ("tokenizer_config.json", 13_000),
+            ("vocab.json", 2_800_000),
+            ("merges.txt", 1_700_000),
+            ("preprocessor_config.json", 330),
+            ("chat_template.json", 1_200),
         ]
     }
 
@@ -40,12 +42,16 @@ class LocalAsrManager: ObservableObject {
             return
         }
 
-        // 检查关键文件是否存在
+        // 检查关键文件是否存在 (模型权重 + 配置文件 + 分词器)
         let configFile = modelDir.appendingPathComponent("config.json")
         let modelFile = modelDir.appendingPathComponent("model.safetensors")
+        let vocabFile = modelDir.appendingPathComponent("vocab.json")
+        let tokenizerConfigFile = modelDir.appendingPathComponent("tokenizer_config.json")
 
         isModelAvailable = FileManager.default.fileExists(atPath: configFile.path)
             && FileManager.default.fileExists(atPath: modelFile.path)
+            && FileManager.default.fileExists(atPath: vocabFile.path)
+            && FileManager.default.fileExists(atPath: tokenizerConfigFile.path)
     }
 
     /// 下载模型文件
@@ -62,6 +68,7 @@ class LocalAsrManager: ObservableObject {
 
         do {
             // 创建目录
+            print("[LocalASR] Model directory: \(modelDir.path)")
             try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
             // 逐个下载文件
@@ -86,11 +93,18 @@ class LocalAsrManager: ObservableObject {
                 }
 
                 // 下载文件
+                print("[LocalASR] Downloading: \(url)")
                 let (data, response) = try await URLSession.shared.data(from: url)
 
-                guard let httpResponse = response as? HTTPURLResponse,
-                      httpResponse.statusCode == 200 else {
-                    throw LocalAsrError.downloadFailed("无法下载 \(filename)")
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw LocalAsrError.downloadFailed("\(filename): 无效的响应")
+                }
+
+                guard httpResponse.statusCode == 200 else {
+                    // 读取响应内容查看错误详情
+                    let body = String(data: data, encoding: .utf8) ?? ""
+                    print("[LocalASR] HTTP \(httpResponse.statusCode) for \(filename): \(body.prefix(200))")
+                    throw LocalAsrError.downloadFailed("\(filename): HTTP \(httpResponse.statusCode)")
                 }
 
                 try data.write(to: destination)
@@ -111,6 +125,7 @@ class LocalAsrManager: ObservableObject {
             await MainActor.run {
                 isDownloading = false
                 downloadError = error.localizedDescription
+                print("[LocalASR] Download failed: \(error)")
             }
         }
     }
