@@ -243,14 +243,20 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
+void uniffi_diy_typeless_core_fn_func_init_local_asr(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
+int8_t uniffi_diy_typeless_core_fn_func_is_local_asr_available(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_WAV_BYTES
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_WAV_BYTES
-RustBuffer uniffi_diy_typeless_core_fn_func_process_wav_bytes(RustBuffer groq_api_key, RustBuffer gemini_api_key, RustBuffer wav_bytes, RustBuffer language, RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING
@@ -268,16 +274,6 @@ RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording(RustCallStatus *_Nonn
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
 RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_wav_bytes(RustBuffer api_key, RustBuffer wav_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
-RustBuffer uniffi_diy_typeless_core_fn_func_init_local_asr(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
-int8_t uniffi_diy_typeless_core_fn_func_is_local_asr_available(RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_RUSTBUFFER_ALLOC
@@ -540,15 +536,21 @@ void ffi_diy_typeless_core_rust_future_free_void(uint64_t handle
 void ffi_diy_typeless_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
-uint16_t uniffi_diy_typeless_core_checksum_func_polish_text(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
+uint16_t uniffi_diy_typeless_core_checksum_func_init_local_asr(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_PROCESS_WAV_BYTES
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_PROCESS_WAV_BYTES
-uint16_t uniffi_diy_typeless_core_checksum_func_process_wav_bytes(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
+uint16_t uniffi_diy_typeless_core_checksum_func_is_local_asr_available(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
+uint16_t uniffi_diy_typeless_core_checksum_func_polish_text(void
     
 );
 #endif
@@ -567,19 +569,7 @@ uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_WAV_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_WAV_BYTES
 uint16_t uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes(void
-
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
-uint16_t uniffi_diy_typeless_core_checksum_func_init_local_asr(void
-
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
-uint16_t uniffi_diy_typeless_core_checksum_func_is_local_asr_available(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_UNIFFI_CONTRACT_VERSION
