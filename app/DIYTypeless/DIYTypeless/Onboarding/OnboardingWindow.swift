@@ -90,7 +90,12 @@ struct OnboardingWindow: View {
         case .asrProvider:
             AsrProviderSelectionStepView(state: state)
         case .groqKey:
-            GroqKeyStepView(state: state)
+            // Show different view based on ASR provider selection
+            if state.asrProvider == .local {
+                LocalModelDownloadView(state: state)
+            } else {
+                GroqKeyStepView(state: state)
+            }
         case .geminiKey:
             GeminiKeyStepView(state: state)
         case .completion:

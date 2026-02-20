@@ -1,6 +1,6 @@
 import Foundation
 
-/// ASR 提供商枚举 - 与 Rust FFI 兼容
+/// ASR provider enum - compatible with Rust FFI
 public enum AsrProvider: Int32, CaseIterable, Identifiable {
     case groq = 0
     case local = 1
@@ -9,20 +9,20 @@ public enum AsrProvider: Int32, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .groq: return "Groq Whisper (云端)"
-        case .local: return "Qwen3-ASR (本地)"
+        case .groq: return "Groq Whisper (Cloud)"
+        case .local: return "Qwen3-ASR (Local)"
         }
     }
 
     var description: String {
         switch self {
-        case .groq: return "使用 Groq API，需要网络连接和 API Key"
-        case .local: return "使用本地 Qwen3-ASR 模型，完全离线，启动更快"
+        case .groq: return "Uses Groq API, requires internet connection and API key"
+        case .local: return "Uses local Qwen3-ASR model, fully offline, faster startup"
         }
     }
 }
 
-/// 管理 ASR 提供商设置
+/// Manages ASR provider settings
 class AsrSettings {
     static let shared = AsrSettings()
 
@@ -39,16 +39,16 @@ class AsrSettings {
         }
     }
 
-    /// 检查当前 ASR 是否可用
+    /// Check if current ASR is available
     var isCurrentProviderAvailable: Bool {
         switch currentProvider {
         case .groq:
-            // Groq 需要 API Key
+            // Groq requires API key
             let keyStore = ApiKeyStore()
             keyStore.preloadKeys()
             return !(keyStore.loadGroqKey() ?? "").isEmpty
         case .local:
-            // 本地 ASR 需要模型
+            // Local ASR requires model
             return LocalAsrManager.shared.isModelLoaded
         }
     }

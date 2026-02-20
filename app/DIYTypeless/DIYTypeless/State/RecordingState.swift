@@ -114,18 +114,18 @@ final class RecordingState: ObservableObject {
 
         refreshKeys()
 
-        // 检查当前 ASR 提供商的依赖
+        // Check current ASR provider dependencies
         let provider = AsrSettings.shared.currentProvider
         switch provider {
         case .groq:
-            // Groq 需要 API Key
+            // Groq requires API key
             if groqKey.isEmpty {
                 showError("Groq API key required")
                 onRequireOnboarding?()
                 return
             }
         case .local:
-            // 本地 ASR 需要模型已加载
+            // Local ASR requires model to be loaded
             if !LocalAsrManager.shared.isModelLoaded {
                 showError("Local ASR model not loaded")
                 onRequireOnboarding?()
@@ -133,7 +133,7 @@ final class RecordingState: ObservableObject {
             }
         }
 
-        // Gemini 总是需要（用于润色）
+        // Gemini always required (for polishing)
         if geminiKey.isEmpty {
             showError("Gemini API key required")
             onRequireOnboarding?()
@@ -167,11 +167,11 @@ final class RecordingState: ObservableObject {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                // 根据提供商选择转录方式：本地 ASR 时传递空字符串，会自动使用本地模型
+                // Choose transcription method based on provider: pass empty string for local ASR
                 let effectiveGroqKey: String
                 switch provider {
                 case .local:
-                    effectiveGroqKey = ""  // 空字符串触发本地 ASR（如果已加载）
+                    effectiveGroqKey = ""  // Empty string triggers local ASR (if loaded)
                 case .groq:
                     effectiveGroqKey = groqKey
                 }
@@ -190,7 +190,7 @@ final class RecordingState: ObservableObject {
                     self.capsuleState = .polishing
                 }
 
-                // Gemini 润色
+                // Gemini polishing
                 let outputText: String
                 do {
                     outputText = try polishText(apiKey: geminiKey, rawText: result.rawText, context: capturedContext)

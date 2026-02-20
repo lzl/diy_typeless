@@ -8,10 +8,10 @@ use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::Duration;
 
-// 全局本地转录器（懒加载）
+// Global local transcriber (lazy loaded)
 static LOCAL_TRANSCRIBER: OnceLock<QwenTranscriber> = OnceLock::new();
 
-/// 初始化本地 ASR 模型
+/// Initialize local ASR model
 pub fn init_local_asr(model_dir: &Path) -> Result<(), CoreError> {
     let transcriber = QwenTranscriber::new(model_dir)?;
     LOCAL_TRANSCRIBER
@@ -20,12 +20,12 @@ pub fn init_local_asr(model_dir: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
-/// 本地 ASR 是否已初始化
+/// Check if local ASR is initialized
 pub fn is_local_asr_available() -> bool {
     LOCAL_TRANSCRIBER.get().is_some()
 }
 
-/// 使用本地 Qwen3-ASR 转录
+/// Transcribe using local Qwen3-ASR
 pub fn transcribe_wav_bytes_local(
     wav_bytes: &[u8],
     language: Option<&str>,
@@ -34,14 +34,14 @@ pub fn transcribe_wav_bytes_local(
         .get()
         .ok_or_else(|| CoreError::Config("Local ASR not initialized".to_string()))?;
 
-    // 解析 WAV 获取样本
+    // Parse WAV to get samples
     let samples = decode_wav_to_f32(wav_bytes)?;
 
     let text = transcriber.transcribe_samples(&samples, 16000, language)?;
     Ok(text)
 }
 
-/// 解码 WAV 为 f32 样本（16kHz mono）
+/// Decode WAV to f32 samples (16kHz mono)
 fn decode_wav_to_f32(wav_bytes: &[u8]) -> Result<Vec<f32>, CoreError> {
     use hound::WavReader;
     use std::io::Cursor;
@@ -69,7 +69,7 @@ fn decode_wav_to_f32(wav_bytes: &[u8]) -> Result<Vec<f32>, CoreError> {
             .map_err(|e| CoreError::AudioProcessing(format!("WAV decode error: {}", e)))?,
     };
 
-    // 如果是多声道，转换为单声道
+    // If multi-channel, convert to mono
     let channels = spec.channels as usize;
     if channels > 1 {
         let mono_samples: Vec<f32> = samples

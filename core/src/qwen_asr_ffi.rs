@@ -1,6 +1,6 @@
-/*! Qwen3-ASR C 库的 Rust FFI 绑定
+/*! Rust FFI bindings for Qwen3-ASR C library
  *
- * 基于 antirez/qwen-asr: https://github.com/antirez/qwen-asr
+ * Based on antirez/qwen-asr: https://github.com/antirez/qwen-asr
  */
 
 use std::ffi::{CStr, CString};
@@ -9,18 +9,18 @@ use std::path::Path;
 
 use crate::error::CoreError;
 
-// C 类型定义
+// C type definitions
 pub type QwenContext = c_void;
 
 extern "C" {
-    // 加载/释放模型
+    // Load/free model
     fn qwen_load(model_dir: *const c_char) -> *mut QwenContext;
     fn qwen_free(ctx: *mut QwenContext);
 
-    // 设置强制语言
+    // Set forced language
     fn qwen_set_force_language(ctx: *mut QwenContext, language: *const c_char) -> c_int;
 
-    // 转录接口
+    // Transcription interface
     fn qwen_transcribe_audio(
         ctx: *mut QwenContext,
         samples: *const c_float,
@@ -28,7 +28,7 @@ extern "C" {
     ) -> *mut c_char;
 }
 
-/// Qwen3-ASR 转录器
+/// Qwen3-ASR transcriber
 pub struct QwenTranscriber {
     ctx: *mut QwenContext,
 }
@@ -37,7 +37,7 @@ unsafe impl Send for QwenTranscriber {}
 unsafe impl Sync for QwenTranscriber {}
 
 impl QwenTranscriber {
-    /// 加载模型
+    /// Load model
     pub fn new(model_dir: &Path) -> Result<Self, CoreError> {
         let model_dir_c = CString::new(model_dir.to_str().ok_or_else(|| {
             CoreError::Config("Invalid model path".to_string())
@@ -52,7 +52,7 @@ impl QwenTranscriber {
         Ok(Self { ctx })
     }
 
-    /// 设置强制语言
+    /// Set forced language
     pub fn set_language(&self, language: Option<&str>) -> Result<(), CoreError> {
         if let Some(lang) = language {
             let lang_c = CString::new(lang).map_err(|e| CoreError::Config(e.to_string()))?;
@@ -67,14 +67,14 @@ impl QwenTranscriber {
         Ok(())
     }
 
-    /// 转录原始音频样本（16kHz mono f32）
+    /// Transcribe raw audio samples (16kHz mono f32)
     pub fn transcribe_samples(
         &self,
         samples: &[f32],
         _sample_rate: u32,
         language: Option<&str>,
     ) -> Result<String, CoreError> {
-        // 先设置语言（如果有）
+        // Set language first (if provided)
         self.set_language(language)?;
 
         let result_ptr = unsafe {
@@ -94,7 +94,7 @@ impl QwenTranscriber {
                 .to_string_lossy()
                 .into_owned();
 
-            // 释放 C 分配的字符串
+            // Free C-allocated string
             libc::free(result_ptr as *mut c_void);
 
             Ok(text)

@@ -8,7 +8,7 @@ pub struct PipelineResult {
     pub polished_text: String,
 }
 
-// ASR 提供商枚举
+// ASR provider enum
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AsrProvider {
     Groq,
@@ -22,7 +22,7 @@ pub fn process_wav_bytes(
     language: Option<&str>,
     context: Option<&str>,
 ) -> Result<PipelineResult, CoreError> {
-    // 如果 groq_api_key 为空且本地 ASR 可用，使用本地 ASR
+    // If groq_api_key is empty and local ASR is available, use local ASR
     let raw = if groq_api_key.is_empty() && crate::transcribe::is_local_asr_available() {
         transcribe_wav_bytes_local(wav_bytes, language)?
     } else {
@@ -35,7 +35,7 @@ pub fn process_wav_bytes(
     })
 }
 
-// 通用转录接口
+// Generic transcription interface
 pub fn process_wav_bytes_with_provider(
     provider: AsrProvider,
     groq_api_key: Option<&str>,

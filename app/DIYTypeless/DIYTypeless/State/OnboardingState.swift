@@ -80,13 +80,15 @@ final class OnboardingState: ObservableObject {
         case .accessibility:
             return permissions.accessibility
         case .asrProvider:
-            // 如果选择本地 ASR，需要模型已加载
-            if asrProvider == .local {
-                return LocalAsrManager.shared.isModelLoaded
-            }
+            // Just a selection step, always allow proceeding
             return true
         case .groqKey:
-            return groqValidation.isSuccess
+            // Show different content based on ASR provider
+            if asrProvider == .local {
+                return LocalAsrManager.shared.isModelLoaded
+            } else {
+                return groqValidation.isSuccess
+            }
         case .geminiKey:
             return geminiValidation.isSuccess
         case .completion:
@@ -171,6 +173,8 @@ final class OnboardingState: ObservableObject {
             hasCompletedWelcome = true
         }
         if let next = step.next {
+            // After groqKey step with Local ASR, we already showed download view
+            // and now should go to geminiKey (which is next in the enum)
             step = next
         }
     }
@@ -276,18 +280,18 @@ final class OnboardingState: ObservableObject {
             return
         }
 
-        // 检查是否已经选择了 ASR 提供商并完成相应设置
+        // Check if ASR provider is selected and configured
         let settings = AsrSettings.shared
         if settings.currentProvider == .local {
-            // 本地 ASR：检查模型是否已加载
+            // Local ASR: check if model is loaded (at groqKey step which shows download view)
             if !LocalAsrManager.shared.isModelLoaded {
-                step = .asrProvider
+                step = .groqKey
                 return
             }
         } else {
-            // Groq ASR：检查 API Key
+            // Groq ASR: check API key
             if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                step = .asrProvider
+                step = .groqKey
                 return
             }
         }

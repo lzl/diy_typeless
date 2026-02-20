@@ -122,12 +122,12 @@ final class AppState: ObservableObject {
         let status = permissionManager.currentStatus()
         let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 总是需要 Gemini（用于润色）
+        // Gemini always required (for polishing)
         guard status.allGranted && !geminiKey.isEmpty else {
             return false
         }
 
-        // 根据 ASR 提供商检查相应条件
+        // Check conditions based on ASR provider
         let provider = AsrSettings.shared.currentProvider
         switch provider {
         case .groq:

@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-/// 管理本地 Qwen3-ASR 模型下载和加载
+/// Manages local Qwen3-ASR model download and loading
 @MainActor
 class LocalAsrManager: ObservableObject {
     static let shared = LocalAsrManager()
@@ -16,13 +16,13 @@ class LocalAsrManager: ObservableObject {
     private let hfRepo = "Qwen/Qwen3-ASR-0.6B"
     private var hasInitialized = false
 
-    /// 模型存储目录 (~/Library/Application Support/DIYTypeless/qwen3-asr-0.6b/)
+    /// Model storage directory (~/Library/Application Support/DIYTypeless/qwen3-asr-0.6b/)
     var modelDirectory: URL? {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         return appSupport?.appendingPathComponent("DIYTypeless").appendingPathComponent(modelDirName)
     }
 
-    /// 需要下载的模型文件列表 (Qwen3-ASR-0.6B 使用 GPT-2 类型分词器)
+    /// List of model files to download (Qwen3-ASR-0.6B uses GPT-2 style tokenizer)
     private var modelFiles: [(name: String, size: Int64)] {
         [
             ("config.json", 6_000),
@@ -35,14 +35,14 @@ class LocalAsrManager: ObservableObject {
         ]
     }
 
-    /// 检查模型是否已下载
+    /// Check if model is already downloaded
     func checkModelAvailability() {
         guard let modelDir = modelDirectory else {
             isModelAvailable = false
             return
         }
 
-        // 检查关键文件是否存在 (模型权重 + 配置文件 + 分词器)
+        // Check if key files exist (model weights + config + tokenizer)
         let configFile = modelDir.appendingPathComponent("config.json")
         let modelFile = modelDir.appendingPathComponent("model.safetensors")
         let vocabFile = modelDir.appendingPathComponent("vocab.json")
@@ -54,11 +54,11 @@ class LocalAsrManager: ObservableObject {
             && FileManager.default.fileExists(atPath: tokenizerConfigFile.path)
     }
 
-    /// 下载模型文件
+    /// Download model files
     func downloadModel() async {
         guard !isDownloading else { return }
         guard let modelDir = modelDirectory else {
-            downloadError = "无法访问应用目录"
+            downloadError = "Cannot access application directory"
             return
         }
 
@@ -67,11 +67,11 @@ class LocalAsrManager: ObservableObject {
         downloadProgress = 0
 
         do {
-            // 创建目录
+            // Create directory
             print("[LocalASR] Model directory: \(modelDir.path)")
             try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
-            // 逐个下载文件
+            // Download files one by one
             let totalFiles = modelFiles.count
             var downloadedBytes: Int64 = 0
             let totalBytes = modelFiles.map { $0.size }.reduce(0, +)
@@ -81,7 +81,7 @@ class LocalAsrManager: ObservableObject {
                 let url = URL(string: "https://huggingface.co/\(hfRepo)/resolve/main/\(filename)")!
                 let destination = modelDir.appendingPathComponent(filename)
 
-                // 如果文件已存在且大小合理，跳过
+                // Skip if file exists and has reasonable size
                 if let attrs = try? FileManager.default.attributesOfItem(atPath: destination.path),
                    let fileSize = attrs[.size] as? Int64,
                    fileSize > 1000 {
@@ -92,16 +92,16 @@ class LocalAsrManager: ObservableObject {
                     continue
                 }
 
-                // 下载文件
+                // Download file
                 print("[LocalASR] Downloading: \(url)")
                 let (data, response) = try await URLSession.shared.data(from: url)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    throw LocalAsrError.downloadFailed("\(filename): 无效的响应")
+                    throw LocalAsrError.downloadFailed("\(filename): Invalid response")
                 }
 
                 guard httpResponse.statusCode == 200 else {
-                    // 读取响应内容查看错误详情
+                    // Read response body for error details
                     let body = String(data: data, encoding: .utf8) ?? ""
                     print("[LocalASR] HTTP \(httpResponse.statusCode) for \(filename): \(body.prefix(200))")
                     throw LocalAsrError.downloadFailed("\(filename): HTTP \(httpResponse.statusCode)")
@@ -121,6 +121,9 @@ class LocalAsrManager: ObservableObject {
                 downloadProgress = 1.0
             }
 
+            // Auto-load model after download completes
+            try? await initialize()
+
         } catch {
             await MainActor.run {
                 isDownloading = false
@@ -130,7 +133,7 @@ class LocalAsrManager: ObservableObject {
         }
     }
 
-    /// 初始化本地 ASR（加载模型到内存）
+    /// Initialize local ASR (load model into memory)
     func initialize() async throws {
         guard !hasInitialized else { return }
         guard isModelAvailable else {
@@ -140,7 +143,7 @@ class LocalAsrManager: ObservableObject {
             throw LocalAsrError.modelNotFound
         }
 
-        // 调用 Rust FFI 初始化
+        // Call Rust FFI initialization
         try await Task.detached {
             try initLocalAsr(modelDir: modelDir.path)
         }.value
@@ -151,7 +154,7 @@ class LocalAsrManager: ObservableObject {
         }
     }
 
-    /// 获取模型总大小（用于显示）
+    /// Get total model size (for display)
     var totalModelSize: String {
         let totalBytes = modelFiles.map { $0.size }.reduce(0, +)
         let gb = Double(totalBytes) / 1_000_000_000
@@ -167,11 +170,11 @@ enum LocalAsrError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotFound:
-            return "本地模型未找到"
+            return "Local model not found"
         case .downloadFailed(let msg):
-            return "下载失败: \(msg)"
+            return "Download failed: \(msg)"
         case .initializationFailed(let msg):
-            return "模型初始化失败: \(msg)"
+            return "Model initialization failed: \(msg)"
         }
     }
 }

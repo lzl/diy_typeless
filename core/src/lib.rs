@@ -55,7 +55,7 @@ pub fn process_wav_bytes(
     )
 }
 
-// 本地 ASR 相关函数
+// Local ASR related functions
 #[uniffi::export]
 pub fn init_local_asr(model_dir: String) -> Result<(), CoreError> {
     let path = std::path::Path::new(&model_dir);
