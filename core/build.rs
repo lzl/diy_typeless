@@ -4,7 +4,7 @@ use std::path::PathBuf;
 fn main() {
     let qwen_asr_dir = PathBuf::from("libs/qwen-asr");
 
-    // C 源文件列表
+    // C source file list
     let src_files = [
         "qwen_asr.c",
         "qwen_asr_kernels.c",
@@ -18,24 +18,24 @@ fn main() {
         "qwen_asr_safetensors.c",
     ];
 
-    // 使用 cc crate 编译 C 代码
+    // Compile C code using cc crate
     let mut build = cc::Build::new();
 
     for file in &src_files {
         build.file(qwen_asr_dir.join(file));
     }
 
-    // 添加头文件搜索路径
+    // Add header file search path
     build.include(&qwen_asr_dir);
 
-    // 编译选项
+    // Compiler options
     build.flag_if_supported("-O3");
     build.flag_if_supported("-march=native");
     build.flag_if_supported("-ffast-math");
     build.flag_if_supported("-Wall");
     build.flag_if_supported("-Wextra");
 
-    // macOS: 使用 Accelerate 框架
+    // macOS: Use Accelerate framework
     #[cfg(target_os = "macos")]
     {
         build.define("USE_BLAS", None);
@@ -43,7 +43,7 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=Accelerate");
     }
 
-    // Linux: 使用 OpenBLAS
+    // Linux: Use OpenBLAS
     #[cfg(target_os = "linux")]
     {
         build.define("USE_BLAS", None);
@@ -52,13 +52,13 @@ fn main() {
         println!("cargo:rustc-link-lib=openblas");
     }
 
-    // 链接数学库和线程库
+    // Link math and thread libraries
     println!("cargo:rustc-link-lib=m");
     println!("cargo:rustc-link-lib=pthread");
 
     build.compile("qwen_asr");
 
-    // 重新编译条件
+    // Recompilation conditions
     for file in &src_files {
         println!("cargo:rerun-if-changed={}", qwen_asr_dir.join(file).display());
     }
