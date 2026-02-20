@@ -6,7 +6,7 @@
 
 use crate::error::CoreError;
 use crate::qwen_asr_ffi::{QwenLiveAudio, QwenTranscriber};
-use std::os::raw::{c_float, c_int, c_void};
+use std::os::raw::{c_float, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -86,6 +86,28 @@ impl StreamingHandle {
 ///
 /// # Returns
 /// A StreamingHandle to control the streaming session
+/// Thread-safe wrapper for raw QwenLiveAudio pointer
+/// SAFETY: We guarantee that only C mutex/condvar are used for synchronization,
+/// and the pointer is valid until explicitly freed.
+/// We store the pointer as usize to avoid Send/Sync issues with raw pointers.
+#[derive(Clone, Copy)]
+struct LiveAudioPtr(usize);
+
+impl LiveAudioPtr {
+    fn new(ptr: *mut QwenLiveAudio) -> Self {
+        Self(ptr as usize)
+    }
+
+    fn as_ptr(&self) -> *mut QwenLiveAudio {
+        self.0 as *mut QwenLiveAudio
+    }
+}
+
+// SAFETY: We guarantee that the pointer is only accessed through C synchronization primitives
+// (pthread_mutex/condvar), so it's safe to Send/Sync the wrapper.
+unsafe impl Send for LiveAudioPtr {}
+unsafe impl Sync for LiveAudioPtr {}
+
 pub fn start_streaming_transcription<F>(
     transcriber: Arc<QwenTranscriber>,
     language: Option<&str>,
@@ -108,20 +130,22 @@ where
 
     // Create QwenLiveAudio structure for real-time streaming
     // This is a shared structure between audio capture and inference
-    let live_audio = Arc::new(Mutex::new(create_live_audio()?));
+    // SAFETY: We use raw pointer with C mutex/condvar for synchronization,
+    // avoiding data race between Rust Mutex and C pthread_mutex
+    let live_audio_ptr: *mut QwenLiveAudio = create_live_audio()?;
+    let live_audio_wrapper = LiveAudioPtr::new(live_audio_ptr);
 
     // Clone for threads
     let stop_flag_audio = stop_flag.clone();
     let stop_flag_inference = stop_flag.clone();
-    let live_audio_audio = live_audio.clone();
-    let live_audio_inference = live_audio.clone();
 
     let language_owned = language.map(|s| s.to_string());
 
     // Audio capture thread - feeds audio into live_audio
+    // LiveAudioPtr is Send + Copy, so it's safe to move between threads
     let audio_thread = thread::spawn(move || {
         let result = capture_audio_live(
-            live_audio_audio,
+            live_audio_wrapper,
             stop_flag_audio,
         );
 
@@ -131,13 +155,27 @@ where
     });
 
     // Inference thread - calls qwen_transcribe_stream_live
+    // LiveAudioPtr is Send + Copy, so it's safe to move between threads
     let inference_thread = thread::spawn(move || {
-        run_live_inference(
+        let result = run_live_inference(
             transcriber,
-            live_audio_inference,
+            live_audio_wrapper,
             stop_flag_inference,
             language_owned.as_deref(),
-        )
+        );
+
+        // Clean up live_audio resources after inference completes
+        // SAFETY: Both threads have finished, so we can safely free the memory
+        unsafe {
+            let ptr = live_audio_wrapper.as_ptr();
+            if !ptr.is_null() {
+                free_live_audio(&mut *ptr);
+                // Convert back to Box and drop to free the struct itself
+                let _ = Box::from_raw(ptr);
+            }
+        }
+
+        result
     });
 
     Ok(StreamingHandle::new(
@@ -149,7 +187,7 @@ where
 }
 
 /// Create a new QwenLiveAudio structure
-fn create_live_audio() -> Result<QwenLiveAudio, CoreError> {
+fn create_live_audio() -> Result<*mut QwenLiveAudio, CoreError> {
     // Initial buffer capacity (30 seconds at 16kHz)
     const INITIAL_CAPACITY: i64 = 16000 * 30;
 
@@ -188,7 +226,8 @@ fn create_live_audio() -> Result<QwenLiveAudio, CoreError> {
     live.mutex = mutex as *mut c_void;
     live.cond = cond as *mut c_void;
 
-    Ok(live)
+    // Convert to raw pointer for thread-safe sharing
+    Ok(Box::into_raw(Box::new(live)))
 }
 
 /// Free QwenLiveAudio resources
@@ -207,8 +246,10 @@ unsafe fn free_live_audio(live: &mut QwenLiveAudio) {
 }
 
 /// Capture audio into live audio buffer
+/// SAFETY: live_audio must be a valid pointer to QwenLiveAudio allocated by create_live_audio
+/// and must remain valid until this function returns. The caller must ensure thread-safe access.
 fn capture_audio_live(
-    live_audio: Arc<Mutex<QwenLiveAudio>>,
+    live_audio: LiveAudioPtr,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<(), CoreError> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -247,6 +288,7 @@ fn capture_audio_live(
     // Audio configuration applied successfully
 
     // Build stream
+    // SAFETY: live_audio is valid for the lifetime of this function
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => build_live_stream::<f32>(
             &device,
@@ -269,7 +311,7 @@ fn capture_audio_live(
         cpal::SampleFormat::U16 => build_live_stream::<u16>(
             &device,
             &config.into(),
-            live_audio.clone(),
+            live_audio,
             stop_flag.clone(),
             channels,
             sample_rate,
@@ -286,14 +328,14 @@ fn capture_audio_live(
         thread::sleep(Duration::from_millis(10));
     }
 
-    // Signal EOF
-    {
-        let mut live = live_audio.lock().unwrap();
+    // Signal EOF using C mutex/condvar
+    // SAFETY: live_audio is valid and we follow the C library's synchronization protocol
+    unsafe {
+        let live = &mut *live_audio.as_ptr();
+        libc::pthread_mutex_lock(live.mutex as *mut libc::pthread_mutex_t);
         live.eof = 1;
-        // Signal condition variable to wake up inference thread
-        unsafe {
-            libc::pthread_cond_signal(live.cond as *mut libc::pthread_cond_t);
-        }
+        libc::pthread_cond_signal(live.cond as *mut libc::pthread_cond_t);
+        libc::pthread_mutex_unlock(live.mutex as *mut libc::pthread_mutex_t);
     }
 
     Ok(())
@@ -302,7 +344,7 @@ fn capture_audio_live(
 fn build_live_stream<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    live_audio: Arc<Mutex<QwenLiveAudio>>,
+    live_audio: LiveAudioPtr,
     stop_flag: Arc<AtomicBool>,
     channels: usize,
     input_sample_rate: u32,
@@ -316,6 +358,8 @@ where
     let resample_ratio = input_sample_rate as f64 / target_sample_rate as f64;
     let mut resample_accumulator: f64 = 0.0;
 
+    // SAFETY: live_audio is valid and remains valid for the lifetime of the stream
+    // The C library uses mutex/condvar for synchronization with the inference thread
     let stream = device.build_input_stream(
         config,
         move |data: &[T], _: &cpal::InputCallbackInfo| {
@@ -323,43 +367,43 @@ where
                 return;
             }
 
-            let mut live = live_audio.lock().unwrap();
+            // SAFETY: live_audio is valid and we use C mutex for synchronization
+            unsafe {
+                let live = &mut *live_audio.as_ptr();
+                libc::pthread_mutex_lock(live.mutex as *mut libc::pthread_mutex_t);
 
-            // Convert to mono f32 with resampling and append to buffer
-            for chunk in data.chunks(channels) {
-                let sum: f32 = chunk.iter().map(|s| Into::<f32>::into(*s)).sum();
-                let sample = sum / channels as f32;
+                // Convert to mono f32 with resampling and append to buffer
+                for chunk in data.chunks(channels) {
+                    let sum: f32 = chunk.iter().map(|s| Into::<f32>::into(*s)).sum();
+                    let sample = sum / channels as f32;
 
-                resample_accumulator += 1.0;
-                if resample_accumulator >= resample_ratio {
-                    // Check if we need to grow buffer
-                    if live.n_samples >= live.capacity {
-                        let new_capacity = live.capacity * 2;
-                        let new_samples = unsafe {
-                            libc::realloc(
+                    resample_accumulator += 1.0;
+                    if resample_accumulator >= resample_ratio {
+                        // Check if we need to grow buffer
+                        if live.n_samples >= live.capacity {
+                            let new_capacity = live.capacity * 2;
+                            let new_samples = libc::realloc(
                                 live.samples as *mut c_void,
                                 (new_capacity as usize) * std::mem::size_of::<c_float>(),
-                            ) as *mut c_float
-                        };
-                        if new_samples.is_null() {
-                            // Failed to grow audio buffer - silently skip samples
-                            return;
+                            ) as *mut c_float;
+                            if new_samples.is_null() {
+                                // Failed to grow audio buffer - silently skip samples
+                                libc::pthread_mutex_unlock(live.mutex as *mut libc::pthread_mutex_t);
+                                return;
+                            }
+                            live.samples = new_samples;
+                            live.capacity = new_capacity;
                         }
-                        live.samples = new_samples;
-                        live.capacity = new_capacity;
-                    }
 
-                    unsafe {
                         *live.samples.offset(live.n_samples as isize) = sample;
+                        live.n_samples += 1;
+                        resample_accumulator -= resample_ratio;
                     }
-                    live.n_samples += 1;
-                    resample_accumulator -= resample_ratio;
                 }
-            }
 
-            // Signal that new data is available
-            unsafe {
+                // Signal that new data is available and unlock
                 libc::pthread_cond_signal(live.cond as *mut libc::pthread_cond_t);
+                libc::pthread_mutex_unlock(live.mutex as *mut libc::pthread_mutex_t);
             }
         },
         |_err| {
@@ -372,45 +416,43 @@ where
 }
 
 /// Run live streaming inference using qwen_transcribe_stream_live
+/// SAFETY: live_audio must be a valid pointer allocated by create_live_audio
+/// and must remain valid until this function returns.
 fn run_live_inference(
     transcriber: Arc<QwenTranscriber>,
-    live_audio: Arc<Mutex<QwenLiveAudio>>,
+    live_audio: LiveAudioPtr,
     stop_flag: Arc<AtomicBool>,
     language: Option<&str>,
 ) -> Result<String, CoreError> {
     // Wait until we have some initial audio data (0.5 seconds)
     let min_samples = 16000 / 2;
     loop {
-        {
-            let live = live_audio.lock().unwrap();
-            if live.n_samples >= min_samples {
+        // SAFETY: live_audio is valid, use C mutex for synchronization
+        unsafe {
+            let live = &*live_audio.as_ptr();
+            libc::pthread_mutex_lock(live.mutex as *mut libc::pthread_mutex_t);
+            let n_samples = live.n_samples;
+            let eof = live.eof;
+            libc::pthread_mutex_unlock(live.mutex as *mut libc::pthread_mutex_t);
+
+            if n_samples >= min_samples {
                 break;
             }
-            if stop_flag.load(Ordering::SeqCst) || live.eof != 0 {
+            if stop_flag.load(Ordering::SeqCst) || eof != 0 {
                 return Ok(String::new());
             }
         }
         thread::sleep(Duration::from_millis(50));
     }
 
-    // Get mutable pointer to live audio for C API
-    let live_ptr: *mut QwenLiveAudio = {
-        let mut live = live_audio.lock().unwrap();
-        &mut *live as *mut QwenLiveAudio
-    };
-
     // DEBUG: Temporarily disable logging
     // eprintln!("[ASR] Calling transcribe_stream_live...");
 
     // SAFETY: This is safe because:
-    // 1. The audio capture thread holds the Arc<Mutex<QwenLiveAudio>>
+    // 1. The audio capture thread uses C mutex/condvar for synchronization
     // 2. The transcriber doesn't modify the live structure, only reads from it
-    // 3. The C library uses mutex/condvar for synchronization
-    let result = unsafe {
-        // Note: We need to ensure the mutex guard is dropped before calling
-        // into C code, otherwise we could deadlock with the audio thread
-        transcriber.transcribe_stream_live(live_ptr, language)
-    };
+    // 3. The C library uses mutex/condvar for synchronization with audio thread
+    let result = transcriber.transcribe_stream_live(live_audio.as_ptr(), language);
 
     // DEBUG: Temporarily disable logging
     // eprintln!("[ASR] transcribe_stream_live result: {:?}", result);

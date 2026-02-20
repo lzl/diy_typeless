@@ -930,8 +930,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {
         return InitializationResult.apiChecksumMismatch
     }
-    // Streaming ASR functions (checksums will be verified at runtime)
-    // Note: These functions are added for streaming transcription support
+    // Streaming ASR functions
+    if (uniffi_diy_typeless_core_checksum_func_start_streaming_session() != 33614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_get_streaming_text() != 49960) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_is_streaming_session_active() != 6669) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_stop_streaming_session() != 30364) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
     return InitializationResult.ok
 }()

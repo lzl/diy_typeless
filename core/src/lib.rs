@@ -8,9 +8,7 @@ mod streaming_asr;
 mod transcribe;
 
 use std::fs::OpenOptions;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub use audio::WavData;
 pub use error::CoreError;
@@ -166,3 +164,6 @@ pub fn stop_streaming_session(session_id: u64) -> Result<String, CoreError> {
 }
 
 uniffi::setup_scaffolding!();
+
+// CLI binary is defined in Cargo.toml as a separate target
+// See: src/cli/main.rs

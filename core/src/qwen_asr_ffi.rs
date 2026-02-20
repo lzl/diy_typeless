@@ -3,12 +3,18 @@
  * Based on antirez/qwen-asr: https://github.com/antirez/qwen-asr
  */
 
+use std::any::Any;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int, c_void};
 use std::path::Path;
 use std::sync::Mutex;
 
 use crate::error::CoreError;
+
+// Global registry to store callbacks for proper cleanup
+// Key: context pointer, Value: boxed callback as Any
+static CALLBACK_REGISTRY: Mutex<Option<HashMap<usize, Box<dyn Any + Send>>>> = Mutex::new(None);
 
 // C type definitions
 pub type QwenContext = c_void;
@@ -57,6 +63,9 @@ extern "C" {
 /// The Mutex ensures only one thread can access the C context at a time.
 pub struct QwenTranscriber {
     ctx: Mutex<*mut QwenContext>,
+    /// Stored callback to ensure proper cleanup when transcriber is dropped
+    /// or when a new callback is set.
+    _callback: Mutex<Option<Box<dyn Any + Send>>>,
 }
 
 unsafe impl Send for QwenTranscriber {}
@@ -78,7 +87,10 @@ impl QwenTranscriber {
             return Err(CoreError::Config("Failed to load Qwen3-ASR model".to_string()));
         }
 
-        Ok(Self { ctx: Mutex::new(ctx) })
+        Ok(Self {
+            ctx: Mutex::new(ctx),
+            _callback: Mutex::new(None),
+        })
     }
 
     /// Set forced language
@@ -145,26 +157,57 @@ impl QwenTranscriber {
     }
 
     /// Set token callback for streaming transcription
+    /// SAFETY: This function stores the callback in a global registry to prevent memory leaks.
+    /// The callback will be properly cleaned up when clear_token_callback is called or when
+    /// the transcriber is dropped.
     pub fn set_token_callback<F>(&self, callback: F)
     where
         F: FnMut(String) + Send + 'static,
     {
-        let ctx = self.ctx.lock().unwrap();
+        // Clear any existing callback first to prevent memory leak
+        self.clear_token_callback();
 
-        // Box the callback and convert to raw pointer
-        let boxed = Box::new(callback);
-        let userdata = Box::into_raw(boxed) as *mut c_void;
+        let ctx = *self.ctx.lock().unwrap();
+        let ctx_key = ctx as usize;
+
+        // Box the callback and store in registry
+        let boxed_callback: Box<dyn Any + Send> = Box::new(callback);
+
+        {
+            let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+            if registry_opt.is_none() {
+                *registry_opt = Some(HashMap::new());
+            }
+            if let Some(registry) = registry_opt.as_mut() {
+                registry.insert(ctx_key, boxed_callback);
+            }
+        }
+
+        // Get a raw pointer to the callback for C
+        // We'll retrieve it from the registry in the trampoline
+        let userdata = ctx as *mut c_void;
 
         unsafe {
-            qwen_set_token_callback(*ctx, Some(token_callback_trampoline::<F>), userdata);
+            qwen_set_token_callback(ctx, Some(token_callback_trampoline_registry), userdata);
         }
     }
 
-    /// Clear token callback
+    /// Clear token callback and free the associated callback from registry
+    /// This prevents memory leaks by properly reclaiming the Box that was stored.
     pub fn clear_token_callback(&self) {
-        let ctx = self.ctx.lock().unwrap();
+        let ctx = *self.ctx.lock().unwrap();
+        let ctx_key = ctx as usize;
+
+        // Remove callback from registry
+        {
+            let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+            if let Some(registry) = registry_opt.as_mut() {
+                registry.remove(&ctx_key);
+            }
+        }
+
         unsafe {
-            qwen_set_token_callback(*ctx, None, std::ptr::null_mut());
+            qwen_set_token_callback(ctx, None, std::ptr::null_mut());
         }
     }
 
@@ -227,25 +270,33 @@ impl QwenTranscriber {
     }
 }
 
-/// Trampoline function for token callbacks
-unsafe extern "C" fn token_callback_trampoline<F>(token: *const c_char, userdata: *mut c_void)
-where
-    F: FnMut(String),
-{
+/// Trampoline function for token callbacks using the global registry
+unsafe extern "C" fn token_callback_trampoline_registry(token: *const c_char, userdata: *mut c_void) {
     if token.is_null() || userdata.is_null() {
         return;
     }
 
-    let token_str = CStr::from_ptr(token).to_string_lossy().into_owned();
-    let callback = &mut *(userdata as *mut F);
-    callback(token_str);
+    let ctx_key = userdata as usize;
+
+    let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+    if let Some(registry) = registry_opt.as_mut() {
+        if let Some(callback_any) = registry.get_mut(&ctx_key) {
+            if let Some(callback) = callback_any.downcast_mut::<Box<dyn FnMut(String) + Send>>() {
+                let token_str = CStr::from_ptr(token).to_string_lossy().into_owned();
+                callback(token_str);
+            }
+        }
+    }
 }
 
 impl Drop for QwenTranscriber {
     fn drop(&mut self) {
-        let ctx = self.ctx.lock().unwrap();
+        // Clear callback first to prevent memory leak
+        self.clear_token_callback();
+
+        let ctx = *self.ctx.lock().unwrap();
         unsafe {
-            qwen_free(*ctx);
+            qwen_free(ctx);
         }
     }
 }
