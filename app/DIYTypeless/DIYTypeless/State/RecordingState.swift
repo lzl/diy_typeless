@@ -15,6 +15,9 @@ enum CapsuleState: Equatable {
 final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
 
+    // Dev build only: Live transcription text for debugging
+    @Published private(set) var liveTranscriptionText: String = ""
+
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
 
@@ -95,6 +98,7 @@ final class RecordingState: ObservableObject {
             isProcessing = false
             currentGeneration += 1
             capturedContext = nil
+            liveTranscriptionText = ""
             _ = try? stopRecording()
             // Cancel streaming if active
             streamingTask?.cancel()
@@ -109,6 +113,7 @@ final class RecordingState: ObservableObject {
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
+            liveTranscriptionText = ""
             // Cancel streaming if active
             streamingTask?.cancel()
             streamingTask = nil
@@ -192,6 +197,7 @@ final class RecordingState: ObservableObject {
         capsuleState = .recording
         isRecording = true
         isProcessing = true
+        liveTranscriptionText = ""
         capturedContext = contextDetector.captureContext().formatted
 
         streamingTask = Task { [weak self] in
@@ -206,9 +212,16 @@ final class RecordingState: ObservableObject {
                 let sessionId = try startStreamingSession(modelDir: modelDir, language: nil)
                 self.streamingSessionId = sessionId
 
-                // Keep showing waveform while recording
+                // Keep showing waveform while recording, and poll for transcription updates
                 while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
-                    try await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                    let currentText = getStreamingText(sessionId: sessionId)
+                    if currentText != self.liveTranscriptionText {
+                        await MainActor.run {
+                            guard self.currentGeneration == gen else { return }
+                            self.liveTranscriptionText = currentText
+                        }
+                    }
+                    try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
 
                 guard self.currentGeneration == gen, !Task.isCancelled else {
@@ -333,6 +346,7 @@ final class RecordingState: ObservableObject {
         let result = outputManager.deliver(text: polished)
         capsuleState = .done(result)
         isProcessing = false
+        liveTranscriptionText = ""
         scheduleHide(after: 1.2, expectedState: .done(result))
     }
 

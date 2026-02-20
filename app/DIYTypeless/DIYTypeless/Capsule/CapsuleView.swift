@@ -8,6 +8,11 @@ struct CapsuleView: View {
     private let capsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
 
+    // Check if this is dev build based on bundle identifier
+    private var isDevBuild: Bool {
+        Bundle.main.bundleIdentifier?.contains(".dev") ?? false
+    }
+
     var body: some View {
         ZStack {
             // Background with progress
@@ -28,6 +33,39 @@ struct CapsuleView: View {
         .onChange(of: state.capsuleState) { newState in
             handleStateChange(newState)
         }
+        // Dev build only: Show live transcription above capsule
+        .overlay(alignment: .bottom) {
+            if isDevBuild && shouldShowLiveTranscription {
+                liveTranscriptionOverlay
+                    .padding(.bottom, capsuleHeight + 8)
+            }
+        }
+    }
+
+    // Only show live transcription during recording/transcribing/polishing
+    private var shouldShowLiveTranscription: Bool {
+        switch state.capsuleState {
+        case .recording, .transcribing, .polishing, .streaming:
+            return !state.liveTranscriptionText.isEmpty
+        default:
+            return false
+        }
+    }
+
+    // Dev build: Display live transcription text (full text, no truncation)
+    private var liveTranscriptionOverlay: some View {
+        Text(state.liveTranscriptionText)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.85))
+                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            )
+            .frame(maxWidth: 600)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
