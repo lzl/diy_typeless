@@ -24,7 +24,7 @@ struct WelcomeStepView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 FeatureRow(icon: "globe", text: "Hold Fn to record")
-                FeatureRow(icon: "waveform", text: "Transcribe with Groq Whisper")
+                FeatureRow(icon: "waveform", text: "Transcribe speech to text")
                 FeatureRow(icon: "sparkles", text: "Polish with Gemini")
                 FeatureRow(icon: "doc.on.clipboard", text: "Paste or copy instantly")
             }

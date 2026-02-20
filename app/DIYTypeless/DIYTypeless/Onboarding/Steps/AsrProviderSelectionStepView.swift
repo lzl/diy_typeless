@@ -4,9 +4,9 @@ struct AsrProviderSelectionStepView: View {
     @ObservedObject var state: OnboardingState
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             Image(systemName: "waveform.badge.mic")
-                .font(.system(size: 80))
+                .font(.system(size: 56))
                 .foregroundColor(.blue)
 
             VStack(spacing: 8) {
@@ -64,7 +64,7 @@ struct AsrProviderSelectionStepView: View {
                         .foregroundColor(.white)
                 }
             }
-            .padding()
+            .padding(.horizontal, 16).padding(.vertical, 12)
             .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
             .cornerRadius(12)
         }
