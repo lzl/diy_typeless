@@ -188,7 +188,8 @@ final class RecordingState: ObservableObject {
         currentGeneration += 1
         let gen = currentGeneration
 
-        capsuleState = .streaming(partialText: "")
+        // Show recording UI with waveform (same as Groq)
+        capsuleState = .recording
         isRecording = true
         isProcessing = true
         capturedContext = contextDetector.captureContext().formatted
@@ -205,28 +206,7 @@ final class RecordingState: ObservableObject {
                 let sessionId = try startStreamingSession(modelDir: modelDir, language: nil)
                 self.streamingSessionId = sessionId
 
-                // Poll for updates while recording
-                var lastText = ""
-                while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
-                    let currentText = getStreamingText(sessionId: sessionId)
-                    if currentText != lastText {
-                        lastText = currentText
-                        await MainActor.run {
-                            guard self.currentGeneration == gen else { return }
-                            self.capsuleState = .streaming(partialText: currentText)
-                        }
-                    }
-
-                    // Check if still active
-                    if !isStreamingSessionActive(sessionId: sessionId) {
-                        break
-                    }
-
-                    // Small delay to avoid busy waiting
-                    try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                }
-
-                // Wait until user releases the key
+                // Keep showing waveform while recording
                 while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
                     try await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
                 }
@@ -237,16 +217,23 @@ final class RecordingState: ObservableObject {
                     return
                 }
 
-                // User released key, stop streaming and get final text
+                // User released key, show transcribing UI
                 await MainActor.run {
                     guard self.currentGeneration == gen else { return }
-                    self.capsuleState = .polishing
+                    self.capsuleState = .transcribing
                 }
 
+                // Stop streaming and get final text
                 let rawText = try stopStreamingSession(sessionId: sessionId)
                 self.streamingSessionId = nil
 
                 guard self.currentGeneration == gen, !Task.isCancelled else { return }
+
+                // Show polishing UI
+                await MainActor.run {
+                    guard self.currentGeneration == gen else { return }
+                    self.capsuleState = .polishing
+                }
 
                 // Gemini polishing
                 let outputText: String
