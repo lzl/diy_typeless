@@ -19,14 +19,13 @@ private class FileLogger {
     private let dateFormatter: DateFormatter
 
     init() {
-        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        logFile = documentsDir.appendingPathComponent("diytypeless_debug.log")
+        logFile = URL(fileURLWithPath: "/tmp/diytypeless_swift.log")
         dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
 
         // Clear previous log
         try? "".write(to: logFile, atomically: true, encoding: .utf8)
-        log("=== Log file initialized at \(logFile.path) ===")
+        log("=== Log file initialized at /tmp/diytypeless_swift.log ===")
     }
 
     func log(_ message: String) {

@@ -10,7 +10,10 @@ struct CapsuleView: View {
 
     // Check if this is dev build based on bundle identifier
     private var isDevBuild: Bool {
-        Bundle.main.bundleIdentifier?.contains(".dev") ?? false
+        let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
+        let isDev = bundleId.contains(".dev")
+        print("[CapsuleView] Bundle ID: \(bundleId), isDevBuild: \(isDev)")
+        return isDev
     }
 
     var body: some View {
