@@ -13,6 +13,23 @@ use crate::error::CoreError;
 // C type definitions
 pub type QwenContext = c_void;
 
+/// Token callback type for streaming transcription
+pub type QwenTokenCallback = unsafe extern "C" fn(token: *const c_char, userdata: *mut c_void);
+
+/// Live audio structure for streaming transcription
+/// Mirrors qwen_live_audio_t from C library
+#[repr(C)]
+pub struct QwenLiveAudio {
+    pub samples: *mut c_float,
+    pub sample_offset: i64,
+    pub n_samples: i64,
+    pub capacity: i64,
+    pub eof: c_int,
+    pub mutex: *mut c_void,  // pthread_mutex_t*
+    pub cond: *mut c_void,   // pthread_cond_t*
+    pub thread: u64,         // pthread_t
+}
+
 extern "C" {
     // Load/free model
     fn qwen_load(model_dir: *const c_char) -> *mut QwenContext;
@@ -27,6 +44,11 @@ extern "C" {
         samples: *const c_float,
         n_samples: c_int,
     ) -> *mut c_char;
+
+    // Streaming transcription interface
+    fn qwen_set_token_callback(ctx: *mut QwenContext, cb: Option<QwenTokenCallback>, userdata: *mut c_void);
+    fn qwen_transcribe_stream(ctx: *mut QwenContext, samples: *const c_float, n_samples: c_int) -> *mut c_char;
+    fn qwen_transcribe_stream_live(ctx: *mut QwenContext, live: *mut QwenLiveAudio) -> *mut c_char;
 }
 
 /// Qwen3-ASR transcriber
@@ -106,6 +128,114 @@ impl QwenTranscriber {
             Ok(text)
         }
     }
+}
+
+impl QwenTranscriber {
+    /// Get raw context pointer for streaming operations
+    /// SAFETY: Caller must ensure the transcriber outlives the usage of the pointer
+    pub fn raw_ctx(&self) -> *mut QwenContext {
+        // We need to return the pointer without locking forever
+        // Since the ctx pointer itself doesn't change after creation,
+        // we can safely return a copy of it
+        let ctx = self.ctx.lock().unwrap();
+        *ctx
+    }
+
+    /// Set token callback for streaming transcription
+    pub fn set_token_callback<F>(&self, callback: F)
+    where
+        F: FnMut(String) + Send + 'static,
+    {
+        let ctx = self.ctx.lock().unwrap();
+
+        // Box the callback and convert to raw pointer
+        let boxed = Box::new(callback);
+        let userdata = Box::into_raw(boxed) as *mut c_void;
+
+        unsafe {
+            qwen_set_token_callback(*ctx, Some(token_callback_trampoline::<F>), userdata);
+        }
+    }
+
+    /// Clear token callback
+    pub fn clear_token_callback(&self) {
+        let ctx = self.ctx.lock().unwrap();
+        unsafe {
+            qwen_set_token_callback(*ctx, None, std::ptr::null_mut());
+        }
+    }
+
+    /// Transcribe with streaming (for pre-recorded audio with streaming output)
+    pub fn transcribe_stream(
+        &self,
+        samples: &[f32],
+        _sample_rate: u32,
+        language: Option<&str>,
+    ) -> Result<String, CoreError> {
+        self.set_language(language)?;
+
+        let ctx = self.ctx.lock().unwrap();
+        let result_ptr = unsafe {
+            qwen_transcribe_stream(
+                *ctx,
+                samples.as_ptr() as *const c_float,
+                samples.len() as c_int,
+            )
+        };
+
+        if result_ptr.is_null() {
+            return Err(CoreError::Transcription("Streaming transcription failed".to_string()));
+        }
+
+        unsafe {
+            let text = CStr::from_ptr(result_ptr)
+                .to_string_lossy()
+                .into_owned();
+            libc::free(result_ptr as *mut c_void);
+            Ok(text)
+        }
+    }
+
+    /// Live streaming transcription
+    /// Blocks until streaming is complete (live.eof is set)
+    pub fn transcribe_stream_live(
+        &self,
+        live: *mut QwenLiveAudio,
+        language: Option<&str>,
+    ) -> Result<String, CoreError> {
+        self.set_language(language)?;
+
+        let ctx = self.ctx.lock().unwrap();
+        let result_ptr = unsafe {
+            qwen_transcribe_stream_live(*ctx, live)
+        };
+
+        if result_ptr.is_null() {
+            return Err(CoreError::Transcription("Live streaming transcription failed".to_string()));
+        }
+
+        unsafe {
+            let text = CStr::from_ptr(result_ptr)
+                .to_string_lossy()
+                .into_owned();
+            libc::free(result_ptr as *mut c_void);
+            Ok(text)
+        }
+    }
+}
+
+/// Trampoline function for token callbacks
+unsafe extern "C" fn token_callback_trampoline<F>(token: *const c_char, userdata: *mut c_void)
+where
+    F: FnMut(String),
+{
+    if token.is_null() || userdata.is_null() {
+        return;
+    }
+
+    let token_str = CStr::from_ptr(token).to_string_lossy().into_owned();
+    let callback = &mut *(userdata as *mut F);
+    callback(token_str);
 }
 
 impl Drop for QwenTranscriber {
