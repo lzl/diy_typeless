@@ -87,6 +87,12 @@ pub fn transcribe_wav_bytes(
     wav_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
+    // If api_key is empty and local ASR is available, use local ASR
+    if api_key.is_empty() && is_local_asr_available() {
+        return transcribe_wav_bytes_local(wav_bytes, language);
+    }
+
+    // Otherwise use Groq API
     let client = Client::builder().timeout(Duration::from_secs(90)).build()?;
 
     for attempt in 0..3 {

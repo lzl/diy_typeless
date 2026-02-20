@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use diy_typeless_core::{process_wav_bytes, start_recording, stop_recording};
+use diy_typeless_core::{start_recording, stop_recording};
 use std::fs;
 use std::io::{self, Cursor, Read};
 use std::path::PathBuf;
@@ -184,16 +184,19 @@ fn main() -> Result<()> {
             fs::write(&wav_path, &wav_data.bytes)?;
 
             println!("Transcribing...");
-            let result = process_wav_bytes(groq_key, gemini_key, wav_data.bytes, language, context)?;
+            let raw_text = diy_typeless_core::transcribe_wav_bytes(groq_key, wav_data.bytes.clone(), language)?;
 
             let raw_path = output_dir.join(format!("{base}.txt"));
-            fs::write(&raw_path, &result.raw_text)?;
+            fs::write(&raw_path, &raw_text)?;
+
+            println!("Polishing...");
+            let polished_text = diy_typeless_core::polish_text(gemini_key, raw_text, context)?;
 
             let polished_path = output_dir.join(format!("{base}_polished.txt"));
-            fs::write(&polished_path, &result.polished_text)?;
+            fs::write(&polished_path, &polished_text)?;
 
-            println!("Polished text:\n{}", result.polished_text);
-            copy_to_clipboard(&result.polished_text);
+            println!("Polished text:\n{}", polished_text);
+            copy_to_clipboard(&polished_text);
 
             println!(
                 "Saved:\n- {}\n- {}\n- {}",

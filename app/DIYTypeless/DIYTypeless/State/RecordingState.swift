@@ -176,12 +176,10 @@ final class RecordingState: ObservableObject {
                     effectiveGroqKey = groqKey
                 }
 
-                let result = try processWavBytes(
-                    groqApiKey: effectiveGroqKey,
-                    geminiApiKey: geminiKey,
+                let rawText = try transcribeWavBytes(
+                    apiKey: effectiveGroqKey,
                     wavBytes: wavData.bytes,
-                    language: nil,
-                    context: capturedContext
+                    language: nil
                 )
                 guard self.currentGeneration == gen else { return }
 
@@ -193,14 +191,14 @@ final class RecordingState: ObservableObject {
                 // Gemini polishing
                 let outputText: String
                 do {
-                    outputText = try polishText(apiKey: geminiKey, rawText: result.rawText, context: capturedContext)
+                    outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)
                 } catch {
-                    outputText = result.rawText
+                    outputText = rawText
                 }
 
                 DispatchQueue.main.async {
                     guard self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: result.rawText, polished: outputText)
+                    self.finishOutput(raw: rawText, polished: outputText)
                 }
             } catch {
                 DispatchQueue.main.async {
