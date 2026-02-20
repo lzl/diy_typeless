@@ -5,6 +5,7 @@ enum CapsuleState: Equatable {
     case hidden
     case recording
     case transcribing
+    case streaming(partialText: String)  // Real-time streaming transcription
     case polishing
     case done(OutputResult)
     case error(String)
@@ -86,7 +87,7 @@ final class RecordingState: ObservableObject {
             _ = try? stopRecording()
             capsuleState = .hidden
 
-        case .transcribing, .polishing:
+        case .transcribing, .polishing, .streaming:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
@@ -154,30 +155,106 @@ final class RecordingState: ObservableObject {
         guard isRecording, !isProcessing else { return }
         isRecording = false
         isProcessing = true
-        capsuleState = .transcribing
 
         currentGeneration += 1
         let gen = currentGeneration
 
         let provider = AsrSettings.shared.currentProvider
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext, provider] in
+        // Use streaming transcription for local ASR, traditional for Groq
+        switch provider {
+        case .local:
+            handleLocalStreamingTranscription(gen: gen, geminiKey: geminiKey, capturedContext: capturedContext)
+        case .groq:
+            handleGroqTranscription(gen: gen, groqKey: groqKey, geminiKey: geminiKey, capturedContext: capturedContext)
+        }
+    }
+
+    /// Handle streaming transcription for local ASR
+    private func handleLocalStreamingTranscription(gen: Int, geminiKey: String, capturedContext: String?) {
+        capsuleState = .streaming(partialText: "")
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+
+            do {
+                guard let modelDir = LocalAsrManager.shared.modelDirectory?.path else {
+                    throw NSError(domain: "RecordingState", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local ASR model not found"])
+                }
+
+                // Start streaming session
+                let sessionId = try startStreamingSession(modelDir: modelDir, language: nil)
+
+                // Poll for updates while recording
+                var lastText = ""
+                while self.isProcessing && self.currentGeneration == gen {
+                    let currentText = getStreamingText(sessionId: sessionId)
+                    if currentText != lastText {
+                        lastText = currentText
+                        DispatchQueue.main.async {
+                            guard self.currentGeneration == gen else { return }
+                            self.capsuleState = .streaming(partialText: currentText)
+                        }
+                    }
+
+                    // Check if still active
+                    if !isStreamingSessionActive(sessionId: sessionId) {
+                        break
+                    }
+
+                    // Small delay to avoid busy waiting
+                    Thread.sleep(forTimeInterval: 0.1)
+                }
+
+                guard self.currentGeneration == gen else {
+                    _ = try? stopStreamingSession(sessionId: sessionId)
+                    return
+                }
+
+                // Stop streaming and get final text
+                let rawText = try stopStreamingSession(sessionId: sessionId)
+                guard self.currentGeneration == gen else { return }
+
+                DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
+                    self.capsuleState = .polishing
+                }
+
+                // Gemini polishing
+                let outputText: String
+                do {
+                    outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)
+                } catch {
+                    outputText = rawText
+                }
+
+                DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
+                    self.finishOutput(raw: rawText, polished: outputText)
+                }
+
+            } catch {
+                DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
+                    self.showError(error.localizedDescription)
+                    self.isProcessing = false
+                }
+            }
+        }
+    }
+
+    /// Handle traditional transcription for Groq
+    private func handleGroqTranscription(gen: Int, groqKey: String, geminiKey: String, capturedContext: String?) {
+        capsuleState = .transcribing
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                // Choose transcription method based on provider: pass empty string for local ASR
-                let effectiveGroqKey: String
-                switch provider {
-                case .local:
-                    effectiveGroqKey = ""  // Empty string triggers local ASR (if loaded)
-                case .groq:
-                    effectiveGroqKey = groqKey
-                }
-
                 let rawText = try transcribeWavBytes(
-                    apiKey: effectiveGroqKey,
+                    apiKey: groqKey,
                     wavBytes: wavData.bytes,
                     language: nil
                 )

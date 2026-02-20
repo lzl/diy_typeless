@@ -42,6 +42,22 @@ struct CapsuleView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
 
+        case .streaming(let partialText):
+            // Show partial text with typing indicator
+            HStack(spacing: 4) {
+                Text(partialText.isEmpty ? "Listening..." : partialText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                // Blinking cursor indicator
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                    .opacity(0.8)
+            }
+
         case .polishing:
             Text("Polishing")
                 .font(.system(size: 13, weight: .medium))
@@ -78,7 +94,8 @@ struct CapsuleView: View {
             audioMonitor.start()
             progress = 0
 
-        case .transcribing:
+        case .transcribing, .streaming:
+            // Both transcribing and streaming show progress
             audioMonitor.stop()
             startProgressAnimation(duration: 2.5)
 
