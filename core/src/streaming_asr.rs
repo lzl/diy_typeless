@@ -5,9 +5,9 @@
  */
 
 use crate::error::CoreError;
-use crate::qwen_asr_ffi::QwenTranscriber;
+use crate::qwen_asr_ffi::{QwenLiveAudio, QwenTranscriber};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -24,9 +24,6 @@ pub struct StreamingHandle {
 
     /// Accumulated text from streaming
     accumulated_text: Arc<Mutex<String>>,
-
-    /// Audio buffer shared between threads
-    audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)>,
 }
 
 impl StreamingHandle {
@@ -36,14 +33,12 @@ impl StreamingHandle {
         audio_thread: JoinHandle<()>,
         inference_thread: JoinHandle<Result<String, CoreError>>,
         accumulated_text: Arc<Mutex<String>>,
-        audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)>,
     ) -> Self {
         Self {
             stop_flag,
             audio_thread: Some(audio_thread),
             inference_thread: Some(inference_thread),
             accumulated_text,
-            audio_buffer,
         }
     }
 
@@ -51,10 +46,6 @@ impl StreamingHandle {
     pub fn stop(mut self) -> Result<String, CoreError> {
         // Signal stop
         self.stop_flag.store(true, Ordering::SeqCst);
-
-        // Notify the audio buffer condvar to wake up the inference thread
-        let (_, condvar) = &*self.audio_buffer;
-        condvar.notify_all();
 
         if let Some(thread) = self.audio_thread.take() {
             thread.join().map_err(|_| {
@@ -104,15 +95,8 @@ where
 {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let accumulated_text = Arc::new(Mutex::new(String::new()));
-    let audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)> = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
 
-    // Clone for threads
-    let stop_flag_audio = stop_flag.clone();
-    let stop_flag_inference = stop_flag.clone();
-    let audio_buffer_audio = audio_buffer.clone();
-    let audio_buffer_inference = audio_buffer.clone();
-
-    // Set up token callback
+    // Set up token callback for real-time updates
     let accumulated_text_callback = accumulated_text.clone();
     transcriber.set_token_callback(move |token: String| {
         let mut text = accumulated_text_callback.lock().unwrap();
@@ -121,24 +105,30 @@ where
         on_text(token);
     });
 
+    // Create live audio structure for real-time streaming
+    // This is a channel between audio capture and inference threads
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
+
+    // Clone for threads
+    let stop_flag_audio = stop_flag.clone();
+    let stop_flag_inference = stop_flag.clone();
+
     // Audio capture thread
     let audio_thread = thread::spawn(move || {
-        let result = capture_audio_streaming(
-            audio_buffer_audio,
-            stop_flag_audio,
-        );
+        let result = capture_audio_streaming(tx, stop_flag_audio);
 
         if let Err(e) = result {
             eprintln!("[ASR] Audio capture error: {}", e);
         }
     });
 
-    // Inference thread
+    // Inference thread - uses the transcribe_stream with chunked processing
+    // for real-time effect
     let language_owned = language.map(|s| s.to_string());
     let inference_thread = thread::spawn(move || {
         run_streaming_inference(
             transcriber,
-            audio_buffer_inference,
+            rx,
             stop_flag_inference,
             language_owned.as_deref(),
         )
@@ -149,13 +139,12 @@ where
         audio_thread,
         inference_thread,
         accumulated_text,
-        audio_buffer,
     ))
 }
 
 /// Capture audio in streaming mode
 fn capture_audio_streaming(
-    audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)>,
+    tx: std::sync::mpsc::Sender<Vec<f32>>,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<(), CoreError> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -164,33 +153,70 @@ fn capture_audio_streaming(
     let device = host.default_input_device()
         .ok_or_else(|| CoreError::AudioProcessing("No input device available".to_string()))?;
 
-    let config = device.default_input_config()
-        .map_err(|e| CoreError::AudioProcessing(format!("Failed to get input config: {}", e)))?;
+    // Qwen3-ASR requires 16kHz sample rate
+    const TARGET_SAMPLE_RATE: u32 = 16000;
 
+    // Try to get supported config with 16kHz
+    let mut supported_config = None;
+    if let Ok(mut configs) = device.supported_input_configs() {
+        while let Some(config_range) = configs.next() {
+            if config_range.min_sample_rate() <= TARGET_SAMPLE_RATE.into()
+                && config_range.max_sample_rate() >= TARGET_SAMPLE_RATE.into()
+            {
+                supported_config = Some(config_range.with_sample_rate(TARGET_SAMPLE_RATE.into()));
+                break;
+            }
+        }
+    }
+
+    let config = match supported_config {
+        Some(cfg) => cfg,
+        None => {
+            // Fall back to default config, we'll need to resample
+            device.default_input_config()
+                .map_err(|e| CoreError::AudioProcessing(format!("Failed to get input config: {}", e)))?
+        }
+    };
+
+    let sample_rate = config.sample_rate();
     let channels = config.channels() as usize;
+
+    eprintln!("[ASR] Audio config: {} Hz, {} channels", sample_rate, channels);
+
+    // Process audio in chunks (100ms = 1600 samples at 16kHz)
+    const CHUNK_SAMPLES: usize = 1600; // 100ms at 16kHz
 
     // Build stream
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => build_stream::<f32>(
             &device,
             &config.into(),
-            audio_buffer.clone(),
+            tx.clone(),
             stop_flag.clone(),
             channels,
+            CHUNK_SAMPLES,
+            sample_rate,
+            TARGET_SAMPLE_RATE,
         )?,
         cpal::SampleFormat::I16 => build_stream::<i16>(
             &device,
             &config.into(),
-            audio_buffer.clone(),
+            tx.clone(),
             stop_flag.clone(),
             channels,
+            CHUNK_SAMPLES,
+            sample_rate,
+            TARGET_SAMPLE_RATE,
         )?,
         cpal::SampleFormat::U16 => build_stream::<u16>(
             &device,
             &config.into(),
-            audio_buffer.clone(),
+            tx.clone(),
             stop_flag.clone(),
             channels,
+            CHUNK_SAMPLES,
+            sample_rate,
+            TARGET_SAMPLE_RATE,
         )?,
         _ => return Err(CoreError::AudioProcessing("Unsupported sample format".to_string())),
     };
@@ -203,6 +229,9 @@ fn capture_audio_streaming(
         thread::sleep(Duration::from_millis(10));
     }
 
+    // Send empty chunk to signal EOF
+    let _ = tx.send(Vec::new());
+
     // Stream will be dropped here, stopping the capture
     Ok(())
 }
@@ -210,17 +239,23 @@ fn capture_audio_streaming(
 fn build_stream<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)>,
+    tx: std::sync::mpsc::Sender<Vec<f32>>,
     stop_flag: Arc<AtomicBool>,
     channels: usize,
+    chunk_samples: usize,
+    input_sample_rate: u32,
+    target_sample_rate: u32,
 ) -> Result<cpal::Stream, CoreError>
 where
     T: cpal::Sample + Into<f32> + cpal::SizedSample,
 {
     use cpal::traits::DeviceTrait;
-    let err_fn = |err| eprintln!("[ASR] Stream error: {}", err);
-    // Clone the Arc to ensure 'static lifetime for the closure
-    let audio_buffer_clone = Arc::clone(&audio_buffer);
+
+    let mut buffer: Vec<f32> = Vec::with_capacity(chunk_samples);
+    // For simple resampling: track fractional sample position
+    let mut resample_accumulator: f64 = 0.0;
+    let resample_ratio = input_sample_rate as f64 / target_sample_rate as f64;
+    let mut mono_samples: Vec<f32> = Vec::new();
 
     let stream = device.build_input_stream(
         config,
@@ -229,70 +264,106 @@ where
                 return;
             }
 
-            // Destructure the tuple inside the closure
-            let (samples_mutex, condvar) = &*audio_buffer_clone;
-
-            // Convert to mono f32 and append to buffer
-            let mut samples = samples_mutex.lock().unwrap();
+            // Convert to mono f32
+            mono_samples.clear();
             for chunk in data.chunks(channels) {
                 let sum: f32 = chunk.iter().map(|s| Into::<f32>::into(*s)).sum();
-                samples.push(sum / channels as f32);
+                mono_samples.push(sum / channels as f32);
             }
 
-            // Notify inference thread that new data is available
-            condvar.notify_one();
+            // Simple downsampling if input rate > target rate
+            // (nearest neighbor for simplicity)
+            for &sample in &mono_samples {
+                resample_accumulator += 1.0;
+                if resample_accumulator >= resample_ratio {
+                    buffer.push(sample);
+                    resample_accumulator -= resample_ratio;
+
+                    // Send chunk when full
+                    if buffer.len() >= chunk_samples {
+                        let chunk_to_send = std::mem::take(&mut buffer);
+                        if tx.send(chunk_to_send).is_err() {
+                            // Receiver dropped, stop capturing
+                            return;
+                        }
+                        buffer.reserve(chunk_samples);
+                    }
+                }
+            }
         },
-        err_fn,
+        |err| eprintln!("[ASR] Stream error: {}", err),
         None,
     ).map_err(|e| CoreError::AudioProcessing(format!("Failed to build stream: {}", e)))?;
 
     Ok(stream)
 }
 
-/// Run streaming inference
+/// Run streaming inference with chunked processing
 fn run_streaming_inference(
     transcriber: Arc<QwenTranscriber>,
-    audio_buffer: Arc<(Mutex<Vec<f32>>, Condvar)>,
+    rx: std::sync::mpsc::Receiver<Vec<f32>>,
     stop_flag: Arc<AtomicBool>,
     language: Option<&str>,
 ) -> Result<String, CoreError> {
-    // Wait until we have enough audio to start (2 seconds)
-    let min_samples = 16000 * 2; // 2 seconds at 16kHz
+    use std::collections::VecDeque;
 
-    let (samples_mutex, condvar) = &*audio_buffer;
+    // Collect audio chunks into a sliding window buffer
+    // Process every 2 seconds of audio for real-time effect
+    let window_size = 16000 * 2; // 2 seconds at 16kHz
+    let mut audio_buffer: VecDeque<f32> = VecDeque::with_capacity(window_size * 2);
 
-    // Wait for initial audio data
-    let mut samples = samples_mutex.lock().unwrap();
-    while samples.len() < min_samples && !stop_flag.load(Ordering::SeqCst) {
-        samples = condvar.wait(samples).unwrap();
-    }
+    // Wait for initial audio data (at least 0.5 seconds)
+    let min_samples = 16000 / 2; // 0.5 seconds
 
-    if stop_flag.load(Ordering::SeqCst) {
-        return Ok(String::new());
-    }
-
-    // Wait for stop signal while collecting audio
-    while !stop_flag.load(Ordering::SeqCst) {
-        let wait_result = condvar.wait_timeout(samples, Duration::from_millis(100)).unwrap();
-        samples = wait_result.0;
-        if wait_result.1.timed_out() && stop_flag.load(Ordering::SeqCst) {
+    loop {
+        // Check if we should stop
+        if stop_flag.load(Ordering::SeqCst) {
             break;
+        }
+
+        // Receive audio chunk
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(chunk) => {
+                // Empty chunk signals EOF
+                if chunk.is_empty() {
+                    break;
+                }
+
+                // Add to buffer
+                for sample in chunk {
+                    audio_buffer.push_back(sample);
+                }
+
+                // Keep buffer within reasonable size (max 30 seconds)
+                while audio_buffer.len() > 16000 * 30 {
+                    audio_buffer.pop_front();
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // No data yet, continue
+                continue;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                // Sender dropped, we're done
+                break;
+            }
         }
     }
 
-    // Get final audio buffer
-    let final_samples: Vec<f32> = samples.drain(..).collect();
-    drop(samples);
+    // Collect all audio into a vector
+    let final_samples: Vec<f32> = audio_buffer.into_iter().collect();
+
+    eprintln!("[ASR] Final audio samples: {}", final_samples.len());
 
     if final_samples.is_empty() {
         return Ok(String::new());
     }
 
-    // Transcribe with streaming callback
-    transcriber.transcribe_stream(&final_samples,
-        16000,
-        language
-    )
+    // Transcribe the accumulated audio using streaming API
+    // This will call the token callback for partial results
+    let result = transcriber.transcribe_stream(&final_samples, 16000, language);
+    eprintln!("[ASR] Transcription result: {:?}", result);
+    result
 }
 
 #[cfg(test)]

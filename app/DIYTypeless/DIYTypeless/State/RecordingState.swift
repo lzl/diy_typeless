@@ -31,6 +31,10 @@ final class RecordingState: ObservableObject {
     private var capturedContext: String?
     nonisolated(unsafe) private var currentGeneration: Int = 0
 
+    // For local streaming ASR
+    private var streamingSessionId: UInt64?
+    private var streamingTask: Task<Void, Never>?
+
     init(
         permissionManager: PermissionManager,
         keyStore: ApiKeyStore,
@@ -71,6 +75,13 @@ final class RecordingState: ObservableObject {
             _ = try? stopRecording()
             isRecording = false
         }
+        // Cancel any active streaming
+        streamingTask?.cancel()
+        streamingTask = nil
+        if let sessionId = streamingSessionId {
+            _ = try? stopStreamingSession(sessionId: sessionId)
+            streamingSessionId = nil
+        }
         currentGeneration += 1
         isProcessing = false
         capturedContext = nil
@@ -85,12 +96,26 @@ final class RecordingState: ObservableObject {
             currentGeneration += 1
             capturedContext = nil
             _ = try? stopRecording()
+            // Cancel streaming if active
+            streamingTask?.cancel()
+            streamingTask = nil
+            if let sessionId = streamingSessionId {
+                _ = try? stopStreamingSession(sessionId: sessionId)
+                streamingSessionId = nil
+            }
             capsuleState = .hidden
 
         case .transcribing, .polishing, .streaming:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
+            // Cancel streaming if active
+            streamingTask?.cancel()
+            streamingTask = nil
+            if let sessionId = streamingSessionId {
+                _ = try? stopStreamingSession(sessionId: sessionId)
+                streamingSessionId = nil
+            }
             capsuleState = .hidden
 
         case .hidden, .done, .error:
@@ -141,41 +166,35 @@ final class RecordingState: ObservableObject {
             return
         }
 
-        do {
-            try startRecording()
-            isRecording = true
-            capsuleState = .recording
-            capturedContext = contextDetector.captureContext().formatted
-        } catch {
-            showError(error.localizedDescription)
+        // For local ASR, start streaming immediately
+        // For Groq, just start recording
+        switch provider {
+        case .local:
+            startLocalStreamingRecording()
+        case .groq:
+            do {
+                try startRecording()
+                isRecording = true
+                capsuleState = .recording
+                capturedContext = contextDetector.captureContext().formatted
+            } catch {
+                showError(error.localizedDescription)
+            }
         }
     }
 
-    private func handleKeyUp() {
-        guard isRecording, !isProcessing else { return }
-        isRecording = false
-        isProcessing = true
-
+    /// Start streaming recording for local ASR
+    private func startLocalStreamingRecording() {
         currentGeneration += 1
         let gen = currentGeneration
 
-        let provider = AsrSettings.shared.currentProvider
-
-        // Use streaming transcription for local ASR, traditional for Groq
-        switch provider {
-        case .local:
-            handleLocalStreamingTranscription(gen: gen, geminiKey: geminiKey, capturedContext: capturedContext)
-        case .groq:
-            handleGroqTranscription(gen: gen, groqKey: groqKey, geminiKey: geminiKey, capturedContext: capturedContext)
-        }
-    }
-
-    /// Handle streaming transcription for local ASR
-    private func handleLocalStreamingTranscription(gen: Int, geminiKey: String, capturedContext: String?) {
         capsuleState = .streaming(partialText: "")
+        isRecording = true
+        isProcessing = true
+        capturedContext = contextDetector.captureContext().formatted
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
+        streamingTask = Task { [weak self] in
+            guard let self = self else { return }
 
             do {
                 guard let modelDir = LocalAsrManager.shared.modelDirectory?.path else {
@@ -184,14 +203,15 @@ final class RecordingState: ObservableObject {
 
                 // Start streaming session
                 let sessionId = try startStreamingSession(modelDir: modelDir, language: nil)
+                self.streamingSessionId = sessionId
 
                 // Poll for updates while recording
                 var lastText = ""
-                while self.isProcessing && self.currentGeneration == gen {
+                while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
                     let currentText = getStreamingText(sessionId: sessionId)
                     if currentText != lastText {
                         lastText = currentText
-                        DispatchQueue.main.async {
+                        await MainActor.run {
                             guard self.currentGeneration == gen else { return }
                             self.capsuleState = .streaming(partialText: currentText)
                         }
@@ -203,43 +223,77 @@ final class RecordingState: ObservableObject {
                     }
 
                     // Small delay to avoid busy waiting
-                    Thread.sleep(forTimeInterval: 0.1)
+                    try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
 
-                guard self.currentGeneration == gen else {
+                // Wait until user releases the key
+                while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
+                    try await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                }
+
+                guard self.currentGeneration == gen, !Task.isCancelled else {
                     _ = try? stopStreamingSession(sessionId: sessionId)
+                    self.streamingSessionId = nil
                     return
                 }
 
-                // Stop streaming and get final text
-                let rawText = try stopStreamingSession(sessionId: sessionId)
-                guard self.currentGeneration == gen else { return }
-
-                DispatchQueue.main.async {
+                // User released key, stop streaming and get final text
+                await MainActor.run {
                     guard self.currentGeneration == gen else { return }
                     self.capsuleState = .polishing
                 }
 
+                let rawText = try stopStreamingSession(sessionId: sessionId)
+                self.streamingSessionId = nil
+
+                guard self.currentGeneration == gen, !Task.isCancelled else { return }
+
                 // Gemini polishing
                 let outputText: String
                 do {
-                    outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)
+                    outputText = try polishText(apiKey: self.geminiKey, rawText: rawText, context: self.capturedContext)
                 } catch {
                     outputText = rawText
                 }
 
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard self.currentGeneration == gen else { return }
                     self.finishOutput(raw: rawText, polished: outputText)
                 }
 
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard self.currentGeneration == gen else { return }
                     self.showError(error.localizedDescription)
                     self.isProcessing = false
+                    self.isRecording = false
                 }
             }
+
+            self.streamingTask = nil
+        }
+    }
+
+    private func handleKeyUp() {
+        guard isRecording else { return }
+
+        let provider = AsrSettings.shared.currentProvider
+
+        switch provider {
+        case .local:
+            // For local streaming, just mark recording as done
+            // The streaming task will continue to finalize
+            isRecording = false
+        case .groq:
+            // For Groq, stop recording and start transcription
+            guard !isProcessing else { return }
+            isRecording = false
+            isProcessing = true
+
+            currentGeneration += 1
+            let gen = currentGeneration
+
+            handleGroqTranscription(gen: gen, groqKey: groqKey, geminiKey: geminiKey, capturedContext: capturedContext)
         }
     }
 

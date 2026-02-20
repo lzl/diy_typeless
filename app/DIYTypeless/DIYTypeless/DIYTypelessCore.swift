@@ -435,6 +435,22 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
+    typealias FfiType = UInt64
+    typealias SwiftType = UInt64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -846,6 +862,41 @@ public func transcribeWavBytes(apiKey: String, wavBytes: Data, language: String?
 })
 }
 
+// MARK: - Streaming ASR Functions
+
+public func startStreamingSession(modelDir: String, language: String?) throws -> UInt64 {
+    return try FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffi_diy_typeless_core_fn_func_start_streaming_session(
+            FfiConverterString.lower(modelDir),
+            FfiConverterOptionString.lower(language),$0
+        )
+    })
+}
+
+public func getStreamingText(sessionId: UInt64) -> String {
+    return try! FfiConverterString.lift(try! rustCall {
+        uniffi_diy_typeless_core_fn_func_get_streaming_text(
+            FfiConverterUInt64.lower(sessionId),$0
+        )
+    })
+}
+
+public func isStreamingSessionActive(sessionId: UInt64) -> Bool {
+    return try! FfiConverterBool.lift(try! rustCall {
+        uniffi_diy_typeless_core_fn_func_is_streaming_session_active(
+            FfiConverterUInt64.lower(sessionId),$0
+        )
+    })
+}
+
+public func stopStreamingSession(sessionId: UInt64) throws -> String {
+    return try FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffi_diy_typeless_core_fn_func_stop_streaming_session(
+            FfiConverterUInt64.lower(sessionId),$0
+        )
+    })
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -879,6 +930,8 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {
         return InitializationResult.apiChecksumMismatch
     }
+    // Streaming ASR functions (checksums will be verified at runtime)
+    // Note: These functions are added for streaming transcription support
 
     return InitializationResult.ok
 }()

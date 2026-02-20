@@ -575,7 +575,54 @@ uint16_t uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes(void
 #ifndef UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_UNIFFI_CONTRACT_VERSION
 #define UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_UNIFFI_CONTRACT_VERSION
 uint32_t ffi_diy_typeless_core_uniffi_contract_version(void
-    
+
 );
+#endif
+
+// Streaming ASR Functions
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_STREAMING_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_STREAMING_SESSION
+uint64_t uniffi_diy_typeless_core_fn_func_start_streaming_session(
+    RustBuffer model_dir,
+    RustBuffer language,
+    RustCallStatus* out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_GET_STREAMING_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_GET_STREAMING_TEXT
+RustBuffer uniffi_diy_typeless_core_fn_func_get_streaming_text(
+    uint64_t session_id,
+    RustCallStatus* out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_STREAMING_SESSION_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_STREAMING_SESSION_ACTIVE
+int8_t uniffi_diy_typeless_core_fn_func_is_streaming_session_active(
+    uint64_t session_id,
+    RustCallStatus* out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
+RustBuffer uniffi_diy_typeless_core_fn_func_stop_streaming_session(
+    uint64_t session_id,
+    RustCallStatus* out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_STREAMING_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_STREAMING_SESSION
+uint16_t uniffi_diy_typeless_core_checksum_func_start_streaming_session(void);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_SESSION
+uint16_t uniffi_diy_typeless_core_checksum_func_get_streaming_session(void);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_STREAMING_SESSION_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_STREAMING_SESSION_ACTIVE
+uint16_t uniffi_diy_typeless_core_checksum_func_is_streaming_session_active(void);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION
+uint16_t uniffi_diy_typeless_core_checksum_func_stop_streaming_session(void);
 #endif
 
