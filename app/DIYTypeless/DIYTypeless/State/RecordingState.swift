@@ -13,7 +13,7 @@ enum CapsuleState: Equatable {
 }
 
 // Simple file logger for debugging
-private class FileLogger {
+class FileLogger {
     static let shared = FileLogger()
     private let logFile: URL
     private let dateFormatter: DateFormatter

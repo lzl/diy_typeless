@@ -12,7 +12,8 @@ struct CapsuleView: View {
     private var isDevBuild: Bool {
         let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
         let isDev = bundleId.contains(".dev")
-        print("[CapsuleView] Bundle ID: \(bundleId), isDevBuild: \(isDev)")
+        // Log to file instead of console
+        FileLogger.shared.log("[CapsuleView] Bundle ID: \(bundleId), isDevBuild: \(isDev)")
         return isDev
     }
 
@@ -47,12 +48,17 @@ struct CapsuleView: View {
 
     // Only show live transcription during recording/transcribing/polishing
     private var shouldShowLiveTranscription: Bool {
+        let isEmpty = state.liveTranscriptionText.isEmpty
+        let stateName = String(describing: state.capsuleState)
+        let shouldShow: Bool
         switch state.capsuleState {
         case .recording, .transcribing, .polishing, .streaming:
-            return !state.liveTranscriptionText.isEmpty
+            shouldShow = !isEmpty
         default:
-            return false
+            shouldShow = false
         }
+        FileLogger.shared.log("[CapsuleView] shouldShowLiveTranscription: state=\(stateName), textEmpty=\(isEmpty), result=\(shouldShow)")
+        return shouldShow
     }
 
     // Dev build: Display live transcription text (full text, no truncation)

@@ -13,7 +13,17 @@ All code, documentation, comments, commit messages, and technical writing in thi
 
 The only exception is user-facing content that is intentionally localized (e.g., test cases for Chinese language processing).
 
-## Closing the Loop (Primary Rule)
+## User Preferences (Important)
+
+### Logging
+
+**Always use file-based logs. NEVER ask the user to use Console.app.**
+
+- Log files should be written to `/tmp/` directory
+- Tell the user the exact file path to retrieve
+- The user will send log files directly, not use Console.app
+
+### Closing the Loop (Primary Rule)
 
 This project prioritizes closing the loop. Any core logic changes must be verified through an executable path that the agent can run end-to-end without opening the macOS app UI.
 
