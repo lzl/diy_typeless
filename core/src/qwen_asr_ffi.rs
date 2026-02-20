@@ -6,6 +6,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int, c_void};
 use std::path::Path;
+use std::sync::Mutex;
 
 use crate::error::CoreError;
 
@@ -29,8 +30,11 @@ extern "C" {
 }
 
 /// Qwen3-ASR transcriber
+///
+/// Thread-safe wrapper around the C library context.
+/// The Mutex ensures only one thread can access the C context at a time.
 pub struct QwenTranscriber {
-    ctx: *mut QwenContext,
+    ctx: Mutex<*mut QwenContext>,
 }
 
 unsafe impl Send for QwenTranscriber {}
@@ -49,14 +53,15 @@ impl QwenTranscriber {
             return Err(CoreError::Config("Failed to load Qwen3-ASR model".to_string()));
         }
 
-        Ok(Self { ctx })
+        Ok(Self { ctx: Mutex::new(ctx) })
     }
 
     /// Set forced language
     pub fn set_language(&self, language: Option<&str>) -> Result<(), CoreError> {
         if let Some(lang) = language {
             let lang_c = CString::new(lang).map_err(|e| CoreError::Config(e.to_string()))?;
-            let result = unsafe { qwen_set_force_language(self.ctx, lang_c.as_ptr()) };
+            let ctx = self.ctx.lock().unwrap();
+            let result = unsafe { qwen_set_force_language(*ctx, lang_c.as_ptr()) };
             if result != 0 {
                 return Err(CoreError::Config(format!(
                     "Failed to set language: {}",
@@ -77,9 +82,10 @@ impl QwenTranscriber {
         // Set language first (if provided)
         self.set_language(language)?;
 
+        let ctx = self.ctx.lock().unwrap();
         let result_ptr = unsafe {
             qwen_transcribe_audio(
-                self.ctx,
+                *ctx,
                 samples.as_ptr() as *const c_float,
                 samples.len() as c_int,
             )
@@ -104,8 +110,9 @@ impl QwenTranscriber {
 
 impl Drop for QwenTranscriber {
     fn drop(&mut self) {
+        let ctx = self.ctx.lock().unwrap();
         unsafe {
-            qwen_free(self.ctx);
+            qwen_free(*ctx);
         }
     }
 }
