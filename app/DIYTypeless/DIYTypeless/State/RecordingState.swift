@@ -185,22 +185,10 @@ final class RecordingState: ObservableObject {
                 )
                 guard self.currentGeneration == gen else { return }
 
+                // processWavBytes already includes polishing, use the result directly
                 DispatchQueue.main.async {
                     guard self.currentGeneration == gen else { return }
-                    self.capsuleState = .polishing
-                }
-
-                // Gemini polishing
-                let outputText: String
-                do {
-                    outputText = try polishText(apiKey: geminiKey, rawText: result.rawText, context: capturedContext)
-                } catch {
-                    outputText = result.rawText
-                }
-
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: result.rawText, polished: outputText)
+                    self.finishOutput(raw: result.rawText, polished: result.polishedText)
                 }
             } catch {
                 DispatchQueue.main.async {
