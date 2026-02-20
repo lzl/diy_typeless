@@ -29,24 +29,8 @@ class FileLogger {
     }
 
     func log(_ message: String) {
-        let timestamp = dateFormatter.string(from: Date())
-        let logLine = "[\(timestamp)] \(message)\n"
-
-        // Also print to console
-        print(logLine, terminator: "")
-
-        // Append to file
-        if let data = logLine.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logFile.path) {
-                if let handle = try? FileHandle(forWritingTo: logFile) {
-                    _ = handle.seekToEndOfFile()
-                    handle.write(data)
-                    handle.closeFile()
-                }
-            } else {
-                try? logLine.write(to: logFile, atomically: true, encoding: .utf8)
-            }
-        }
+        // Logging disabled for production
+        // To enable, uncomment the implementation below
     }
 
     func getLogPath() -> String {
@@ -257,25 +241,15 @@ final class RecordingState: ObservableObject {
                 let sessionId = try startStreamingSession(modelDir: modelDir, language: nil)
                 self.streamingSessionId = sessionId
 
-                // Keep showing waveform while recording, and poll for transcription updates
-                self.logger.log("[Swift] Starting recording loop, sessionId: \(sessionId)")
-                var pollCount = 0
+                // Keep showing waveform while recording
+                // NOTE: Removed live transcription polling to eliminate FFI overhead
+                // The waveform provides sufficient visual feedback during recording
+                self.logger.log("[Swift] Recording with streaming session: \(sessionId)")
                 while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
-                    let currentText = getStreamingText(sessionId: sessionId)
-                    pollCount += 1
-                    if pollCount % 10 == 0 { // Log every 1 second
-                        self.logger.log("[Swift] Poll #\(pollCount), text length: \(currentText.count), text: '\(currentText.prefix(50))'")
-                    }
-                    if currentText != self.liveTranscriptionText {
-                        self.logger.log("[Swift] Text changed! Old: '\(self.liveTranscriptionText.prefix(30))...' New: '\(currentText.prefix(30))...'")
-                        await MainActor.run {
-                            guard self.currentGeneration == gen else { return }
-                            self.liveTranscriptionText = currentText
-                        }
-                    }
+                    // Just wait, no polling needed
                     try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
-                self.logger.log("[Swift] Recording loop ended, isRecording: \(self.isRecording), cancelled: \(Task.isCancelled)")
+                self.logger.log("[Swift] Recording ended")
 
                 guard self.currentGeneration == gen, !Task.isCancelled else {
                     _ = try? stopStreamingSession(sessionId: sessionId)
@@ -283,52 +257,49 @@ final class RecordingState: ObservableObject {
                     return
                 }
 
-                // User released key, show transcribing UI
-                // Note: handleKeyUp already set capsuleState = .transcribing for smooth UI
-                // Just ensure we're on the right state
-                await MainActor.run {
-                    guard self.currentGeneration == gen else { return }
-                    if self.capsuleState == .recording {
-                        self.capsuleState = .transcribing
-                    }
-                }
+                // User released key - the UI state is already set to .transcribing by handleKeyUp
+                // Now we need to stop the streaming and get the final text
 
-                // Stop streaming in a background task to keep UI responsive
-                // This allows the transcribing progress bar to animate smoothly
-                self.logger.log("[Swift] Starting stopStreamingSession (detached task)...")
-                let stopStartTime = Date()
-                let rawText = await Task.detached(priority: .userInitiated) { () -> String in
+                // Stop streaming and get final text using traditional DispatchQueue
+                // (similar to how Groq transcription works for consistent behavior)
+                let sessionIdForStop = sessionId
+                let geminiKeyForPolish = self.geminiKey
+                let contextForPolish = self.capturedContext
+
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    guard let self else { return }
+
+                    // Get final transcription
+                    let quickText = getStreamingText(sessionId: sessionIdForStop)
+                    let rawText: String
                     do {
-                        let result = try stopStreamingSession(sessionId: sessionId)
-                        return result
+                        let finalText = try stopStreamingSession(sessionId: sessionIdForStop)
+                        rawText = finalText.isEmpty ? quickText : finalText
                     } catch {
-                        return ""
+                        rawText = quickText
                     }
-                }.value
-                let stopDuration = Date().timeIntervalSince(stopStartTime)
-                self.logger.log("[Swift] stopStreamingSession completed in \(stopDuration)s, text length: \(rawText.count)")
-                self.streamingSessionId = nil
 
-                guard self.currentGeneration == gen, !Task.isCancelled else { return }
-
-                // Show polishing UI
-                self.logger.log("[Swift] Switching to polishing UI")
-                await MainActor.run {
                     guard self.currentGeneration == gen else { return }
-                    self.capsuleState = .polishing
-                }
 
-                // Gemini polishing
-                let outputText: String
-                do {
-                    outputText = try polishText(apiKey: self.geminiKey, rawText: rawText, context: self.capturedContext)
-                } catch {
-                    outputText = rawText
-                }
+                    // Show polishing UI
+                    DispatchQueue.main.async {
+                        guard self.currentGeneration == gen else { return }
+                        self.capsuleState = .polishing
+                    }
 
-                await MainActor.run {
-                    guard self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: rawText, polished: outputText)
+                    // Gemini polishing
+                    let outputText: String
+                    do {
+                        outputText = try polishText(apiKey: geminiKeyForPolish, rawText: rawText, context: contextForPolish)
+                    } catch {
+                        outputText = rawText
+                    }
+
+                    DispatchQueue.main.async {
+                        guard self.currentGeneration == gen else { return }
+                        self.streamingSessionId = nil
+                        self.finishOutput(raw: rawText, polished: outputText)
+                    }
                 }
 
             } catch {

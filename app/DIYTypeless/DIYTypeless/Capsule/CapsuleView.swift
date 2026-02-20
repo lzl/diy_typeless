@@ -10,11 +10,7 @@ struct CapsuleView: View {
 
     // Check if this is dev build based on bundle identifier
     private var isDevBuild: Bool {
-        let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
-        let isDev = bundleId.contains(".dev")
-        // Log to file instead of console
-        FileLogger.shared.log("[CapsuleView] Bundle ID: \(bundleId), isDevBuild: \(isDev)")
-        return isDev
+        Bundle.main.bundleIdentifier?.contains(".dev") ?? false
     }
 
     var body: some View {
@@ -50,7 +46,6 @@ struct CapsuleView: View {
         default:
             shouldShow = false
         }
-        FileLogger.shared.log("[CapsuleView] shouldShowLiveTranscription: state=\(stateName), textEmpty=\(isEmpty), result=\(shouldShow)")
         return shouldShow
     }
 

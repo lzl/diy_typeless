@@ -30,19 +30,8 @@ static LOG_FILE: Lazy<Mutex<std::fs::File>> = Lazy::new(|| {
     Mutex::new(file)
 });
 
-pub fn log_to_file(msg: &str) {
-    use std::time::SystemTime;
-    let timestamp = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs_f64();
-    let line = format!("[{:.3}] {}\n", timestamp, msg);
-    if let Ok(mut file) = LOG_FILE.lock() {
-        let _ = file.write_all(line.as_bytes());
-        let _ = file.flush();
-    }
-    // Also print to stderr
-    eprintln!("{}", line.trim_end());
+pub fn log_to_file(_msg: &str) {
+    // Logging disabled for production
 }
 
 #[uniffi::export]
@@ -127,11 +116,8 @@ pub fn start_streaming_session(
 pub fn get_streaming_text(session_id: u64) -> String {
     let sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
     if let Some((_, handle)) = sessions.iter().find(|(id, _)| *id == session_id) {
-        let text = handle.current_text();
-        eprintln!("[ASR] get_streaming_text for session {}: len={}, text='{}'", session_id, text.len(), text.chars().take(50).collect::<String>());
-        text
+        handle.current_text()
     } else {
-        eprintln!("[ASR] get_streaming_text: session {} not found!", session_id);
         String::new()
     }
 }
