@@ -37,16 +37,6 @@ struct CapsuleView: View {
         .onChange(of: state.capsuleState) { newState in
             handleStateChange(newState)
         }
-        // Dev build only: Show live transcription above capsule
-        .overlay(alignment: .bottom) {
-            Group {
-                if shouldShowLiveTranscription {
-                    let _ = FileLogger.shared.log("[CapsuleView] Rendering overlay")
-                    liveTranscriptionOverlay
-                        .padding(.bottom, capsuleHeight + 8)
-                }
-            }
-        }
     }
 
     // Only show live transcription during recording/transcribing/polishing
@@ -84,8 +74,18 @@ struct CapsuleView: View {
     private var content: some View {
         switch state.capsuleState {
         case .recording:
-            WaveformView(levels: audioMonitor.levels)
-                .frame(width: capsuleWidth - 32)
+            // Dev build: show live transcription text instead of waveform
+            if isDevBuild && !state.liveTranscriptionText.isEmpty {
+                Text(state.liveTranscriptionText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.head) // Show latest text, truncate from beginning
+                    .frame(width: capsuleWidth - 32)
+            } else {
+                WaveformView(levels: audioMonitor.levels)
+                    .frame(width: capsuleWidth - 32)
+            }
 
         case .transcribing:
             Text("Transcribing")
