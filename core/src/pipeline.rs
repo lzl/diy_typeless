@@ -1,5 +1,4 @@
 use crate::error::CoreError;
-use crate::polish::polish_text;
 use crate::transcribe::{transcribe_wav_bytes, transcribe_wav_bytes_local};
 
 #[derive(Debug, uniffi::Record)]
@@ -17,10 +16,10 @@ pub enum AsrProvider {
 
 pub fn process_wav_bytes(
     groq_api_key: &str,
-    gemini_api_key: &str,
+    _gemini_api_key: &str,
     wav_bytes: &[u8],
     language: Option<&str>,
-    context: Option<&str>,
+    _context: Option<&str>,
 ) -> Result<PipelineResult, CoreError> {
     // If groq_api_key is empty and local ASR is available, use local ASR
     let raw = if groq_api_key.is_empty() && crate::transcribe::is_local_asr_available() {
@@ -28,10 +27,10 @@ pub fn process_wav_bytes(
     } else {
         transcribe_wav_bytes(groq_api_key, wav_bytes, language)?
     };
-    let polished = polish_text(gemini_api_key, &raw, context)?;
+    // Return raw text only; polishing will be done on Swift side for better UX
     Ok(PipelineResult {
-        raw_text: raw,
-        polished_text: polished,
+        raw_text: raw.clone(),
+        polished_text: raw,
     })
 }
 
@@ -39,10 +38,10 @@ pub fn process_wav_bytes(
 pub fn process_wav_bytes_with_provider(
     provider: AsrProvider,
     groq_api_key: Option<&str>,
-    gemini_api_key: &str,
+    _gemini_api_key: &str,
     wav_bytes: &[u8],
     language: Option<&str>,
-    context: Option<&str>,
+    _context: Option<&str>,
 ) -> Result<PipelineResult, CoreError> {
     let raw = match provider {
         AsrProvider::Groq => {
@@ -56,9 +55,9 @@ pub fn process_wav_bytes_with_provider(
         }
     };
 
-    let polished = polish_text(gemini_api_key, &raw, context)?;
+    // Return raw text only; polishing will be done on Swift side for better UX
     Ok(PipelineResult {
-        raw_text: raw,
-        polished_text: polished,
+        raw_text: raw.clone(),
+        polished_text: raw,
     })
 }
