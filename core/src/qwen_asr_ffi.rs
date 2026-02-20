@@ -62,6 +62,9 @@ pub struct QwenTranscriber {
 unsafe impl Send for QwenTranscriber {}
 unsafe impl Sync for QwenTranscriber {}
 
+unsafe impl Send for QwenLiveAudio {}
+unsafe impl Sync for QwenLiveAudio {}
+
 impl QwenTranscriber {
     /// Load model
     pub fn new(model_dir: &Path) -> Result<Self, CoreError> {
