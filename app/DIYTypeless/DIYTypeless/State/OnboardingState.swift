@@ -296,11 +296,6 @@ final class OnboardingState: ObservableObject {
             }
         }
 
-        if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            step = .groqKey
-            return
-        }
-
         if geminiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             step = .geminiKey
             return
