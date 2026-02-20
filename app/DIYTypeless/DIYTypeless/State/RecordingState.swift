@@ -231,13 +231,24 @@ final class RecordingState: ObservableObject {
                 }
 
                 // User released key, show transcribing UI
+                // Note: handleKeyUp already set capsuleState = .transcribing for smooth UI
+                // Just ensure we're on the right state
                 await MainActor.run {
                     guard self.currentGeneration == gen else { return }
-                    self.capsuleState = .transcribing
+                    if self.capsuleState == .recording {
+                        self.capsuleState = .transcribing
+                    }
                 }
 
-                // Stop streaming and get final text
-                let rawText = try stopStreamingSession(sessionId: sessionId)
+                // Stop streaming in a background task to keep UI responsive
+                // This allows the transcribing progress bar to animate smoothly
+                let rawText = await Task.detached(priority: .userInitiated) { () -> String in
+                    do {
+                        return try stopStreamingSession(sessionId: sessionId)
+                    } catch {
+                        return ""
+                    }
+                }.value
                 self.streamingSessionId = nil
 
                 guard self.currentGeneration == gen, !Task.isCancelled else { return }
@@ -281,9 +292,10 @@ final class RecordingState: ObservableObject {
 
         switch provider {
         case .local:
-            // For local streaming, just mark recording as done
-            // The streaming task will continue to finalize
+            // For local streaming, mark recording as done and immediately switch UI
             isRecording = false
+            // Immediately show transcribing UI for smooth transition
+            capsuleState = .transcribing
         case .groq:
             // For Groq, stop recording and start transcription
             guard !isProcessing else { return }
