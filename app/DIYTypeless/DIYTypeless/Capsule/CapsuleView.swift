@@ -39,9 +39,12 @@ struct CapsuleView: View {
         }
         // Dev build only: Show live transcription above capsule
         .overlay(alignment: .bottom) {
-            if isDevBuild && shouldShowLiveTranscription {
-                liveTranscriptionOverlay
-                    .padding(.bottom, capsuleHeight + 8)
+            Group {
+                if shouldShowLiveTranscription {
+                    let _ = FileLogger.shared.log("[CapsuleView] Rendering overlay")
+                    liveTranscriptionOverlay
+                        .padding(.bottom, capsuleHeight + 8)
+                }
             }
         }
     }
