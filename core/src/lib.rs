@@ -3,11 +3,11 @@ mod config;
 mod error;
 mod pipeline;
 mod polish;
+mod qwen_asr_ffi;
 mod transcribe;
 
 pub use audio::WavData;
 pub use error::CoreError;
-pub use pipeline::PipelineResult;
 
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {
@@ -37,21 +37,16 @@ pub fn polish_text(
     polish::polish_text(&api_key, &raw_text, context.as_deref())
 }
 
+// Local ASR related functions
 #[uniffi::export]
-pub fn process_wav_bytes(
-    groq_api_key: String,
-    gemini_api_key: String,
-    wav_bytes: Vec<u8>,
-    language: Option<String>,
-    context: Option<String>,
-) -> Result<PipelineResult, CoreError> {
-    pipeline::process_wav_bytes(
-        &groq_api_key,
-        &gemini_api_key,
-        &wav_bytes,
-        language.as_deref(),
-        context.as_deref(),
-    )
+pub fn init_local_asr(model_dir: String) -> Result<(), CoreError> {
+    let path = std::path::Path::new(&model_dir);
+    transcribe::init_local_asr(path)
+}
+
+#[uniffi::export]
+pub fn is_local_asr_available() -> bool {
+    transcribe::is_local_asr_available()
 }
 
 uniffi::setup_scaffolding!();

@@ -113,8 +113,29 @@ final class RecordingState: ObservableObject {
         guard !isRecording, !isProcessing else { return }
 
         refreshKeys()
-        guard !groqKey.isEmpty, !geminiKey.isEmpty else {
-            showError("API keys required")
+
+        // Check current ASR provider dependencies
+        let provider = AsrSettings.shared.currentProvider
+        switch provider {
+        case .groq:
+            // Groq requires API key
+            if groqKey.isEmpty {
+                showError("Groq API key required")
+                onRequireOnboarding?()
+                return
+            }
+        case .local:
+            // Local ASR requires model to be loaded
+            if !LocalAsrManager.shared.isModelLoaded {
+                showError("Local ASR model not loaded")
+                onRequireOnboarding?()
+                return
+            }
+        }
+
+        // Gemini always required (for polishing)
+        if geminiKey.isEmpty {
+            showError("Gemini API key required")
             onRequireOnboarding?()
             return
         }
@@ -138,14 +159,25 @@ final class RecordingState: ObservableObject {
         currentGeneration += 1
         let gen = currentGeneration
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext] in
+        let provider = AsrSettings.shared.currentProvider
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, groqKey, geminiKey, capturedContext, provider] in
             guard let self else { return }
             do {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
+                // Choose transcription method based on provider: pass empty string for local ASR
+                let effectiveGroqKey: String
+                switch provider {
+                case .local:
+                    effectiveGroqKey = ""  // Empty string triggers local ASR (if loaded)
+                case .groq:
+                    effectiveGroqKey = groqKey
+                }
+
                 let rawText = try transcribeWavBytes(
-                    apiKey: groqKey,
+                    apiKey: effectiveGroqKey,
                     wavBytes: wavData.bytes,
                     language: nil
                 )
@@ -156,6 +188,7 @@ final class RecordingState: ObservableObject {
                     self.capsuleState = .polishing
                 }
 
+                // Gemini polishing
                 let outputText: String
                 do {
                     outputText = try polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)

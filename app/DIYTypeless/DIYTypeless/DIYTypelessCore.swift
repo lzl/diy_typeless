@@ -435,6 +435,30 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -618,6 +642,10 @@ public enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedErr
     case Serialization(String
     )
     case EmptyResponse
+    case Transcription(String
+    )
+    case Config(String
+    )
 
     
 
@@ -666,6 +694,12 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             try FfiConverterString.read(from: &buf)
             )
         case 9: return .EmptyResponse
+        case 10: return .Transcription(
+            try FfiConverterString.read(from: &buf)
+            )
+        case 11: return .Config(
+            try FfiConverterString.read(from: &buf)
+            )
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -718,6 +752,16 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         case .EmptyResponse:
             writeInt(&buf, Int32(9))
         
+        
+        case let .Transcription(v1):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(v1, into: &buf)
+            
+        
+        case let .Config(v1):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(v1, into: &buf)
+            
         }
     }
 }
@@ -760,22 +804,23 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
+public func initLocalAsr(modelDir: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_init_local_asr(
+        FfiConverterString.lower(modelDir),$0
+    )
+}
+}
+public func isLocalAsrAvailable() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_diy_typeless_core_fn_func_is_local_asr_available($0
+    )
+})
+}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(rawText),
-        FfiConverterOptionString.lower(context),$0
-    )
-})
-}
-public func processWavBytes(groqApiKey: String, geminiApiKey: String, wavBytes: Data, language: String?, context: String?)throws  -> PipelineResult  {
-    return try  FfiConverterTypePipelineResult_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_process_wav_bytes(
-        FfiConverterString.lower(groqApiKey),
-        FfiConverterString.lower(geminiApiKey),
-        FfiConverterData.lower(wavBytes),
-        FfiConverterOptionString.lower(language),
         FfiConverterOptionString.lower(context),$0
     )
 })
@@ -816,10 +861,13 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
+    if (uniffi_diy_typeless_core_checksum_func_init_local_asr() != 58840) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_process_wav_bytes() != 61710) {
+    if (uniffi_diy_typeless_core_checksum_func_is_local_asr_available() != 6687) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {
