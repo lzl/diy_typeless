@@ -7,11 +7,43 @@ mod qwen_asr_ffi;
 mod streaming_asr;
 mod transcribe;
 
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 pub use audio::WavData;
 pub use error::CoreError;
 pub use streaming_asr::StreamingHandle;
+
+// Simple file logger using once_cell
+use once_cell::sync::Lazy;
+
+static LOG_FILE: Lazy<Mutex<std::fs::File>> = Lazy::new(|| {
+    let log_path = std::path::PathBuf::from("/tmp/diytypeless_rust.log");
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_path)
+        .expect("Failed to open log file");
+    Mutex::new(file)
+});
+
+pub fn log_to_file(msg: &str) {
+    use std::time::SystemTime;
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+    let line = format!("[{:.3}] {}\n", timestamp, msg);
+    if let Ok(mut file) = LOG_FILE.lock() {
+        let _ = file.write_all(line.as_bytes());
+        let _ = file.flush();
+    }
+    // Also print to stderr
+    eprintln!("{}", line.trim_end());
+}
 
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {
@@ -95,8 +127,11 @@ pub fn start_streaming_session(
 pub fn get_streaming_text(session_id: u64) -> String {
     let sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
     if let Some((_, handle)) = sessions.iter().find(|(id, _)| *id == session_id) {
-        handle.current_text()
+        let text = handle.current_text();
+        eprintln!("[ASR] get_streaming_text for session {}: len={}, text='{}'", session_id, text.len(), text.chars().take(50).collect::<String>());
+        text
     } else {
+        eprintln!("[ASR] get_streaming_text: session {} not found!", session_id);
         String::new()
     }
 }

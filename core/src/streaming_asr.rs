@@ -100,8 +100,10 @@ where
     // Set up token callback for real-time updates
     let accumulated_text_callback = accumulated_text.clone();
     transcriber.set_token_callback(move |token: String| {
+        crate::log_to_file(&format!("[ASR] Token callback received: '{}'", token));
         let mut text = accumulated_text_callback.lock().unwrap();
         text.push_str(&token);
+        crate::log_to_file(&format!("[ASR] Accumulated text now: '{}'", text));
         drop(text);
         on_text(token);
     });
@@ -376,15 +378,19 @@ fn run_live_inference(
     stop_flag: Arc<AtomicBool>,
     language: Option<&str>,
 ) -> Result<String, CoreError> {
+    eprintln!("[ASR] run_live_inference: waiting for initial audio...");
+
     // Wait until we have some initial audio data (0.5 seconds)
     let min_samples = 16000 / 2;
     loop {
         {
             let live = live_audio.lock().unwrap();
             if live.n_samples >= min_samples {
+                eprintln!("[ASR] Got {} samples, starting inference", live.n_samples);
                 break;
             }
             if stop_flag.load(Ordering::SeqCst) || live.eof != 0 {
+                eprintln!("[ASR] Stopped before min_samples");
                 return Ok(String::new());
             }
         }
@@ -397,6 +403,8 @@ fn run_live_inference(
         &mut *live as *mut QwenLiveAudio
     };
 
+    eprintln!("[ASR] Calling transcribe_stream_live...");
+
     // SAFETY: This is safe because:
     // 1. The audio capture thread holds the Arc<Mutex<QwenLiveAudio>>
     // 2. The transcriber doesn't modify the live structure, only reads from it
@@ -407,6 +415,7 @@ fn run_live_inference(
         transcriber.transcribe_stream_live(live_ptr, language)
     };
 
+    eprintln!("[ASR] transcribe_stream_live result: {:?}", result);
     result
 }
 

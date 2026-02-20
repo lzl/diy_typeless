@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os.log
 
 enum CapsuleState: Equatable {
     case hidden
@@ -11,6 +12,49 @@ enum CapsuleState: Equatable {
     case error(String)
 }
 
+// Simple file logger for debugging
+private class FileLogger {
+    static let shared = FileLogger()
+    private let logFile: URL
+    private let dateFormatter: DateFormatter
+
+    init() {
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        logFile = documentsDir.appendingPathComponent("diytypeless_debug.log")
+        dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+        // Clear previous log
+        try? "".write(to: logFile, atomically: true, encoding: .utf8)
+        log("=== Log file initialized at \(logFile.path) ===")
+    }
+
+    func log(_ message: String) {
+        let timestamp = dateFormatter.string(from: Date())
+        let logLine = "[\(timestamp)] \(message)\n"
+
+        // Also print to console
+        print(logLine, terminator: "")
+
+        // Append to file
+        if let data = logLine.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    _ = handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? logLine.write(to: logFile, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    func getLogPath() -> String {
+        return logFile.path
+    }
+}
+
 @MainActor
 final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
@@ -20,6 +64,8 @@ final class RecordingState: ObservableObject {
 
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
+
+    private let logger = FileLogger.shared
 
     private let permissionManager: PermissionManager
     private let keyStore: ApiKeyStore
@@ -213,9 +259,16 @@ final class RecordingState: ObservableObject {
                 self.streamingSessionId = sessionId
 
                 // Keep showing waveform while recording, and poll for transcription updates
+                self.logger.log("[Swift] Starting recording loop, sessionId: \(sessionId)")
+                var pollCount = 0
                 while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
                     let currentText = getStreamingText(sessionId: sessionId)
+                    pollCount += 1
+                    if pollCount % 10 == 0 { // Log every 1 second
+                        self.logger.log("[Swift] Poll #\(pollCount), text length: \(currentText.count), text: '\(currentText.prefix(50))'")
+                    }
                     if currentText != self.liveTranscriptionText {
+                        self.logger.log("[Swift] Text changed! Old: '\(self.liveTranscriptionText.prefix(30))...' New: '\(currentText.prefix(30))...'")
                         await MainActor.run {
                             guard self.currentGeneration == gen else { return }
                             self.liveTranscriptionText = currentText
@@ -223,6 +276,7 @@ final class RecordingState: ObservableObject {
                     }
                     try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
+                self.logger.log("[Swift] Recording loop ended, isRecording: \(self.isRecording), cancelled: \(Task.isCancelled)")
 
                 guard self.currentGeneration == gen, !Task.isCancelled else {
                     _ = try? stopStreamingSession(sessionId: sessionId)
@@ -242,18 +296,24 @@ final class RecordingState: ObservableObject {
 
                 // Stop streaming in a background task to keep UI responsive
                 // This allows the transcribing progress bar to animate smoothly
+                self.logger.log("[Swift] Starting stopStreamingSession (detached task)...")
+                let stopStartTime = Date()
                 let rawText = await Task.detached(priority: .userInitiated) { () -> String in
                     do {
-                        return try stopStreamingSession(sessionId: sessionId)
+                        let result = try stopStreamingSession(sessionId: sessionId)
+                        return result
                     } catch {
                         return ""
                     }
                 }.value
+                let stopDuration = Date().timeIntervalSince(stopStartTime)
+                self.logger.log("[Swift] stopStreamingSession completed in \(stopDuration)s, text length: \(rawText.count)")
                 self.streamingSessionId = nil
 
                 guard self.currentGeneration == gen, !Task.isCancelled else { return }
 
                 // Show polishing UI
+                self.logger.log("[Swift] Switching to polishing UI")
                 await MainActor.run {
                     guard self.currentGeneration == gen else { return }
                     self.capsuleState = .polishing
