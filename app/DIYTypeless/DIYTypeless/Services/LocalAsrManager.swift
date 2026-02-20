@@ -12,6 +12,10 @@ class LocalAsrManager: ObservableObject {
     @Published var downloadProgress: Double = 0
     @Published var downloadError: String?
 
+    private var currentFileIndex = 0
+    private var downloadedBytes: Int64 = 0
+    private var totalBytes: Int64 = 0
+
     private let modelDirName = "qwen3-asr-0.6b"
     private let hfRepo = "Qwen/Qwen3-ASR-0.6B"
     private var hasInitialized = false
@@ -65,6 +69,9 @@ class LocalAsrManager: ObservableObject {
         isDownloading = true
         downloadError = nil
         downloadProgress = 0
+        currentFileIndex = 0
+        downloadedBytes = 0
+        totalBytes = modelFiles.map { $0.size }.reduce(0, +)
 
         do {
             // Create directory
@@ -72,11 +79,8 @@ class LocalAsrManager: ObservableObject {
             try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
             // Download files one by one
-            let totalFiles = modelFiles.count
-            var downloadedBytes: Int64 = 0
-            let totalBytes = modelFiles.map { $0.size }.reduce(0, +)
-
             for (index, fileInfo) in modelFiles.enumerated() {
+                currentFileIndex = index
                 let filename = fileInfo.name
                 let url = URL(string: "https://huggingface.co/\(hfRepo)/resolve/main/\(filename)")!
                 let destination = modelDir.appendingPathComponent(filename)
@@ -86,51 +90,40 @@ class LocalAsrManager: ObservableObject {
                    let fileSize = attrs[.size] as? Int64,
                    fileSize > 1000 {
                     downloadedBytes += fileSize
-                    await MainActor.run {
-                        downloadProgress = Double(downloadedBytes) / Double(totalBytes)
-                    }
+                    downloadProgress = Double(downloadedBytes) / Double(totalBytes)
                     continue
                 }
 
-                // Download file
+                // Download file with progress tracking
                 print("[LocalASR] Downloading: \(url)")
-                let (data, response) = try await URLSession.shared.data(from: url)
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw LocalAsrError.downloadFailed("\(filename): Invalid response")
-                }
-
-                guard httpResponse.statusCode == 200 else {
-                    // Read response body for error details
-                    let body = String(data: data, encoding: .utf8) ?? ""
-                    print("[LocalASR] HTTP \(httpResponse.statusCode) for \(filename): \(body.prefix(200))")
-                    throw LocalAsrError.downloadFailed("\(filename): HTTP \(httpResponse.statusCode)")
-                }
-
-                try data.write(to: destination)
-                downloadedBytes += Int64(data.count)
-
-                await MainActor.run {
-                    downloadProgress = Double(downloadedBytes) / Double(totalBytes)
-                }
+                try await downloadFile(from: url, to: destination)
             }
 
-            await MainActor.run {
-                isDownloading = false
-                isModelAvailable = true
-                downloadProgress = 1.0
-            }
+            isDownloading = false
+            isModelAvailable = true
+            downloadProgress = 1.0
 
             // Auto-load model after download completes
             try? await initialize()
 
         } catch {
-            await MainActor.run {
-                isDownloading = false
-                downloadError = error.localizedDescription
-                print("[LocalASR] Download failed: \(error)")
+            isDownloading = false
+            downloadError = error.localizedDescription
+            print("[LocalASR] Download failed: \(error)")
+        }
+    }
+
+    /// Download a single file using URLSessionDownloadTask with progress
+    private func downloadFile(from url: URL, to destination: URL) async throws {
+        let downloader = FileDownloader(url: url, destination: destination)
+        downloader.onProgress = { [weak self] bytesWritten in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.downloadedBytes += bytesWritten
+                self.downloadProgress = Double(self.downloadedBytes) / Double(self.totalBytes)
             }
         }
+        try await downloader.download()
     }
 
     /// Initialize local ASR (load model into memory)
@@ -149,9 +142,7 @@ class LocalAsrManager: ObservableObject {
         }.value
 
         hasInitialized = true
-        await MainActor.run {
-            isModelLoaded = true
-        }
+        isModelLoaded = true
     }
 
     /// Get total model size (for display)
@@ -159,6 +150,80 @@ class LocalAsrManager: ObservableObject {
         let totalBytes = modelFiles.map { $0.size }.reduce(0, +)
         let gb = Double(totalBytes) / 1_000_000_000
         return String(format: "%.1fGB", gb)
+    }
+}
+
+// MARK: - File Downloader
+
+/// Handles single file download with progress tracking
+@MainActor
+class FileDownloader: NSObject, URLSessionDownloadDelegate {
+    let url: URL
+    let destination: URL
+
+    var onProgress: ((Int64) -> Void)?
+    var continuation: CheckedContinuation<Void, Error>?
+    var lastReportedTotalBytes: Int64 = 0
+
+    init(url: URL, destination: URL) {
+        self.url = url
+        self.destination = destination
+    }
+
+    func download() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.continuation = continuation
+
+            let session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
+            let task = session.downloadTask(with: url)
+            task.resume()
+        }
+    }
+
+    // MARK: - URLSessionDownloadDelegate
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let delta = bytesWritten
+        if delta > 0 {
+            onProgress?(delta)
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        session.finishTasksAndInvalidate()
+
+        guard let response = downloadTask.response as? HTTPURLResponse else {
+            continuation?.resume(throwing: LocalAsrError.downloadFailed("Invalid response"))
+            continuation = nil
+            return
+        }
+
+        guard response.statusCode == 200 else {
+            continuation?.resume(throwing: LocalAsrError.downloadFailed("HTTP \(response.statusCode)"))
+            continuation = nil
+            return
+        }
+
+        do {
+            // Move downloaded file to destination
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: location, to: destination)
+            continuation?.resume()
+            continuation = nil
+        } catch {
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            session.invalidateAndCancel()
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
     }
 }
 
