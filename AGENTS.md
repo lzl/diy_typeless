@@ -66,6 +66,16 @@ If there is uncertainty, extend the CLI with additional flags or diagnostics so 
 
 When working with the macOS app, use `xcodebuild` command line tool instead of opening the Xcode GUI. This enables automated error collection and debugging.
 
+### Quick Build Verification
+
+To verify the app builds successfully without launching it or modifying permissions:
+
+```bash
+./scripts/dev-loop.sh --testing
+```
+
+This is the preferred way to validate macOS app builds during development.
+
 ### Project Location
 
 The Xcode project is located at:
