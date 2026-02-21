@@ -213,7 +213,24 @@ let text = stop_streaming_session(session_id)?;
 fs::write(&txt_path, &text)?;
 ```
 
-### 4.3 FFI Interface
+### 4.3 Full Pipeline with Local ASR
+
+**Location**: `cli/src/main.rs::run_local_asr_full()`
+
+For the complete pipeline (record + transcribe + polish), there's a separate function that uses local ASR:
+
+```rust
+fn run_local_asr_full(
+    output_dir: &PathBuf,
+    duration_seconds: Option<u64>,
+    language: Option<String>,
+    model_dir: PathBuf,
+) -> Result<()>
+```
+
+This function follows the same pattern as `run_local_asr_recording()` but additionally calls the Polish API after transcription.
+
+### 4.4 FFI Interface
 
 **Location**: `core/src/lib.rs`
 
@@ -362,9 +379,11 @@ From official documentation (`MODEL_CARD_OFFICIAL.md`):
 
 ## 10. File Locations Summary
 
+### 10.1 Rust Core
+
 | Component | Path |
 |-----------|------|
-| C Library | `core/libs/qwen-asr/` |
+| C Library (submodule) | `core/libs/qwen-asr/` |
 | Rust Streaming | `core/src/streaming_asr.rs` |
 | Rust FFI | `core/src/qwen_asr_ffi.rs` |
 | Rust Transcribe | `core/src/transcribe.rs` |
@@ -373,9 +392,81 @@ From official documentation (`MODEL_CARD_OFFICIAL.md`):
 | Download Script | `core/libs/qwen-asr/download_model.sh` |
 | Build Script | `core/build.rs` |
 
+### 10.2 Swift/macOS App
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| LocalAsrManager | `app/DIYTypeless/DIYTypeless/Services/LocalAsrManager.swift` | Manages model download and local ASR lifecycle |
+| AsrProvider | `app/DIYTypeless/DIYTypeless/Services/AsrProvider.swift` | Enum defining ASR providers (groq vs local) |
+| LocalModelDownloadView | `app/DIYTypeless/DIYTypeless/Onboarding/Steps/LocalModelDownloadView.swift` | SwiftUI view for downloading model |
+| RecordingState | `app/DIYTypeless/DIYTypeless/State/RecordingState.swift` | Recording state management with streaming integration |
+| AppState | `app/DIYTypeless/DIYTypeless/State/AppState.swift` | App-level state including local ASR availability checks |
+
+**Note**: The macOS app uses these Swift components to integrate with the Rust core via UniFFI bindings.
+
 ---
 
-## 11. Lessons Learned
+## 11. Code Removal Reference
+
+This section documents the complete list of components to remove when deleting local ASR functionality. Follow this order to handle dependencies correctly.
+
+### 11.1 Phase 1: Swift/macOS App Layer
+
+| # | File | Action | Notes |
+|---|------|--------|-------|
+| 1 | `LocalAsrManager.swift` | Delete entire file | No external dependencies |
+| 2 | `LocalModelDownloadView.swift` | Delete entire file | Pure UI component |
+| 3 | `AsrProvider.swift` | Remove `.local` case | Affects `AsrSettings.shared.currentProvider` logic |
+| 4 | `RecordingState.swift` | Delete methods: `startStreamingRecording()`, `stopStreamingAndGetText()` | Also remove calls to `startStreamingSession()` |
+| 5 | `AppState.swift` | Remove local ASR availability checks | Simplify `isCurrentProviderAvailable` logic |
+
+### 11.2 Phase 2: CLI Layer
+
+| # | File | Action |
+|---|------|--------|
+| 6 | `cli/src/main.rs` | Remove `--local-asr` argument from `Record` and `Full` commands |
+| 7 | `cli/src/main.rs` | Delete `run_local_asr_recording()` function |
+| 8 | `cli/src/main.rs` | Delete `run_local_asr_full()` function |
+| 9 | `cli/src/main.rs` | Simplify `cmd_record()` and `cmd_full()` to remove local ASR branches |
+
+### 11.3 Phase 3: Rust Core Layer
+
+| # | File | Action |
+|---|------|--------|
+| 10 | `core/src/lib.rs` | Delete: `init_local_asr()`, `start_streaming_session()`, `stop_streaming_session()`, `get_streaming_text()` |
+| 11 | `core/src/lib.rs` | Remove static variables: `ACTIVE_STREAMING_SESSIONS`, `NEXT_SESSION_ID` |
+| 12 | `core/src/streaming_asr.rs` | Delete entire file |
+| 13 | `core/src/qwen_asr_ffi.rs` | Delete entire file |
+| 14 | `core/src/transcribe.rs` | Delete: `init_local_asr()`, `is_local_asr_available()`, `transcribe_wav_bytes_local()`, `decode_wav_to_f32()` |
+| 15 | `core/src/transcribe.rs` | Remove static variable: `LOCAL_TRANSCRIBER` |
+
+### 11.4 Phase 4: Build System
+
+| # | File | Action |
+|---|------|--------|
+| 16 | `core/build.rs` | Remove entire C code compilation logic |
+| 17 | `core/Cargo.toml` | Remove dependencies: `cpal`, `hound`, `libc` (if not used elsewhere) |
+| 18 | `core/Cargo.toml` | Remove `[build-dependencies]` section if only for C compilation |
+
+### 11.5 Phase 5: C Library and Submodule
+
+| # | File | Action | Notes |
+|---|------|--------|-------|
+| 19 | `core/libs/qwen-asr/` | Remove submodule | Use special git commands (see below) |
+| 20 | `.gitmodules` | Remove submodule entry | Delete the `[submodule "core/libs/qwen-asr"]` section |
+| 21 | `.git/modules/core/libs/qwen-asr` | Remove git metadata | `rm -rf .git/modules/core/libs/qwen-asr` |
+
+**Submodule removal commands**:
+```bash
+git submodule deinit core/libs/qwen-asr
+git rm core/libs/qwen-asr
+rm -rf .git/modules/core/libs/qwen-asr
+git commit -m "chore(asr): remove local ASR and qwen-asr submodule"
+```
+
+---
+
+## 12. Lessons Learned
 
 1. **Model Size vs. Quality Trade-off**: Even the smaller 0.6B model (~1.9GB) was too large for a smooth user experience, and its quality was not sufficient for production use.
 
@@ -383,7 +474,7 @@ From official documentation (`MODEL_CARD_OFFICIAL.md`):
 
 3. **Memory Pressure**: ~1GB RAM usage is substantial for a macOS menu bar app and affects overall system performance.
 
-4. **Cloud ASR Alternative**: Consider cloud-based ASR APIs (OpenAI Whisper, etc.) for better quality, though this trades privacy for accuracy.
+4. **Git Submodule Overhead**: Using a git submodule for the C library added complexity to the build process and clone workflow. Future implementations should consider vendoring or a simpler dependency approach.
 
 ---
 
