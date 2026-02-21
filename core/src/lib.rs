@@ -48,11 +48,6 @@ pub fn init_local_asr(model_dir: String) -> Result<(), CoreError> {
     transcribe::init_local_asr(path)
 }
 
-#[uniffi::export]
-pub fn is_local_asr_available() -> bool {
-    transcribe::is_local_asr_available()
-}
-
 /// Global storage for active streaming sessions
 /// This allows Swift to reference sessions by ID and poll for results
 static ACTIVE_STREAMING_SESSIONS: std::sync::Mutex<Vec<(u64, Arc<crate::streaming_asr::StreamingHandle>)>> =
@@ -98,17 +93,6 @@ pub fn get_streaming_text(session_id: u64) -> String {
         handle.current_text()
     } else {
         String::new()
-    }
-}
-
-/// Check if a streaming session is still running
-#[uniffi::export]
-pub fn is_streaming_session_active(session_id: u64) -> bool {
-    let sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-    if let Some((_, handle)) = sessions.iter().find(|(id, _)| *id == session_id) {
-        handle.is_running()
-    } else {
-        false
     }
 }
 

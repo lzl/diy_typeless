@@ -248,12 +248,6 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
 void uniffi_diy_typeless_core_fn_func_init_local_asr(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_LOCAL_ASR_AVAILABLE
-int8_t uniffi_diy_typeless_core_fn_func_is_local_asr_available(RustCallStatus *_Nonnull out_status
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
@@ -542,12 +536,6 @@ uint16_t uniffi_diy_typeless_core_checksum_func_init_local_asr(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_LOCAL_ASR_AVAILABLE
-uint16_t uniffi_diy_typeless_core_checksum_func_is_local_asr_available(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
 uint16_t uniffi_diy_typeless_core_checksum_func_polish_text(void
@@ -595,13 +583,6 @@ RustBuffer uniffi_diy_typeless_core_fn_func_get_streaming_text(
     RustCallStatus* out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_STREAMING_SESSION_ACTIVE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_IS_STREAMING_SESSION_ACTIVE
-int8_t uniffi_diy_typeless_core_fn_func_is_streaming_session_active(
-    uint64_t session_id,
-    RustCallStatus* out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
 RustBuffer uniffi_diy_typeless_core_fn_func_stop_streaming_session(
@@ -616,10 +597,6 @@ uint16_t uniffi_diy_typeless_core_checksum_func_start_streaming_session(void);
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_TEXT
 uint16_t uniffi_diy_typeless_core_checksum_func_get_streaming_text(void);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_STREAMING_SESSION_ACTIVE
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_IS_STREAMING_SESSION_ACTIVE
-uint16_t uniffi_diy_typeless_core_checksum_func_is_streaming_session_active(void);
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION

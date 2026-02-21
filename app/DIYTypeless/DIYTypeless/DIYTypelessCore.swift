@@ -826,12 +826,6 @@ public func initLocalAsr(modelDir: String)throws   {try rustCallWithError(FfiCon
     )
 }
 }
-public func isLocalAsrAvailable() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_diy_typeless_core_fn_func_is_local_asr_available($0
-    )
-})
-}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -881,14 +875,6 @@ public func getStreamingText(sessionId: UInt64) -> String {
     })
 }
 
-public func isStreamingSessionActive(sessionId: UInt64) -> Bool {
-    return try! FfiConverterBool.lift(try! rustCall {
-        uniffi_diy_typeless_core_fn_func_is_streaming_session_active(
-            FfiConverterUInt64.lower(sessionId),$0
-        )
-    })
-}
-
 public func stopStreamingSession(sessionId: UInt64) throws -> String {
     return try FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
         uniffi_diy_typeless_core_fn_func_stop_streaming_session(
@@ -915,9 +901,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_init_local_asr() != 58840) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_is_local_asr_available() != 6687) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -935,9 +918,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_get_streaming_text() != 49960) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_diy_typeless_core_checksum_func_is_streaming_session_active() != 6669) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_stop_streaming_session() != 30364) {
