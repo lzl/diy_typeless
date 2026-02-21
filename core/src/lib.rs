@@ -1,6 +1,7 @@
 mod audio;
 mod config;
 mod error;
+mod http_client;
 mod pipeline;
 mod polish;
 mod qwen_asr_ffi;
@@ -21,6 +22,12 @@ pub fn start_recording() -> Result<(), CoreError> {
 #[uniffi::export]
 pub fn stop_recording() -> Result<WavData, CoreError> {
     audio::stop_recording()
+}
+
+/// Stop recording and return WAV format (for CLI compatibility)
+#[uniffi::export]
+pub fn stop_recording_wav() -> Result<WavData, CoreError> {
+    audio::stop_recording_wav()
 }
 
 #[uniffi::export]
@@ -116,6 +123,20 @@ pub fn stop_streaming_session(session_id: u64) -> Result<String, CoreError> {
             ))
         }
     }
+}
+
+/// Warm up TLS connection to Groq API
+/// Call this at the start of recording to eliminate TLS handshake latency
+#[uniffi::export]
+pub fn warmup_groq_connection() -> Result<(), CoreError> {
+    http_client::warmup_groq_connection()
+}
+
+/// Warm up TLS connection to Gemini API
+/// Call this at the start of recording to eliminate TLS handshake latency
+#[uniffi::export]
+pub fn warmup_gemini_connection() -> Result<(), CoreError> {
+    http_client::warmup_gemini_connection()
 }
 
 uniffi::setup_scaffolding!();

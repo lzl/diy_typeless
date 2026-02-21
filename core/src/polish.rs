@@ -1,6 +1,6 @@
 use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
 use crate::error::CoreError;
-use reqwest::blocking::Client;
+use crate::http_client::get_http_client;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::thread::sleep;
@@ -42,7 +42,7 @@ pub fn polish_text(
          "You are a professional text editor. Transform the following speech transcript into well-structured written text.\n\nRules:\n1. Keep the SAME language as the original - do NOT translate\n2. Convert spoken language to written language:\n   - Remove filler words (e.g., \"um\", \"uh\", \"like\", \"you know\", or equivalents in other languages)\n   - Clean up spoken-language patterns: remove filler words and fix grammar errors, but preserve the speaker's original sentence structure and phrasing choices. NEVER rewrite sentences into different forms.\n   - Fix transcription errors (misheard words, typos)\n   - Handle self-corrections: when the speaker changes their mind (e.g., \"let's meet at 7, actually make it 3\"), keep ONLY the final intention and remove the corrected content\n3. Reorganize content logically:\n   - Group related information together\n   - Separate different topics into paragraphs with blank lines\n4. When content contains multiple parallel points, requirements, or items, ALWAYS format them as a numbered or bulleted list — NEVER as separate paragraphs. Example:\n   BAD: \"First issue is performance. Second issue is UI complexity.\"\n   GOOD: \"Issues encountered:\\n1. Performance bottlenecks\\n2. UI complexity\"\n5. Preserve ALL substantive information - only remove verbal fillers, not actual content\n6. Add proper punctuation and spacing\n7. Output ONLY the final polished text - no comments or annotations\n{context_section}\nOriginal transcript:\n{raw_text}\n\nOutput the polished text directly.",
      );
 
-    let client = Client::builder().timeout(Duration::from_secs(90)).build()?;
+    let client = get_http_client();
 
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 

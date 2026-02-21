@@ -1,7 +1,7 @@
 use crate::config::{GROQ_TRANSCRIBE_URL, GROQ_WHISPER_MODEL};
 use crate::error::CoreError;
+use crate::http_client::get_http_client;
 use crate::qwen_asr_ffi::QwenTranscriber;
-use reqwest::blocking::Client;
 use reqwest::StatusCode;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -93,7 +93,7 @@ pub fn transcribe_wav_bytes(
     }
 
     // Otherwise use Groq API
-    let client = Client::builder().timeout(Duration::from_secs(90)).build()?;
+    let client = get_http_client();
 
     for attempt in 0..3 {
         let mut form = reqwest::blocking::multipart::Form::new()
@@ -106,6 +106,7 @@ pub fn transcribe_wav_bytes(
             }
         }
 
+        // Audio bytes are WAV format (16-bit PCM, 16kHz, mono)
         let part = reqwest::blocking::multipart::Part::bytes(wav_bytes.to_vec())
             .file_name("audio.wav")
             .mime_str("audio/wav")
