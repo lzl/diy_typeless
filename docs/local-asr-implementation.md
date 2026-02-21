@@ -61,6 +61,16 @@ The implementation consists of two layers:
 
 A pure C inference engine with no Python dependencies.
 
+**Source**: This is a **git submodule** pointing to:
+- **Repository**: https://github.com/antirez/qwen-asr
+- **Local path**: `core/libs/qwen-asr/`
+- **Added in**: commit `a92374b` (Add local ASR support with Qwen3-ASR #25)
+
+To initialize/update the submodule:
+```bash
+git submodule update --init --recursive
+```
+
 **Core Files**:
 - `qwen_asr.c` (84KB) - Main API and streaming logic
 - `qwen_asr_encoder.c` (15KB) - Audio encoder implementation
