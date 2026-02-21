@@ -163,6 +163,12 @@ final class RecordingState: ObservableObject {
         case .local:
             startLocalStreamingRecording()
         case .groq:
+            // Warm up TLS connections in background to reduce latency
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                _ = try? warmupGroqConnection()
+                _ = try? warmupGeminiConnection()
+            }
+
             do {
                 try startRecording()
                 isRecording = true
