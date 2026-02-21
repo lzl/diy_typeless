@@ -7,30 +7,11 @@ mod qwen_asr_ffi;
 mod streaming_asr;
 mod transcribe;
 
-use std::fs::OpenOptions;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub use audio::WavData;
 pub use error::CoreError;
 pub use streaming_asr::StreamingHandle;
-
-// Simple file logger using once_cell
-use once_cell::sync::Lazy;
-
-static LOG_FILE: Lazy<Mutex<std::fs::File>> = Lazy::new(|| {
-    let log_path = std::path::PathBuf::from("/tmp/diytypeless_rust.log");
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&log_path)
-        .expect("Failed to open log file");
-    Mutex::new(file)
-});
-
-pub fn log_to_file(_msg: &str) {
-    // Logging disabled for production
-}
 
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {

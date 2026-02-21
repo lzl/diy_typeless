@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import os.log
 
 enum CapsuleState: Equatable {
     case hidden
@@ -12,32 +11,6 @@ enum CapsuleState: Equatable {
     case error(String)
 }
 
-// Simple file logger for debugging
-class FileLogger {
-    static let shared = FileLogger()
-    private let logFile: URL
-    private let dateFormatter: DateFormatter
-
-    init() {
-        logFile = URL(fileURLWithPath: "/tmp/diytypeless_swift.log")
-        dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-
-        // Clear previous log
-        try? "".write(to: logFile, atomically: true, encoding: .utf8)
-        log("=== Log file initialized at /tmp/diytypeless_swift.log ===")
-    }
-
-    func log(_ message: String) {
-        // Logging disabled for production
-        // To enable, uncomment the implementation below
-    }
-
-    func getLogPath() -> String {
-        return logFile.path
-    }
-}
-
 @MainActor
 final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
@@ -47,8 +20,6 @@ final class RecordingState: ObservableObject {
 
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
-
-    private let logger = FileLogger.shared
 
     private let permissionManager: PermissionManager
     private let keyStore: ApiKeyStore
@@ -244,12 +215,10 @@ final class RecordingState: ObservableObject {
                 // Keep showing waveform while recording
                 // NOTE: Removed live transcription polling to eliminate FFI overhead
                 // The waveform provides sufficient visual feedback during recording
-                self.logger.log("[Swift] Recording with streaming session: \(sessionId)")
                 while !Task.isCancelled && self.currentGeneration == gen && self.isRecording {
                     // Just wait, no polling needed
                     try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 }
-                self.logger.log("[Swift] Recording ended")
 
                 guard self.currentGeneration == gen, !Task.isCancelled else {
                     _ = try? stopStreamingSession(sessionId: sessionId)
