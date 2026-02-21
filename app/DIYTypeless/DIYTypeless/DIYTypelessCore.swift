@@ -419,6 +419,22 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
+    typealias FfiType = UInt64
+    typealias SwiftType = UInt64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -429,46 +445,6 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 
     public static func write(_ value: Float, into buf: inout [UInt8]) {
         writeFloat(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
-    typealias FfiType = UInt64
-    typealias SwiftType = UInt64
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
-        return try lift(readInt(&buf))
-    }
-
-    public static func write(_ value: UInt64, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterBool : FfiConverter {
-    typealias FfiType = Int8
-    typealias SwiftType = Bool
-
-    public static func lift(_ value: Int8) throws -> Bool {
-        return value != 0
-    }
-
-    public static func lower(_ value: Bool) -> Int8 {
-        return value ? 1 : 0
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
-        return try lift(readInt(&buf))
-    }
-
-    public static func write(_ value: Bool, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
     }
 }
 
@@ -820,6 +796,17 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
+/**
+ * Get the current partial transcription for a streaming session
+ * Returns the accumulated text so far, or empty string if session not found
+ */
+public func getStreamingText(sessionId: UInt64) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_diy_typeless_core_fn_func_get_streaming_text(
+        FfiConverterUInt64.lower(sessionId),$0
+    )
+})
+}
 public func initLocalAsr(modelDir: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_init_local_asr(
         FfiConverterString.lower(modelDir),$0
@@ -840,9 +827,42 @@ public func startRecording()throws   {try rustCallWithError(FfiConverterTypeCore
     )
 }
 }
+/**
+ * Start a streaming transcription session
+ * Returns a session ID that can be used to poll for results and stop the session
+ * This is only used for local ASR (streaming mode)
+ */
+public func startStreamingSession(modelDir: String, language: String?)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_start_streaming_session(
+        FfiConverterString.lower(modelDir),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
 public func stopRecording()throws  -> WavData  {
     return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording($0
+    )
+})
+}
+/**
+ * Stop recording and return WAV format (for CLI compatibility)
+ */
+public func stopRecordingWav()throws  -> WavData  {
+    return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_stop_recording_wav($0
+    )
+})
+}
+/**
+ * Stop a streaming transcription session and return the final text
+ * This removes the session from the active sessions list
+ */
+public func stopStreamingSession(sessionId: UInt64)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_stop_streaming_session(
+        FfiConverterUInt64.lower(sessionId),$0
     )
 })
 }
@@ -855,32 +875,23 @@ public func transcribeWavBytes(apiKey: String, wavBytes: Data, language: String?
     )
 })
 }
-
-// MARK: - Streaming ASR Functions
-
-public func startStreamingSession(modelDir: String, language: String?) throws -> UInt64 {
-    return try FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-        uniffi_diy_typeless_core_fn_func_start_streaming_session(
-            FfiConverterString.lower(modelDir),
-            FfiConverterOptionString.lower(language),$0
-        )
-    })
+/**
+ * Warm up TLS connection to Gemini API
+ * Call this at the start of recording to eliminate TLS handshake latency
+ */
+public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_warmup_gemini_connection($0
+    )
 }
-
-public func getStreamingText(sessionId: UInt64) -> String {
-    return try! FfiConverterString.lift(try! rustCall {
-        uniffi_diy_typeless_core_fn_func_get_streaming_text(
-            FfiConverterUInt64.lower(sessionId),$0
-        )
-    })
 }
-
-public func stopStreamingSession(sessionId: UInt64) throws -> String {
-    return try FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-        uniffi_diy_typeless_core_fn_func_stop_streaming_session(
-            FfiConverterUInt64.lower(sessionId),$0
-        )
-    })
+/**
+ * Warm up TLS connection to Groq API
+ * Call this at the start of recording to eliminate TLS handshake latency
+ */
+public func warmupGroqConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_warmup_groq_connection($0
+    )
+}
 }
 
 private enum InitializationResult {
@@ -898,6 +909,9 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_get_streaming_text() != 49960) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_init_local_asr() != 58840) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -907,20 +921,25 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_start_streaming_session() != 33614) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 15390) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 25405) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_stop_streaming_session() != 30364) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {
         return InitializationResult.apiChecksumMismatch
     }
-    // Streaming ASR functions
-    if (uniffi_diy_typeless_core_checksum_func_start_streaming_session() != 33614) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 52706) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_get_streaming_text() != 49960) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_diy_typeless_core_checksum_func_stop_streaming_session() != 30364) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 9423) {
         return InitializationResult.apiChecksumMismatch
     }
 
