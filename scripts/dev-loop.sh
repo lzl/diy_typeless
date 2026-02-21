@@ -16,9 +16,7 @@ BUNDLE_ID="com.lizunlong.DIYTypeless.dev"
 RUST_PROFILE=""
 
 SKIP_RUST_BUILD=0
-RESET_PERMISSIONS=0
-RESET_MICROPHONE=0
-SKIP_LAUNCH=0
+TESTING=0
 
 usage() {
     cat <<'USAGE'
@@ -41,14 +39,12 @@ Options:
                                Default: inferred from --configuration
                                (Debug->debug, Release->release)
   --skip-rust-build            Skip cargo build step.
-  --reset-permissions          Reset Accessibility before launch.
-  --include-microphone-reset   With --reset-permissions, also reset microphone.
-  --skip-launch                Build/install only; do not launch app.
+  --testing                    Build only; skip permissions reset and app launch.
   -h, --help                   Show this help message.
 
 Examples:
-  ./scripts/dev-loop.sh
-  ./scripts/dev-loop.sh --reset-permissions --skip-launch
+  ./scripts/dev-loop.sh              # Build, reset permissions, and launch
+  ./scripts/dev-loop.sh --testing    # Build only (for CI/testing)
   ./scripts/dev-loop.sh --destination-dir "$HOME/Applications" --app-name "DIYTypeless.app"
 USAGE
 }
@@ -94,16 +90,8 @@ while [[ $# -gt 0 ]]; do
             SKIP_RUST_BUILD=1
             shift
             ;;
-        --reset-permissions)
-            RESET_PERMISSIONS=1
-            shift
-            ;;
-        --include-microphone-reset)
-            RESET_MICROPHONE=1
-            shift
-            ;;
-        --skip-launch)
-            SKIP_LAUNCH=1
+        --testing)
+            TESTING=1
             shift
             ;;
         -h|--help)
@@ -196,22 +184,19 @@ fi
 rm -rf "$TARGET_APP_PATH"
 cp -R "$BUILT_APP_PATH" "$TARGET_APP_PATH"
 
-if [[ "$RESET_PERMISSIONS" -eq 1 ]]; then
+if [[ "$TESTING" -eq 0 ]]; then
     echo "=== [4/4] Resetting permissions ==="
-    reset_cmd=("$SCRIPT_DIR/reset-permissions.sh" "--bundle-id" "$BUNDLE_ID")
-    if [[ "$RESET_MICROPHONE" -eq 1 ]]; then
-        reset_cmd+=("--include-microphone")
-    fi
+    reset_cmd=("$SCRIPT_DIR/reset-permissions.sh" "--bundle-id" "$BUNDLE_ID" "--include-microphone")
     "${reset_cmd[@]}"
 else
-    echo "=== [4/4] Skipping permission reset ==="
+    echo "=== [4/4] Skipping permission reset (testing mode) ==="
 fi
 
-if [[ "$SKIP_LAUNCH" -eq 0 ]]; then
+if [[ "$TESTING" -eq 0 ]]; then
     echo "Launching: $TARGET_APP_PATH"
     open -n "$TARGET_APP_PATH"
 else
-    echo "Launch skipped (--skip-launch)."
+    echo "Launch skipped (testing mode)."
 fi
 
 echo
