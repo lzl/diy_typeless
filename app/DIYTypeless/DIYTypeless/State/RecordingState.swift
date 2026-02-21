@@ -184,37 +184,42 @@ final class RecordingState: ObservableObject {
         isProcessing = true
         capturedContext = contextDetector.captureContext().formatted
 
-        streamingTask = Task { [weak self] in
+        // Use DispatchQueue instead of Swift Concurrency to avoid UI animation stuttering
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
 
             do {
-                let sessionId = try await self.setupStreamingSession()
-                self.streamingSessionId = sessionId
+                let sessionId = try self.setupStreamingSession()
 
-                await self.runStreamingRecording(sessionId: sessionId, generation: gen)
+                DispatchQueue.main.async {
+                    guard self.currentGeneration == gen else { return }
+                    self.streamingSessionId = sessionId
+                }
 
-                guard self.currentGeneration == gen, !Task.isCancelled else {
+                // Wait for user to stop recording
+                self.waitForRecordingStop(generation: gen)
+
+                guard self.currentGeneration == gen else {
                     self.cleanupStreamingSession()
                     return
                 }
 
-                await self.finalizeStreamingTranscription(sessionId: sessionId, generation: gen)
+                // Finalize transcription and polishing
+                self.finalizeStreamingTranscription(sessionId: sessionId, generation: gen)
 
             } catch {
-                await MainActor.run {
+                DispatchQueue.main.async {
                     guard self.currentGeneration == gen else { return }
                     self.showError(error.localizedDescription)
                     self.isProcessing = false
                     self.isRecording = false
                 }
             }
-
-            self.streamingTask = nil
         }
     }
 
     /// Setup streaming session and return session ID
-    private func setupStreamingSession() async throws -> UInt64 {
+    private func setupStreamingSession() throws -> UInt64 {
         guard let modelDir = LocalAsrManager.shared.modelDirectory?.path else {
             throw NSError(domain: "RecordingState", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local ASR model not found"])
         }
@@ -222,34 +227,30 @@ final class RecordingState: ObservableObject {
         return try startStreamingSession(modelDir: modelDir, language: nil)
     }
 
-    /// Run streaming recording loop until user stops
-    private func runStreamingRecording(sessionId: UInt64, generation: Int) async {
-        while !Task.isCancelled && self.currentGeneration == generation && self.isRecording {
-            do {
-                try await Task.sleep(nanoseconds: 100_000_000)
-            } catch {
-                break
-            }
+    /// Wait for recording to stop (polling isRecording flag)
+    private func waitForRecordingStop(generation: Int) {
+        while self.currentGeneration == generation && self.isRecording {
+            Thread.sleep(forTimeInterval: 0.1)
         }
     }
 
     /// Stop streaming and finalize transcription with polishing
-    private func finalizeStreamingTranscription(sessionId: UInt64, generation: Int) async {
+    private func finalizeStreamingTranscription(sessionId: UInt64, generation: Int) {
         let geminiKeyForPolish = self.geminiKey
         let contextForPolish = self.capturedContext
 
-        let rawText = await stopStreamingAndGetText(sessionId: sessionId)
+        let rawText = self.stopStreamingAndGetText(sessionId: sessionId)
 
         guard self.currentGeneration == generation else { return }
 
-        await MainActor.run {
+        DispatchQueue.main.async {
             guard self.currentGeneration == generation else { return }
             self.capsuleState = .polishing
         }
 
-        let outputText = await polishWithFallback(rawText: rawText, apiKey: geminiKeyForPolish, context: contextForPolish)
+        let outputText = self.polishWithFallback(rawText: rawText, apiKey: geminiKeyForPolish, context: contextForPolish)
 
-        await MainActor.run {
+        DispatchQueue.main.async {
             guard self.currentGeneration == generation else { return }
             self.streamingSessionId = nil
             self.finishOutput(raw: rawText, polished: outputText)
@@ -257,7 +258,7 @@ final class RecordingState: ObservableObject {
     }
 
     /// Stop streaming session and return text (quick or final)
-    private func stopStreamingAndGetText(sessionId: UInt64) async -> String {
+    private func stopStreamingAndGetText(sessionId: UInt64) -> String {
         let quickText = getStreamingText(sessionId: sessionId)
 
         do {
@@ -269,7 +270,7 @@ final class RecordingState: ObservableObject {
     }
 
     /// Polish text with fallback to raw text on error
-    private func polishWithFallback(rawText: String, apiKey: String, context: String?) async -> String {
+    private func polishWithFallback(rawText: String, apiKey: String, context: String?) -> String {
         do {
             return try polishText(apiKey: apiKey, rawText: rawText, context: context)
         } catch {
