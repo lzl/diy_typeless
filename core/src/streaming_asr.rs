@@ -18,28 +18,33 @@ pub struct StreamingHandle {
     stop_flag: Arc<AtomicBool>,
 
     /// Handle to the audio capture thread
-    audio_thread: Option<JoinHandle<()>>,
+    audio_thread: Option<JoinHandle<Result<(), CoreError>>>,
 
     /// Handle to the inference thread
     inference_thread: Option<JoinHandle<Result<String, CoreError>>>,
 
     /// Accumulated text from streaming
     accumulated_text: Arc<Mutex<String>>,
+
+    /// Audio error channel - receives error from audio capture thread
+    audio_error: Arc<Mutex<Option<CoreError>>>,
 }
 
 impl StreamingHandle {
     /// Create a new streaming handle
     fn new(
         stop_flag: Arc<AtomicBool>,
-        audio_thread: JoinHandle<()>,
+        audio_thread: JoinHandle<Result<(), CoreError>>,
         inference_thread: JoinHandle<Result<String, CoreError>>,
         accumulated_text: Arc<Mutex<String>>,
+        audio_error: Arc<Mutex<Option<CoreError>>>,
     ) -> Self {
         Self {
             stop_flag,
             audio_thread: Some(audio_thread),
             inference_thread: Some(inference_thread),
             accumulated_text,
+            audio_error,
         }
     }
 
@@ -48,10 +53,18 @@ impl StreamingHandle {
         // Signal stop
         self.stop_flag.store(true, Ordering::SeqCst);
 
+        // Check for audio errors before joining threads
         if let Some(thread) = self.audio_thread.take() {
-            thread.join().map_err(|_| {
-                CoreError::Transcription("Audio thread panicked".to_string())
-            })?;
+            match thread.join() {
+                Ok(Ok(())) => {},
+                Ok(Err(e)) => {
+                    // Audio capture failed - propagate the error
+                    return Err(e);
+                }
+                Err(_) => {
+                    return Err(CoreError::Transcription("Audio thread panicked".to_string()));
+                }
+            }
         }
 
         if let Some(thread) = self.inference_thread.take() {
@@ -118,6 +131,7 @@ where
 {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let accumulated_text = Arc::new(Mutex::new(String::new()));
+    let audio_error: Arc<Mutex<Option<CoreError>>> = Arc::new(Mutex::new(None));
 
     // Set up token callback for real-time updates
     let accumulated_text_callback = accumulated_text.clone();
@@ -138,6 +152,7 @@ where
     // Clone for threads
     let stop_flag_audio = stop_flag.clone();
     let stop_flag_inference = stop_flag.clone();
+    let audio_error_audio = audio_error.clone();
 
     let language_owned = language.map(|s| s.to_string());
 
@@ -149,9 +164,12 @@ where
             stop_flag_audio,
         );
 
-        if let Err(_e) = result {
-            // Audio capture error - silently ignore in production
+        // Propagate audio capture errors to the handle
+        if let Err(e) = result {
+            *audio_error_audio.lock().unwrap() = Some(e);
+            return Err(CoreError::AudioProcessing("Audio capture failed".to_string()));
         }
+        Ok(())
     });
 
     // Inference thread - calls qwen_transcribe_stream_live
@@ -183,6 +201,7 @@ where
         audio_thread,
         inference_thread,
         accumulated_text,
+        audio_error,
     ))
 }
 
@@ -406,8 +425,9 @@ where
                 libc::pthread_mutex_unlock(live.mutex as *mut libc::pthread_mutex_t);
             }
         },
-        |_err| {
-            // Stream error - silently ignore in production
+        |err| {
+            // Log stream errors for debugging - these are typically device disconnections
+            eprintln!("[ASR] Audio stream error: {}", err);
         },
         None,
     ).map_err(|e| CoreError::AudioProcessing(format!("Failed to build stream: {}", e)))?;

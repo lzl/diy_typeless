@@ -146,16 +146,6 @@ impl QwenTranscriber {
 }
 
 impl QwenTranscriber {
-    /// Get raw context pointer for streaming operations
-    /// SAFETY: Caller must ensure the transcriber outlives the usage of the pointer
-    pub fn raw_ctx(&self) -> *mut QwenContext {
-        // We need to return the pointer without locking forever
-        // Since the ctx pointer itself doesn't change after creation,
-        // we can safely return a copy of it
-        let ctx = self.ctx.lock().unwrap();
-        *ctx
-    }
-
     /// Set token callback for streaming transcription
     /// SAFETY: This function stores the callback in a global registry to prevent memory leaks.
     /// The callback will be properly cleaned up when clear_token_callback is called or when
