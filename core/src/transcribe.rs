@@ -106,10 +106,10 @@ pub fn transcribe_wav_bytes(
             }
         }
 
-        // Audio is now encoded as FLAC for smaller upload size (~50-70% reduction)
+        // Audio bytes are WAV format (16-bit PCM, 16kHz, mono)
         let part = reqwest::blocking::multipart::Part::bytes(wav_bytes.to_vec())
-            .file_name("audio.flac")
-            .mime_str("audio/flac")
+            .file_name("audio.wav")
+            .mime_str("audio/wav")
             .map_err(|e| CoreError::Http(e.to_string()))?;
 
         form = form.part("file", part);
