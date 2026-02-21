@@ -14,9 +14,6 @@ enum CapsuleState: Equatable {
 final class RecordingState: ObservableObject {
     @Published private(set) var capsuleState: CapsuleState = .hidden
 
-    // Dev build only: Live transcription text for debugging
-    @Published private(set) var liveTranscriptionText: String = ""
-
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
 
@@ -97,7 +94,6 @@ final class RecordingState: ObservableObject {
             isProcessing = false
             currentGeneration += 1
             capturedContext = nil
-            liveTranscriptionText = ""
             _ = try? stopRecording()
             // Cancel streaming if active
             streamingTask?.cancel()
@@ -112,7 +108,6 @@ final class RecordingState: ObservableObject {
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
-            liveTranscriptionText = ""
             // Cancel streaming if active
             streamingTask?.cancel()
             streamingTask = nil
@@ -196,7 +191,6 @@ final class RecordingState: ObservableObject {
         capsuleState = .recording
         isRecording = true
         isProcessing = true
-        liveTranscriptionText = ""
         capturedContext = contextDetector.captureContext().formatted
 
         streamingTask = Task { [weak self] in
@@ -356,7 +350,6 @@ final class RecordingState: ObservableObject {
         let result = outputManager.deliver(text: polished)
         capsuleState = .done(result)
         isProcessing = false
-        liveTranscriptionText = ""
         scheduleHide(after: 1.2, expectedState: .done(result))
     }
 
