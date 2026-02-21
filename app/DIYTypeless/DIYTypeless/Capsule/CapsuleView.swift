@@ -42,12 +42,6 @@ struct CapsuleView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
 
-        case .streaming:
-            // Should not happen with unified UI, but show transcribing as fallback
-            Text("Transcribing")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.9))
-
         case .polishing:
             Text("Polishing")
                 .font(.system(size: 13, weight: .medium))
@@ -85,11 +79,6 @@ struct CapsuleView: View {
             progress = 0
 
         case .transcribing:
-            audioMonitor.stop()
-            startProgressAnimation(duration: 2.5)
-
-        case .streaming:
-            // Not used with unified UI
             audioMonitor.stop()
             startProgressAnimation(duration: 2.5)
 

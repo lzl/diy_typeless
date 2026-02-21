@@ -5,7 +5,6 @@ enum CapsuleState: Equatable {
     case hidden
     case recording
     case transcribing
-    case streaming(partialText: String)  // Real-time streaming transcription
     case polishing
     case done(OutputResult)
     case error(String)
@@ -109,7 +108,7 @@ final class RecordingState: ObservableObject {
             }
             capsuleState = .hidden
 
-        case .transcribing, .polishing, .streaming:
+        case .transcribing, .polishing:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
