@@ -13,6 +13,41 @@ All code, documentation, comments, commit messages, and technical writing in thi
 
 The only exception is user-facing content that is intentionally localized (e.g., test cases for Chinese language processing).
 
+## Commit Message Convention
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format for all commit messages:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Common types:**
+- `feat` - New feature
+- `fix` - Bug fix
+- `docs` - Documentation changes
+- `refactor` - Code refactoring
+- `test` - Test-related changes
+- `chore` - Build/tooling changes
+
+**Examples:**
+```
+feat(asr): add streaming support for local Qwen3-ASR
+
+fix(cli): handle empty audio input gracefully
+
+docs(agents): add commit message convention
+```
+
+**Rules:**
+- Use lowercase for type and scope
+- Use present tense ("add" not "added")
+- Keep the first line under 72 characters
+- Reference issues/PRs in footer when applicable
+
 ## Closing the Loop (Primary Rule)
 
 This project prioritizes closing the loop. Any core logic changes must be verified through an executable path that the agent can run end-to-end without opening the macOS app UI.
