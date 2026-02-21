@@ -53,6 +53,7 @@ extern "C" {
 
     // Streaming transcription interface
     fn qwen_set_token_callback(ctx: *mut QwenContext, cb: Option<QwenTokenCallback>, userdata: *mut c_void);
+    #[allow(dead_code)]
     fn qwen_transcribe_stream(ctx: *mut QwenContext, samples: *const c_float, n_samples: c_int) -> *mut c_char;
     fn qwen_transcribe_stream_live(ctx: *mut QwenContext, live: *mut QwenLiveAudio) -> *mut c_char;
 }
@@ -202,6 +203,7 @@ impl QwenTranscriber {
     }
 
     /// Transcribe with streaming (for pre-recorded audio with streaming output)
+    #[allow(dead_code)]
     pub fn transcribe_stream(
         &self,
         samples: &[f32],

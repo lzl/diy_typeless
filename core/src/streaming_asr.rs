@@ -25,9 +25,6 @@ pub struct StreamingHandle {
 
     /// Accumulated text from streaming
     accumulated_text: Arc<Mutex<String>>,
-
-    /// Audio error channel - receives error from audio capture thread
-    audio_error: Arc<Mutex<Option<CoreError>>>,
 }
 
 impl StreamingHandle {
@@ -37,14 +34,12 @@ impl StreamingHandle {
         audio_thread: JoinHandle<Result<(), CoreError>>,
         inference_thread: JoinHandle<Result<String, CoreError>>,
         accumulated_text: Arc<Mutex<String>>,
-        audio_error: Arc<Mutex<Option<CoreError>>>,
     ) -> Self {
         Self {
             stop_flag,
             audio_thread: Some(audio_thread),
             inference_thread: Some(inference_thread),
             accumulated_text,
-            audio_error,
         }
     }
 
@@ -131,7 +126,6 @@ where
 {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let accumulated_text = Arc::new(Mutex::new(String::new()));
-    let audio_error: Arc<Mutex<Option<CoreError>>> = Arc::new(Mutex::new(None));
 
     // Set up token callback for real-time updates
     let accumulated_text_callback = accumulated_text.clone();
@@ -152,24 +146,16 @@ where
     // Clone for threads
     let stop_flag_audio = stop_flag.clone();
     let stop_flag_inference = stop_flag.clone();
-    let audio_error_audio = audio_error.clone();
 
     let language_owned = language.map(|s| s.to_string());
 
     // Audio capture thread - feeds audio into live_audio
     // LiveAudioPtr is Send + Copy, so it's safe to move between threads
     let audio_thread = thread::spawn(move || {
-        let result = capture_audio_live(
+        capture_audio_live(
             live_audio_wrapper,
             stop_flag_audio,
-        );
-
-        // Propagate audio capture errors to the handle
-        if let Err(e) = result {
-            *audio_error_audio.lock().unwrap() = Some(e);
-            return Err(CoreError::AudioProcessing("Audio capture failed".to_string()));
-        }
-        Ok(())
+        )
     });
 
     // Inference thread - calls qwen_transcribe_stream_live
@@ -201,7 +187,6 @@ where
         audio_thread,
         inference_thread,
         accumulated_text,
-        audio_error,
     ))
 }
 
