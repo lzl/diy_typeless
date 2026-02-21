@@ -14,6 +14,7 @@ use crate::error::CoreError;
 
 // Global registry to store callbacks for proper cleanup
 // Key: context pointer, Value: boxed callback as Any
+// Using OnceLock for lazy initialization
 static CALLBACK_REGISTRY: Mutex<Option<HashMap<usize, Box<dyn Any + Send>>>> = Mutex::new(None);
 
 // C type definitions
@@ -62,9 +63,6 @@ extern "C" {
 /// The Mutex ensures only one thread can access the C context at a time.
 pub struct QwenTranscriber {
     ctx: Mutex<*mut QwenContext>,
-    /// Stored callback to ensure proper cleanup when transcriber is dropped
-    /// or when a new callback is set.
-    _callback: Mutex<Option<Box<dyn Any + Send>>>,
 }
 
 unsafe impl Send for QwenTranscriber {}
@@ -88,7 +86,6 @@ impl QwenTranscriber {
 
         Ok(Self {
             ctx: Mutex::new(ctx),
-            _callback: Mutex::new(None),
         })
     }
 
@@ -142,9 +139,7 @@ impl QwenTranscriber {
             Ok(text)
         }
     }
-}
 
-impl QwenTranscriber {
     /// Set token callback for streaming transcription
     /// SAFETY: This function stores the callback in a global registry to prevent memory leaks.
     /// The callback will be properly cleaned up when clear_token_callback is called or when

@@ -80,7 +80,6 @@ pub fn start_streaming_session(
     let session_id = NEXT_SESSION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
     sessions.push((session_id, Arc::new(handle)));
-
     Ok(session_id)
 }
 
@@ -89,11 +88,10 @@ pub fn start_streaming_session(
 #[uniffi::export]
 pub fn get_streaming_text(session_id: u64) -> String {
     let sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-    if let Some((_, handle)) = sessions.iter().find(|(id, _)| *id == session_id) {
-        handle.current_text()
-    } else {
-        String::new()
-    }
+    sessions.iter()
+        .find(|(id, _)| *id == session_id)
+        .map(|(_, handle)| handle.current_text())
+        .unwrap_or_default()
 }
 
 /// Stop a streaming transcription session and return the final text
@@ -102,30 +100,22 @@ pub fn get_streaming_text(session_id: u64) -> String {
 pub fn stop_streaming_session(session_id: u64) -> Result<String, CoreError> {
     let handle = {
         let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-        let index = sessions.iter().position(|(id, _)| *id == session_id);
-        if let Some(idx) = index {
-            let (_, handle) = sessions.remove(idx);
-            // We need to unwrap the Arc to call stop(), but Arc::into_inner requires nightly
-            // Instead, we'll use a workaround with try_unwrap
-            match Arc::try_unwrap(handle) {
-                Ok(h) => h,
-                Err(arc) => {
-                    // If we can't unwrap, we can't stop - return error
-                    // Put it back in the list
-                    sessions.push((session_id, arc));
-                    return Err(CoreError::Transcription(
-                        "Streaming session is still in use".to_string()
-                    ));
-                }
-            }
-        } else {
-            return Err(CoreError::Transcription(
-                "Streaming session not found".to_string()
-            ));
-        }
+        let idx = sessions.iter().position(|(id, _)| *id == session_id);
+        idx.map(|i| sessions.remove(i).1).ok_or_else(|| {
+            CoreError::Transcription("Streaming session not found".to_string())
+        })?
     };
 
-    handle.stop()
+    match Arc::try_unwrap(handle) {
+        Ok(h) => h.stop(),
+        Err(arc) => {
+            let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
+            sessions.push((session_id, arc));
+            Err(CoreError::Transcription(
+                "Streaming session is still in use".to_string()
+            ))
+        }
+    }
 }
 
 uniffi::setup_scaffolding!();

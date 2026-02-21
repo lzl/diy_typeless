@@ -6,11 +6,30 @@
 
 use crate::error::CoreError;
 use crate::qwen_asr_ffi::{QwenLiveAudio, QwenTranscriber};
-use std::os::raw::{c_float, c_void};
+use std::ffi::c_void;
+use std::os::raw::c_float;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+
+/// Thread-safe wrapper for raw QwenLiveAudio pointer.
+/// SAFETY: We guarantee that only C mutex/condvar are used for synchronization.
+#[derive(Clone, Copy)]
+struct LiveAudioPtr(*mut QwenLiveAudio);
+
+unsafe impl Send for LiveAudioPtr {}
+unsafe impl Sync for LiveAudioPtr {}
+
+impl LiveAudioPtr {
+    fn new(ptr: *mut QwenLiveAudio) -> Self {
+        Self(ptr)
+    }
+
+    fn as_ptr(self) -> *mut QwenLiveAudio {
+        self.0
+    }
+}
 
 /// Handle for controlling a streaming transcription session
 pub struct StreamingHandle {
@@ -94,27 +113,6 @@ impl StreamingHandle {
 ///
 /// # Returns
 /// A StreamingHandle to control the streaming session
-/// Thread-safe wrapper for raw QwenLiveAudio pointer
-/// SAFETY: We guarantee that only C mutex/condvar are used for synchronization,
-/// and the pointer is valid until explicitly freed.
-/// We store the pointer as usize to avoid Send/Sync issues with raw pointers.
-#[derive(Clone, Copy)]
-struct LiveAudioPtr(usize);
-
-impl LiveAudioPtr {
-    fn new(ptr: *mut QwenLiveAudio) -> Self {
-        Self(ptr as usize)
-    }
-
-    fn as_ptr(&self) -> *mut QwenLiveAudio {
-        self.0 as *mut QwenLiveAudio
-    }
-}
-
-// SAFETY: We guarantee that the pointer is only accessed through C synchronization primitives
-// (pthread_mutex/condvar), so it's safe to Send/Sync the wrapper.
-unsafe impl Send for LiveAudioPtr {}
-unsafe impl Sync for LiveAudioPtr {}
 
 pub fn start_streaming_transcription<F>(
     transcriber: Arc<QwenTranscriber>,
@@ -140,8 +138,8 @@ where
     // This is a shared structure between audio capture and inference
     // SAFETY: We use raw pointer with C mutex/condvar for synchronization,
     // avoiding data race between Rust Mutex and C pthread_mutex
-    let live_audio_ptr: *mut QwenLiveAudio = create_live_audio()?;
-    let live_audio_wrapper = LiveAudioPtr::new(live_audio_ptr);
+    let live_audio_ptr = LiveAudioPtr::new(QwenLiveAudio::create()?);
+    let live_audio_ptr_for_inference = live_audio_ptr;
 
     // Clone for threads
     let stop_flag_audio = stop_flag.clone();
@@ -153,7 +151,7 @@ where
     // LiveAudioPtr is Send + Copy, so it's safe to move between threads
     let audio_thread = thread::spawn(move || {
         capture_audio_live(
-            live_audio_wrapper,
+            live_audio_ptr,
             stop_flag_audio,
         )
     });
@@ -163,7 +161,7 @@ where
     let inference_thread = thread::spawn(move || {
         let result = run_live_inference(
             transcriber,
-            live_audio_wrapper,
+            live_audio_ptr_for_inference,
             stop_flag_inference,
             language_owned.as_deref(),
         );
@@ -171,12 +169,7 @@ where
         // Clean up live_audio resources after inference completes
         // SAFETY: Both threads have finished, so we can safely free the memory
         unsafe {
-            let ptr = live_audio_wrapper.as_ptr();
-            if !ptr.is_null() {
-                free_live_audio(&mut *ptr);
-                // Convert back to Box and drop to free the struct itself
-                let _ = Box::from_raw(ptr);
-            }
+            QwenLiveAudio::destroy(live_audio_ptr_for_inference.as_ptr());
         }
 
         result
@@ -190,67 +183,79 @@ where
     ))
 }
 
-/// Create a new QwenLiveAudio structure
-fn create_live_audio() -> Result<*mut QwenLiveAudio, CoreError> {
-    // Initial buffer capacity (30 seconds at 16kHz)
-    const INITIAL_CAPACITY: i64 = 16000 * 30;
+impl QwenLiveAudio {
+    /// Create a new QwenLiveAudio structure
+    pub fn create() -> Result<*mut QwenLiveAudio, CoreError> {
+        // Initial buffer capacity (30 seconds at 16kHz)
+        const INITIAL_CAPACITY: i64 = 16000 * 30;
 
-    let samples = unsafe {
-        libc::malloc((INITIAL_CAPACITY as usize) * std::mem::size_of::<c_float>()) as *mut c_float
-    };
+        let samples = unsafe {
+            libc::malloc((INITIAL_CAPACITY as usize) * std::mem::size_of::<c_float>()) as *mut c_float
+        };
 
-    if samples.is_null() {
-        return Err(CoreError::Transcription("Failed to allocate audio buffer".to_string()));
+        if samples.is_null() {
+            return Err(CoreError::Transcription("Failed to allocate audio buffer".to_string()));
+        }
+
+        let mut live = QwenLiveAudio {
+            samples,
+            sample_offset: 0,
+            n_samples: 0,
+            capacity: INITIAL_CAPACITY,
+            eof: 0,
+            mutex: std::ptr::null_mut(),
+            cond: std::ptr::null_mut(),
+            thread: 0,
+        };
+
+        // Initialize mutex and condition variable
+        let mutex = unsafe { libc::malloc(std::mem::size_of::<libc::pthread_mutex_t>()) as *mut libc::pthread_mutex_t };
+        let cond = unsafe { libc::malloc(std::mem::size_of::<libc::pthread_cond_t>()) as *mut libc::pthread_cond_t };
+
+        if mutex.is_null() || cond.is_null() {
+            return Err(CoreError::Transcription("Failed to allocate sync primitives".to_string()));
+        }
+
+        unsafe {
+            libc::pthread_mutex_init(mutex, std::ptr::null());
+            libc::pthread_cond_init(cond, std::ptr::null());
+        }
+
+        live.mutex = mutex as *mut libc::c_void;
+        live.cond = cond as *mut libc::c_void;
+
+        // Convert to raw pointer for thread-safe sharing
+        Ok(Box::into_raw(Box::new(live)))
     }
 
-    let mut live = QwenLiveAudio {
-        samples,
-        sample_offset: 0,
-        n_samples: 0,
-        capacity: INITIAL_CAPACITY,
-        eof: 0,
-        mutex: std::ptr::null_mut(),
-        cond: std::ptr::null_mut(),
-        thread: 0,
-    };
+    /// Free QwenLiveAudio resources and the struct itself
+    /// SAFETY: Must only be called once, and when no other threads are using the pointer
+    pub unsafe fn destroy(ptr: *mut QwenLiveAudio) {
+        if ptr.is_null() {
+            return;
+        }
 
-    // Initialize mutex and condition variable
-    let mutex = unsafe { libc::malloc(std::mem::size_of::<libc::pthread_mutex_t>()) as *mut libc::pthread_mutex_t };
-    let cond = unsafe { libc::malloc(std::mem::size_of::<libc::pthread_cond_t>()) as *mut libc::pthread_cond_t };
+        let live = &mut *ptr;
 
-    if mutex.is_null() || cond.is_null() {
-        return Err(CoreError::Transcription("Failed to allocate sync primitives".to_string()));
-    }
+        if !live.samples.is_null() {
+            libc::free(live.samples as *mut libc::c_void);
+        }
+        if !live.mutex.is_null() {
+            libc::pthread_mutex_destroy(live.mutex as *mut libc::pthread_mutex_t);
+            libc::free(live.mutex);
+        }
+        if !live.cond.is_null() {
+            libc::pthread_cond_destroy(live.cond as *mut libc::pthread_cond_t);
+            libc::free(live.cond);
+        }
 
-    unsafe {
-        libc::pthread_mutex_init(mutex, std::ptr::null());
-        libc::pthread_cond_init(cond, std::ptr::null());
-    }
-
-    live.mutex = mutex as *mut c_void;
-    live.cond = cond as *mut c_void;
-
-    // Convert to raw pointer for thread-safe sharing
-    Ok(Box::into_raw(Box::new(live)))
-}
-
-/// Free QwenLiveAudio resources
-unsafe fn free_live_audio(live: &mut QwenLiveAudio) {
-    if !live.samples.is_null() {
-        libc::free(live.samples as *mut c_void);
-    }
-    if !live.mutex.is_null() {
-        libc::pthread_mutex_destroy(live.mutex as *mut libc::pthread_mutex_t);
-        libc::free(live.mutex);
-    }
-    if !live.cond.is_null() {
-        libc::pthread_cond_destroy(live.cond as *mut libc::pthread_cond_t);
-        libc::free(live.cond);
+        // Convert back to Box and drop to free the struct itself
+        let _ = Box::from_raw(ptr);
     }
 }
 
 /// Capture audio into live audio buffer
-/// SAFETY: live_audio must be a valid pointer to QwenLiveAudio allocated by create_live_audio
+/// SAFETY: live_audio must be a valid pointer to QwenLiveAudio allocated by QwenLiveAudio::create
 /// and must remain valid until this function returns. The caller must ensure thread-safe access.
 fn capture_audio_live(
     live_audio: LiveAudioPtr,
@@ -421,7 +426,7 @@ where
 }
 
 /// Run live streaming inference using qwen_transcribe_stream_live
-/// SAFETY: live_audio must be a valid pointer allocated by create_live_audio
+/// SAFETY: live_audio must be a valid pointer allocated by QwenLiveAudio::create
 /// and must remain valid until this function returns.
 fn run_live_inference(
     transcriber: Arc<QwenTranscriber>,
@@ -450,18 +455,11 @@ fn run_live_inference(
         thread::sleep(Duration::from_millis(50));
     }
 
-    // DEBUG: Temporarily disable logging
-    // eprintln!("[ASR] Calling transcribe_stream_live...");
-
     // SAFETY: This is safe because:
     // 1. The audio capture thread uses C mutex/condvar for synchronization
     // 2. The transcriber doesn't modify the live structure, only reads from it
     // 3. The C library uses mutex/condvar for synchronization with audio thread
-    let result = transcriber.transcribe_stream_live(live_audio.as_ptr(), language);
-
-    // DEBUG: Temporarily disable logging
-    // eprintln!("[ASR] transcribe_stream_live result: {:?}", result);
-    result
+    transcriber.transcribe_stream_live(live_audio.as_ptr(), language)
 }
 
 #[cfg(test)]
