@@ -8,3 +8,4 @@ pub const GEMINI_MODEL: &str = "gemini-2.5-flash-lite-preview-09-2025";
 pub const GEMINI_API_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
 pub const HIGHPASS_FREQ_HZ: f32 = 80.0;
+pub const TARGET_RMS_DB: f32 = -18.0;

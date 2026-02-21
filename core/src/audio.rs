@@ -1,4 +1,4 @@
-use crate::config::{HIGHPASS_FREQ_HZ, WHISPER_CHANNELS, WHISPER_SAMPLE_RATE};
+use crate::config::{HIGHPASS_FREQ_HZ, TARGET_RMS_DB, WHISPER_CHANNELS, WHISPER_SAMPLE_RATE};
 use crate::error::CoreError;
 use biquad::{Biquad, Coefficients, DirectForm1, ToHertz, Type, Q_BUTTERWORTH_F32};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -227,12 +227,10 @@ fn resample_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
     output
 }
 
-/// Minimal audio enhancement for ASR input.
+/// Optimized audio enhancement for ASR input.
 ///
-/// Only applies highpass filtering to remove low-frequency noise.
-/// Whisper models internally perform log-mel spectrogram normalization,
-/// so additional gain staging (RMS normalization, limiting, peak normalization)
-/// is unnecessary and can amplify background noise.
+/// Applies minimal processing to improve recognition while avoiding
+/// unnecessary gain staging that amplifies noise.
 fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreError> {
     if samples.is_empty() {
         return Ok(Vec::new());
@@ -240,8 +238,7 @@ fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreErro
 
     let mut output = samples.to_vec();
 
-    // Apply highpass filter to remove low-frequency rumble/noise
-    // This is the only processing step that meaningfully improves ASR accuracy
+    // Step 1: Highpass filter to remove low-frequency rumble/noise
     if let Ok(coeffs) = Coefficients::<f32>::from_params(
         Type::HighPass,
         sample_rate.hz(),
@@ -251,6 +248,17 @@ fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreErro
         let mut df1 = DirectForm1::<f32>::new(coeffs);
         for sample in &mut output {
             *sample = df1.run(*sample);
+        }
+    }
+
+    // Step 2: RMS normalization to ensure consistent volume
+    // This is critical for whisper speech recognition - too quiet = poor accuracy
+    let rms = (output.iter().map(|s| s * s).sum::<f32>() / output.len() as f32).sqrt();
+    if rms > 1e-6 {
+        let target_rms = 10f32.powf(TARGET_RMS_DB / 20.0);
+        let gain = (target_rms / rms).min(10.0); // Cap gain at 10x to prevent extreme amplification
+        for sample in &mut output {
+            *sample *= gain;
         }
     }
 
