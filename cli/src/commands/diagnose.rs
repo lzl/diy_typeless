@@ -1,7 +1,7 @@
 //! Diagnostic commands for CLI
 
 use anyhow::{anyhow, Context, Result};
-use diy_typeless_core::{start_recording, stop_recording};
+use diy_typeless_core::{start_recording, stop_recording_wav};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
@@ -59,7 +59,7 @@ pub fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>) -> Res
     let start = Instant::now();
     start_recording().context("Failed to start recording")?;
     sleep(Duration::from_secs(duration_seconds));
-    let wav_data = stop_recording().context("Failed to stop recording")?;
+    let wav_data = stop_recording_wav().context("Failed to stop recording")?;
     let elapsed = start.elapsed();
 
     fs::write(&output_path, &wav_data.bytes)
