@@ -8,11 +8,6 @@ struct CapsuleView: View {
     private let capsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
 
-    // Check if this is dev build based on bundle identifier
-    private var isDevBuild: Bool {
-        Bundle.main.bundleIdentifier?.contains(".dev") ?? false
-    }
-
     var body: some View {
         ZStack {
             // Background with progress
@@ -35,52 +30,12 @@ struct CapsuleView: View {
         }
     }
 
-    // Only show live transcription during recording/transcribing/polishing
-    private var shouldShowLiveTranscription: Bool {
-        let isEmpty = state.liveTranscriptionText.isEmpty
-        let stateName = String(describing: state.capsuleState)
-        let shouldShow: Bool
-        switch state.capsuleState {
-        case .recording, .transcribing, .polishing, .streaming:
-            shouldShow = !isEmpty
-        default:
-            shouldShow = false
-        }
-        return shouldShow
-    }
-
-    // Dev build: Display live transcription text (full text, no truncation)
-    private var liveTranscriptionOverlay: some View {
-        Text(state.liveTranscriptionText)
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.black.opacity(0.85))
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-            )
-            .frame(maxWidth: 600)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
     @ViewBuilder
     private var content: some View {
         switch state.capsuleState {
         case .recording:
-            // Dev build: show live transcription text instead of waveform
-            if isDevBuild && !state.liveTranscriptionText.isEmpty {
-                Text(state.liveTranscriptionText)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .truncationMode(.head) // Show latest text, truncate from beginning
-                    .frame(width: capsuleWidth - 32)
-            } else {
-                WaveformView(levels: audioMonitor.levels)
-                    .frame(width: capsuleWidth - 32)
-            }
+            WaveformView(levels: audioMonitor.levels)
+                .frame(width: capsuleWidth - 32)
 
         case .transcribing:
             Text("Transcribing")
