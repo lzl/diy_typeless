@@ -3,6 +3,8 @@
  * Based on antirez/qwen-asr: https://github.com/antirez/qwen-asr
  */
 
+use std::any::Any;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int, c_void};
 use std::path::Path;
@@ -10,8 +12,30 @@ use std::sync::Mutex;
 
 use crate::error::CoreError;
 
+// Global registry to store callbacks for proper cleanup
+// Key: context pointer, Value: boxed callback as Any
+// Using OnceLock for lazy initialization
+static CALLBACK_REGISTRY: Mutex<Option<HashMap<usize, Box<dyn Any + Send>>>> = Mutex::new(None);
+
 // C type definitions
 pub type QwenContext = c_void;
+
+/// Token callback type for streaming transcription
+pub type QwenTokenCallback = unsafe extern "C" fn(token: *const c_char, userdata: *mut c_void);
+
+/// Live audio structure for streaming transcription
+/// Mirrors qwen_live_audio_t from C library
+#[repr(C)]
+pub struct QwenLiveAudio {
+    pub samples: *mut c_float,
+    pub sample_offset: i64,
+    pub n_samples: i64,
+    pub capacity: i64,
+    pub eof: c_int,
+    pub mutex: *mut c_void,  // pthread_mutex_t*
+    pub cond: *mut c_void,   // pthread_cond_t*
+    pub thread: u64,         // pthread_t
+}
 
 extern "C" {
     // Load/free model
@@ -27,6 +51,10 @@ extern "C" {
         samples: *const c_float,
         n_samples: c_int,
     ) -> *mut c_char;
+
+    // Streaming transcription interface
+    fn qwen_set_token_callback(ctx: *mut QwenContext, cb: Option<QwenTokenCallback>, userdata: *mut c_void);
+    fn qwen_transcribe_stream_live(ctx: *mut QwenContext, live: *mut QwenLiveAudio) -> *mut c_char;
 }
 
 /// Qwen3-ASR transcriber
@@ -39,6 +67,9 @@ pub struct QwenTranscriber {
 
 unsafe impl Send for QwenTranscriber {}
 unsafe impl Sync for QwenTranscriber {}
+
+unsafe impl Send for QwenLiveAudio {}
+unsafe impl Sync for QwenLiveAudio {}
 
 impl QwenTranscriber {
     /// Load model
@@ -53,7 +84,9 @@ impl QwenTranscriber {
             return Err(CoreError::Config("Failed to load Qwen3-ASR model".to_string()));
         }
 
-        Ok(Self { ctx: Mutex::new(ctx) })
+        Ok(Self {
+            ctx: Mutex::new(ctx),
+        })
     }
 
     /// Set forced language
@@ -106,13 +139,117 @@ impl QwenTranscriber {
             Ok(text)
         }
     }
+
+    /// Set token callback for streaming transcription
+    /// SAFETY: This function stores the callback in a global registry to prevent memory leaks.
+    /// The callback will be properly cleaned up when clear_token_callback is called or when
+    /// the transcriber is dropped.
+    pub fn set_token_callback<F>(&self, callback: F)
+    where
+        F: FnMut(String) + Send + 'static,
+    {
+        // Clear any existing callback first to prevent memory leak
+        self.clear_token_callback();
+
+        let ctx = *self.ctx.lock().unwrap();
+        let ctx_key = ctx as usize;
+
+        // Box the callback and store in registry
+        let boxed_callback: Box<dyn Any + Send> = Box::new(callback);
+
+        {
+            let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+            if registry_opt.is_none() {
+                *registry_opt = Some(HashMap::new());
+            }
+            if let Some(registry) = registry_opt.as_mut() {
+                registry.insert(ctx_key, boxed_callback);
+            }
+        }
+
+        // Get a raw pointer to the callback for C
+        // We'll retrieve it from the registry in the trampoline
+        let userdata = ctx as *mut c_void;
+
+        unsafe {
+            qwen_set_token_callback(ctx, Some(token_callback_trampoline_registry), userdata);
+        }
+    }
+
+    /// Clear token callback and free the associated callback from registry
+    /// This prevents memory leaks by properly reclaiming the Box that was stored.
+    pub fn clear_token_callback(&self) {
+        let ctx = *self.ctx.lock().unwrap();
+        let ctx_key = ctx as usize;
+
+        // Remove callback from registry
+        {
+            let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+            if let Some(registry) = registry_opt.as_mut() {
+                registry.remove(&ctx_key);
+            }
+        }
+
+        unsafe {
+            qwen_set_token_callback(ctx, None, std::ptr::null_mut());
+        }
+    }
+
+    /// Live streaming transcription
+    /// Blocks until streaming is complete (live.eof is set)
+    pub fn transcribe_stream_live(
+        &self,
+        live: *mut QwenLiveAudio,
+        language: Option<&str>,
+    ) -> Result<String, CoreError> {
+        self.set_language(language)?;
+
+        let ctx = self.ctx.lock().unwrap();
+        let result_ptr = unsafe {
+            qwen_transcribe_stream_live(*ctx, live)
+        };
+
+        if result_ptr.is_null() {
+            return Err(CoreError::Transcription("Live streaming transcription failed".to_string()));
+        }
+
+        unsafe {
+            let text = CStr::from_ptr(result_ptr)
+                .to_string_lossy()
+                .into_owned();
+            libc::free(result_ptr as *mut c_void);
+            Ok(text)
+        }
+    }
+}
+
+/// Trampoline function for token callbacks using the global registry
+unsafe extern "C" fn token_callback_trampoline_registry(token: *const c_char, userdata: *mut c_void) {
+    if token.is_null() || userdata.is_null() {
+        return;
+    }
+
+    let ctx_key = userdata as usize;
+
+    let mut registry_opt = CALLBACK_REGISTRY.lock().unwrap();
+    if let Some(registry) = registry_opt.as_mut() {
+        if let Some(callback_any) = registry.get_mut(&ctx_key) {
+            if let Some(callback) = callback_any.downcast_mut::<Box<dyn FnMut(String) + Send>>() {
+                let token_str = CStr::from_ptr(token).to_string_lossy().into_owned();
+                callback(token_str);
+            }
+        }
+    }
 }
 
 impl Drop for QwenTranscriber {
     fn drop(&mut self) {
-        let ctx = self.ctx.lock().unwrap();
+        // Clear callback first to prevent memory leak
+        self.clear_token_callback();
+
+        let ctx = *self.ctx.lock().unwrap();
         unsafe {
-            qwen_free(*ctx);
+            qwen_free(ctx);
         }
     }
 }

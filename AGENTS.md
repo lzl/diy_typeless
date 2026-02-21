@@ -97,3 +97,13 @@ This is because:
 - `SWIFT_INCLUDE_PATHS` in `project.pbxproj` is set to `$(SRCROOT)/DIYTypeless`, which resolves to `app/DIYTypeless/DIYTypeless/`.
 
 Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory). That path is not referenced by the Xcode project and creates confusing duplicates.
+
+## Lesson: Use DispatchQueue instead of Swift Concurrency for macOS UI Work
+
+**Issue**: When implementing streaming ASR with Swift Concurrency (`Task`, `await`, `Task.detached`), UI animations (progress bars) were choppy and blocked.
+
+**Root Cause**: Swift Concurrency's `Task` and `await` mechanisms can interfere with UI animation smoothness on macOS, even when correctly dispatched to background threads. The interaction between Swift Concurrency's structured concurrency and AppKit's runloop can cause unexpected blocking of UI updates.
+
+**Solution**: Use `DispatchQueue.global(qos: .userInitiated).async` for background work and `DispatchQueue.main.async` for UI updates. This pattern provides more predictable behavior for macOS UI animations, especially when mixing synchronous C/Rust FFI calls with UI updates.
+
+**Rule**: For macOS UI work requiring smooth animations, prefer `DispatchQueue` over Swift Concurrency. Do not use `Task`, `await`, or `Task.detached` for background-to-UI transitions without explicit testing of animation smoothness.
