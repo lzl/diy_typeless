@@ -145,6 +145,3 @@ pub fn stop_streaming_session(session_id: u64) -> Result<String, CoreError> {
 }
 
 uniffi::setup_scaffolding!();
-
-// CLI binary is defined in Cargo.toml as a separate target
-// See: src/cli/main.rs

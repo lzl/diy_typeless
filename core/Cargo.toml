@@ -9,15 +9,8 @@ build = "build.rs"
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
-[[bin]]
-name = "cli"
-path = "src/cli/main.rs"
-required-features = ["cli-bin"]
-
 [features]
 default = []
-cli = []
-cli-bin = ["cli"]
 
 [dependencies]
 biquad = "0.5.0"

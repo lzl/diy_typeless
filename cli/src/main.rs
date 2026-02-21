@@ -52,6 +52,9 @@ enum Commands {
         duration_seconds: Option<u64>,
         #[arg(long)]
         context: Option<String>,
+        /// Use local ASR model instead of Groq API (model directory path)
+        #[arg(long)]
+        local_asr: Option<PathBuf>,
     },
     Diagnose {
         #[command(subcommand)]
@@ -160,50 +163,80 @@ fn main() -> Result<()> {
             language,
             duration_seconds,
             context,
+            local_asr,
         } => {
-            let groq_key = resolve_groq_key(groq_key)?;
             let gemini_key = resolve_gemini_key(gemini_key)?;
             let output_dir = resolve_output_dir(output_dir)?;
             fs::create_dir_all(&output_dir)?;
 
-            if let Some(duration) = duration_seconds {
-                start_recording().context("Failed to start recording")?;
-                println!("Recording for {duration}s (auto-start)...");
-                sleep(Duration::from_secs(duration));
+            let raw_text = if let Some(model_dir) = local_asr {
+                // Local ASR flow - real-time streaming transcription
+                if !model_dir.exists() {
+                    return Err(anyhow!("Model directory does not exist: {}", model_dir.display()));
+                }
+
+                let model_dir_str = model_dir.to_string_lossy().to_string();
+
+                // Initialize local ASR
+                println!("Initializing local ASR...");
+                diy_typeless_core::init_local_asr(model_dir_str.clone())
+                    .context("Failed to initialize local ASR")?;
+
+                // Start streaming session
+                let session_id = diy_typeless_core::start_streaming_session(model_dir_str, language)
+                    .context("Failed to start streaming session")?;
+
+                if let Some(duration) = duration_seconds {
+                    println!("Using local ASR... Recording for {duration}s (auto-start)...");
+                    sleep(Duration::from_secs(duration));
+                } else {
+                    println!("Using local ASR... Press Enter to stop recording.");
+                    wait_for_enter()?;
+                }
+
+                // Stop and get final text
+                let text = diy_typeless_core::stop_streaming_session(session_id)
+                    .context("Failed to stop streaming session")?;
+                println!("Transcription completed.");
+                text
             } else {
-                println!("Press Enter to start recording...");
-                wait_for_enter()?;
-                start_recording().context("Failed to start recording")?;
-                println!("Recording... Press Enter to stop.");
-                wait_for_enter()?;
-            }
+                // Groq API flow - traditional recording then transcription
+                let groq_key = resolve_groq_key(groq_key)?;
 
-            let wav_data = stop_recording().context("Failed to stop recording")?;
-            let base = format!("recording_{}", timestamp());
-            let wav_path = output_dir.join(format!("{base}.wav"));
-            fs::write(&wav_path, &wav_data.bytes)?;
+                if let Some(duration) = duration_seconds {
+                    start_recording().context("Failed to start recording")?;
+                    println!("Recording for {duration}s (auto-start)...");
+                    sleep(Duration::from_secs(duration));
+                } else {
+                    println!("Press Enter to start recording...");
+                    wait_for_enter()?;
+                    start_recording().context("Failed to start recording")?;
+                    println!("Recording... Press Enter to stop.");
+                    wait_for_enter()?;
+                }
 
-            println!("Transcribing...");
-            let raw_text = diy_typeless_core::transcribe_wav_bytes(groq_key, wav_data.bytes.clone(), language)?;
+                let wav_data = stop_recording().context("Failed to stop recording")?;
+                let base = format!("recording_{}", timestamp());
+                let wav_path = output_dir.join(format!("{base}.wav"));
+                fs::write(&wav_path, &wav_data.bytes)?;
 
-            let raw_path = output_dir.join(format!("{base}.txt"));
-            fs::write(&raw_path, &raw_text)?;
+                println!("Transcribing with Groq API...");
+                let text = diy_typeless_core::transcribe_wav_bytes(groq_key, wav_data.bytes, language)?;
+                let raw_path = output_dir.join(format!("{base}_raw.txt"));
+                fs::write(&raw_path, &text)?;
+                text
+            };
 
             println!("Polishing...");
             let polished_text = diy_typeless_core::polish_text(gemini_key, raw_text, context)?;
 
-            let polished_path = output_dir.join(format!("{base}_polished.txt"));
+            let polished_path = output_dir.join(format!("recording_{}_polished.txt", timestamp()));
             fs::write(&polished_path, &polished_text)?;
 
             println!("Polished text:\n{}", polished_text);
             copy_to_clipboard(&polished_text);
 
-            println!(
-                "Saved:\n- {}\n- {}\n- {}",
-                wav_path.display(),
-                raw_path.display(),
-                polished_path.display()
-            );
+            println!("Saved: {}", polished_path.display());
         }
         Commands::Diagnose { command } => match command {
             DiagnoseCommands::Env => run_diagnose_env()?,
