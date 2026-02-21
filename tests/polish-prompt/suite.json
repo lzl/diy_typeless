@@ -24,6 +24,12 @@
       "description": "Email formatting when context is Gmail — should use email tone, greeting, sign-off, and format phone numbers",
       "has_context": true,
       "scores": [8, 8]
+    },
+    {
+      "id": "005-self-correction",
+      "description": "Self-correction in speech — when user changes their mind, keep the final intention",
+      "has_context": false,
+      "scores": [8, 9]
     }
   ]
 }
