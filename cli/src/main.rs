@@ -23,6 +23,11 @@ enum Commands {
         output_dir: Option<PathBuf>,
         #[arg(long)]
         duration_seconds: Option<u64>,
+        #[arg(long)]
+        language: Option<String>,
+        /// Use local ASR model for real-time transcription
+        #[arg(long)]
+        local_asr: Option<PathBuf>,
     },
     Transcribe {
         file: PathBuf,
@@ -106,31 +111,67 @@ fn main() -> Result<()> {
         Commands::Record {
             output_dir,
             duration_seconds,
+            language,
+            local_asr,
         } => {
             let output_dir = resolve_output_dir(output_dir)?;
             fs::create_dir_all(&output_dir)?;
 
-            if let Some(duration) = duration_seconds {
-                start_recording().context("Failed to start recording")?;
-                println!("Recording for {duration}s (auto-start)...");
-                sleep(Duration::from_secs(duration));
+            if let Some(model_dir) = local_asr {
+                // Local ASR flow
+                if !model_dir.exists() {
+                    return Err(anyhow!("Model directory does not exist: {}", model_dir.display()));
+                }
+
+                let model_dir_str = model_dir.to_string_lossy().to_string();
+
+                println!("Initializing local ASR...");
+                diy_typeless_core::init_local_asr(model_dir_str.clone())
+                    .context("Failed to initialize local ASR")?;
+
+                let session_id = diy_typeless_core::start_streaming_session(model_dir_str, language)
+                    .context("Failed to start streaming session")?;
+
+                if let Some(duration) = duration_seconds {
+                    println!("Recording for {duration}s (auto-start)...");
+                    sleep(Duration::from_secs(duration));
+                } else {
+                    println!("Recording... Press Enter to stop.");
+                    wait_for_enter()?;
+                }
+
+                let text = diy_typeless_core::stop_streaming_session(session_id)
+                    .context("Failed to stop streaming session")?;
+
+                let txt_path = output_dir.join(format!("recording_{}.txt", timestamp()));
+                fs::write(&txt_path, &text)?;
+
+                println!("Transcription:\n{text}");
+                println!("Saved to {}", txt_path.display());
             } else {
-                println!("Press Enter to start recording...");
-                wait_for_enter()?;
-                start_recording().context("Failed to start recording")?;
-                println!("Recording... Press Enter to stop.");
-                wait_for_enter()?;
+                // Traditional recording flow
+                if let Some(duration) = duration_seconds {
+                    start_recording().context("Failed to start recording")?;
+                    println!("Recording for {duration}s (auto-start)...");
+                    sleep(Duration::from_secs(duration));
+                } else {
+                    println!("Press Enter to start recording...");
+                    wait_for_enter()?;
+                    start_recording().context("Failed to start recording")?;
+                    println!("Recording... Press Enter to stop.");
+                    wait_for_enter()?;
+                }
+
+                let wav_data = stop_recording().context("Failed to stop recording")?;
+                let wav_path = output_dir.join(format!("recording_{}.wav", timestamp()));
+                fs::write(&wav_path, wav_data.bytes)?;
+
+                println!(
+                    "Saved WAV to {} (duration {:.2}s)",
+                    wav_path.display(),
+                    wav_data.duration_seconds
+                );
             }
-
-            let wav_data = stop_recording().context("Failed to stop recording")?;
-            let wav_path = output_dir.join(format!("recording_{}.wav", timestamp()));
-            fs::write(&wav_path, wav_data.bytes)?;
-
-            println!(
-                "Saved WAV to {} (duration {:.2}s)",
-                wav_path.display(),
-                wav_data.duration_seconds
-            );
         }
         Commands::Transcribe {
             file,
