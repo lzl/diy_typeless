@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum CapsuleState: Equatable {
     case hidden
@@ -11,16 +11,19 @@ enum CapsuleState: Equatable {
 }
 
 @MainActor
-final class RecordingState: ObservableObject {
-    @Published private(set) var capsuleState: CapsuleState = .hidden
+@Observable
+final class RecordingState {
+    private(set) var capsuleState: CapsuleState = .hidden
 
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
 
-    private let permissionManager: PermissionManager
-    private let keyStore: ApiKeyStore
-    private let keyMonitor: KeyMonitor
-    private let outputManager: TextOutputManager
+    private let permissionRepository: PermissionRepository
+    private let apiKeyRepository: ApiKeyRepository
+    private var keyMonitoringRepository: KeyMonitoringRepository
+    private let textOutputRepository: TextOutputRepository
+    private let transcriptionUseCase: TranscriptionUseCaseProtocol
+    private let recordingControlUseCase: RecordingControlUseCaseProtocol
     private let contextDetector = AppContextDetector()
 
     private var groqKey: String = ""
@@ -28,44 +31,48 @@ final class RecordingState: ObservableObject {
     private var isRecording = false
     private var isProcessing = false
     private var capturedContext: String?
-    nonisolated(unsafe) private var currentGeneration: Int = 0
+    private var currentGeneration: Int = 0
 
     init(
-        permissionManager: PermissionManager,
-        keyStore: ApiKeyStore,
-        keyMonitor: KeyMonitor,
-        outputManager: TextOutputManager
+        permissionRepository: PermissionRepository,
+        apiKeyRepository: ApiKeyRepository,
+        keyMonitoringRepository: KeyMonitoringRepository,
+        textOutputRepository: TextOutputRepository,
+        transcriptionUseCase: TranscriptionUseCaseProtocol = TranscriptionPipelineUseCase(),
+        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCase()
     ) {
-        self.permissionManager = permissionManager
-        self.keyStore = keyStore
-        self.keyMonitor = keyMonitor
-        self.outputManager = outputManager
+        self.permissionRepository = permissionRepository
+        self.apiKeyRepository = apiKeyRepository
+        self.keyMonitoringRepository = keyMonitoringRepository
+        self.textOutputRepository = textOutputRepository
+        self.transcriptionUseCase = transcriptionUseCase
+        self.recordingControlUseCase = recordingControlUseCase
 
-        keyMonitor.onFnDown = { [weak self] in
+        keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
-                self?.handleKeyDown()
+                await self?.handleKeyDown()
             }
         }
-        keyMonitor.onFnUp = { [weak self] in
+        keyMonitoringRepository.onFnUp = { [weak self] in
             Task { @MainActor in
-                self?.handleKeyUp()
+                await self?.handleKeyUp()
             }
         }
     }
 
     func activate() {
         refreshKeys()
-        let status = permissionManager.currentStatus()
+        let status = permissionRepository.currentStatus
         if status.allGranted {
-            _ = keyMonitor.start()
+            _ = keyMonitoringRepository.start()
         } else {
-            keyMonitor.stop()
+            keyMonitoringRepository.stop()
             onRequireOnboarding?()
         }
     }
 
     func deactivate() {
-        keyMonitor.stop()
+        keyMonitoringRepository.stop()
         if isRecording {
             _ = try? stopRecording()
             isRecording = false
@@ -97,13 +104,13 @@ final class RecordingState: ObservableObject {
         }
     }
 
-    private func handleKeyDown() {
+    private func handleKeyDown() async {
         if isProcessing, !isRecording {
             handleCancel()
             return
         }
 
-        let status = permissionManager.currentStatus()
+        let status = permissionRepository.currentStatus
         guard status.allGranted else {
             showError("Permissions required")
             onRequireOnboarding?()
@@ -114,28 +121,24 @@ final class RecordingState: ObservableObject {
 
         refreshKeys()
 
-        // Check Groq API key
         if groqKey.isEmpty {
             showError("Groq API key required")
             onRequireOnboarding?()
             return
         }
 
-        // Gemini always required (for polishing)
         if geminiKey.isEmpty {
             showError("Gemini API key required")
             onRequireOnboarding?()
             return
         }
 
-        // Warm up TLS connections in background to reduce latency
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            _ = try? warmupGroqConnection()
-            _ = try? warmupGeminiConnection()
+        Task {
+            await recordingControlUseCase.warmupConnections()
         }
 
         do {
-            try startRecording()
+            try await recordingControlUseCase.startRecording()
             isRecording = true
             capsuleState = .recording
             capturedContext = contextDetector.captureContext().formatted
@@ -144,7 +147,7 @@ final class RecordingState: ObservableObject {
         }
     }
 
-    private func handleKeyUp() {
+    private func handleKeyUp() async {
         guard isRecording else { return }
 
         guard !isProcessing else { return }
@@ -156,40 +159,32 @@ final class RecordingState: ObservableObject {
 
         capsuleState = .transcribing
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
+        do {
+            let result = try await transcriptionUseCase.execute(
+                groqKey: groqKey,
+                geminiKey: geminiKey,
+                context: capturedContext
+            )
 
-            do {
-                let wavData = try stopRecording()
-                guard self.currentGeneration == gen else { return }
+            guard currentGeneration == gen else { return }
 
-                let rawText = try transcribeWavBytes(apiKey: self.groqKey, wavBytes: wavData.bytes, language: nil)
-                guard self.currentGeneration == gen else { return }
+            capsuleState = .polishing
 
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.capsuleState = .polishing
-                }
+            try? await Task.sleep(for: .milliseconds(100))
 
-                let outputText = (try? polishText(apiKey: self.geminiKey, rawText: rawText, context: self.capturedContext)) ?? rawText
+            guard currentGeneration == gen else { return }
 
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: rawText, polished: outputText)
-                }
-            } catch {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.showError(error.localizedDescription)
-                    self.isProcessing = false
-                }
-            }
+            finishOutput(raw: result.rawText, polished: result.polishedText)
+        } catch {
+            guard currentGeneration == gen else { return }
+            showError(error.localizedDescription)
+            isProcessing = false
         }
     }
 
     private func finishOutput(raw: String, polished: String) {
         onWillDeliverText?()
-        let result = outputManager.deliver(text: polished)
+        let result = textOutputRepository.deliver(text: polished)
         capsuleState = .done(result)
         isProcessing = false
         scheduleHide(after: 1.2, expectedState: .done(result))
@@ -210,7 +205,7 @@ final class RecordingState: ObservableObject {
     }
 
     private func refreshKeys() {
-        groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

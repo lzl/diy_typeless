@@ -1,6 +1,6 @@
 import AppKit
-import Combine
 import Foundation
+import Observation
 
 struct PermissionStatus {
     var accessibility: Bool
@@ -12,23 +12,23 @@ struct PermissionStatus {
 }
 
 @MainActor
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     enum Phase {
         case onboarding
         case ready
     }
 
-    /// Delay before terminating app during restart to ensure new instance starts
     private static let restartTerminationDelay: TimeInterval = 0.5
 
-    @Published private(set) var phase: Phase = .onboarding
+    private(set) var phase: Phase = .onboarding
     let onboarding: OnboardingState
     let recording: RecordingState
 
-    private let permissionManager: PermissionManager
-    private let keyStore: ApiKeyStore
-    private let keyMonitor: KeyMonitor
-    private let outputManager: TextOutputManager
+    private let permissionRepository: PermissionRepository
+    private let apiKeyRepository: ApiKeyRepository
+    private let keyMonitoringRepository: KeyMonitoringRepository
+    private let textOutputRepository: TextOutputRepository
 
     private var readinessTimer: Timer?
     private var onboardingWindow: OnboardingWindowController?
@@ -36,18 +36,24 @@ final class AppState: ObservableObject {
     private var isForcedOnboarding = false
     private var hasShownReadyConfirmation = false
 
-    init() {
-        permissionManager = PermissionManager()
-        keyStore = ApiKeyStore()
-        keyMonitor = KeyMonitor()
-        outputManager = TextOutputManager()
+    init(
+        apiKeyRepository: ApiKeyRepository? = nil,
+        permissionRepository: PermissionRepository? = nil,
+        keyMonitoringRepository: KeyMonitoringRepository? = nil,
+        textOutputRepository: TextOutputRepository? = nil
+    ) {
+        let repository = apiKeyRepository ?? KeychainApiKeyRepository()
+        self.apiKeyRepository = repository
+        self.permissionRepository = permissionRepository ?? SystemPermissionRepository()
+        self.keyMonitoringRepository = keyMonitoringRepository ?? SystemKeyMonitoringRepository()
+        self.textOutputRepository = textOutputRepository ?? SystemTextOutputRepository()
 
-        onboarding = OnboardingState(permissionManager: permissionManager, keyStore: keyStore)
+        onboarding = OnboardingState(permissionRepository: self.permissionRepository, apiKeyRepository: repository)
         recording = RecordingState(
-            permissionManager: permissionManager,
-            keyStore: keyStore,
-            keyMonitor: keyMonitor,
-            outputManager: outputManager
+            permissionRepository: self.permissionRepository,
+            apiKeyRepository: repository,
+            keyMonitoringRepository: self.keyMonitoringRepository,
+            textOutputRepository: self.textOutputRepository
         )
 
         onboarding.onCompletion = { [weak self] in
@@ -66,9 +72,10 @@ final class AppState: ObservableObject {
 
     func start() {
         uniffiEnsureDiyTypelessCoreInitialized()
-        keyStore.preloadKeys()
+        if let repository = apiKeyRepository as? KeychainApiKeyRepository {
+            repository.preloadKeys()
+        }
         configureWindows()
-        // Force initial phase setup since phase defaults to .onboarding
         setPhase(checkReadiness() ? .ready : .onboarding, force: true)
         startReadinessTimer()
         observeShowSettings()
@@ -117,13 +124,10 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Checks if all requirements are met for the app to be ready.
     private func checkReadiness() -> Bool {
-        let status = permissionManager.currentStatus()
-        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // All required: permissions, Gemini key (for polishing), Groq key (for transcription)
+        let status = permissionRepository.currentStatus
+        let geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return status.allGranted && !geminiKey.isEmpty && !groqKey.isEmpty
     }
 
@@ -149,7 +153,6 @@ final class AppState: ObservableObject {
         case .ready:
             onboarding.stopPolling()
             recording.activate()
-            // Show completion window on first ready state entry
             if !hasShownReadyConfirmation {
                 hasShownReadyConfirmation = true
                 onboarding.showCompletion()
@@ -167,12 +170,10 @@ final class AppState: ObservableObject {
         task.arguments = ["-n", bundleURL.path]
         do {
             try task.run()
-            // Delay exit to ensure new instance starts
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartTerminationDelay) {
                 NSApp.terminate(nil)
             }
         } catch {
-            // Fallback to original method if Process fails
             let config = NSWorkspace.OpenConfiguration()
             NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, _ in
                 NSApp.terminate(nil)

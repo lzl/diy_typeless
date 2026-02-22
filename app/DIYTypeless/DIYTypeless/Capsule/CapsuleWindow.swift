@@ -1,5 +1,5 @@
 import AppKit
-import Combine
+import Observation
 import SwiftUI
 
 private class CapsulePanel: NSPanel {
@@ -21,7 +21,7 @@ private class CapsulePanel: NSPanel {
 @MainActor
 final class CapsuleWindowController {
     private let panel: CapsulePanel
-    private var cancellable: AnyCancellable?
+    private var observation: Any?
 
     init(state: RecordingState) {
         let hosting = NSHostingController(rootView: CapsuleView(state: state))
@@ -51,11 +51,26 @@ final class CapsuleWindowController {
             panel?.resignKey()
         }
 
-        cancellable = state.$capsuleState
-            .receive(on: RunLoop.main)
-            .sink { [weak self] newState in
-                self?.updateVisibility(for: newState)
+        // Use Observation framework for @Observable state
+        startObserving(state: state)
+
+        // Initial visibility update
+        updateVisibility(for: state.capsuleState)
+    }
+
+    private func startObserving(state: RecordingState) {
+        // withObservationTracking is one-shot, need to recursively re-register
+        func observe() {
+            _ = withObservationTracking {
+                state.capsuleState
+            } onChange: { [weak self] in
+                DispatchQueue.main.async { [weak self] in
+                    self?.updateVisibility(for: state.capsuleState)
+                    observe() // Re-register for next change
+                }
             }
+        }
+        observe()
     }
 
     private func updateVisibility(for state: CapsuleState) {

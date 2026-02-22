@@ -3,18 +3,18 @@ import SwiftUI
 @main
 struct DIYTypelessApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appState: AppState
+    @State private var appState: AppState
 
     init() {
         let state = AppState()
-        _appState = StateObject(wrappedValue: state)
+        _appState = State(wrappedValue: state)
         state.start()
     }
 
     var body: some Scene {
         MenuBarExtra("DIY Typeless", systemImage: "waveform") {
             MenuBarView()
-                .environmentObject(appState)
+                .environment(appState)
         }
     }
 }

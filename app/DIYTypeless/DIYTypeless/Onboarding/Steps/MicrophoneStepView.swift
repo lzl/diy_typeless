@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MicrophoneStepView: View {
-    @ObservedObject var state: OnboardingState
+    @Bindable var state: OnboardingState
 
     var body: some View {
         VStack(spacing: 24) {

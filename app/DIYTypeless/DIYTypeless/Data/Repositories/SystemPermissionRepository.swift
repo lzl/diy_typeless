@@ -1,8 +1,8 @@
 import AppKit
 import AVFoundation
 
-final class PermissionManager {
-    func currentStatus() -> PermissionStatus {
+final class SystemPermissionRepository: PermissionRepository {
+    var currentStatus: PermissionStatus {
         let accessibility = AXIsProcessTrusted()
         let microphone = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         return PermissionStatus(
@@ -17,8 +17,12 @@ final class PermissionManager {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    func requestMicrophone(completion: @escaping (Bool) -> Void) {
-        AVCaptureDevice.requestAccess(for: .audio, completionHandler: completion)
+    func requestMicrophone() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                continuation.resume(returning: granted)
+            }
+        }
     }
 
     func openAccessibilitySettings() {

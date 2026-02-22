@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct CapsuleView: View {
-    @ObservedObject var state: RecordingState
-    @StateObject private var audioMonitor = AudioLevelMonitor()
+    @Bindable var state: RecordingState
+    @State private var audioMonitor = AudioLevelMonitor()
     @State private var progress: CGFloat = 0
 
     private let capsuleWidth: CGFloat = 160

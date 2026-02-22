@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeyMonitor {
+final class SystemKeyMonitoringRepository: KeyMonitoringRepository {
     var onFnDown: (() -> Void)?
     var onFnUp: (() -> Void)?
 

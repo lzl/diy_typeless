@@ -62,6 +62,241 @@ Required workflow:
 
 If there is uncertainty, extend the CLI with additional flags or diagnostics so the agent can re-run and confirm fixes.
 
+## Clean Architecture Guidelines
+
+### Layer Structure
+
+```
+Presentation (SwiftUI Views + @Observable ViewModels)
+         ↓
+Domain (UseCases + Entities + Repository Protocols)
+         ↓
+Data (Repository Implementations + SwiftData)
+         ↓
+Infrastructure (FFI Bridge + Network)
+```
+
+### Dependency Direction
+
+All dependencies point **inward** toward Domain. Outer layers depend on inner layers through protocols.
+
+```
+Domain Layer (no external dependencies)
+    ↑
+Data Layer (depends on Domain)
+    ↑
+Presentation Layer (depends on Domain and Data)
+    ↑
+Infrastructure Layer (depends on all above)
+```
+
+### Mandatory Rules
+
+1. **Views** must not contain business logic; delegate to ViewModels
+2. **ViewModels** must be `@MainActor @Observable`, never `ObservableObject`
+3. **UseCases** encapsulate single business operations; pure Swift, no UI framework imports
+4. **Repositories** abstract data sources; protocols in Domain, implementations in Data
+5. **SwiftData Models** must not be exposed to Presentation layer; map to Domain entities
+6. **FFI calls** must be wrapped in async continuations; never call synchronously from MainActor
+7. **Dependencies** must be injected via constructors; singletons are prohibited
+
+## SwiftUI State Management
+
+### Use @Observable (Not ObservableObject)
+
+All ViewModels must use the modern `@Observable` macro:
+
+```swift
+// CORRECT
+@MainActor
+@Observable
+final class AppState {
+    private(set) var phase: Phase = .onboarding
+}
+
+// WRONG - Do not use
+@MainActor
+final class AppState: ObservableObject {
+    @Published private(set) var phase: Phase = .onboarding
+}
+```
+
+### View Property Wrappers
+
+```swift
+struct ContentView: View {
+    // For root state passed via environment
+    @State private var appState = AppState()
+
+    // For observable objects (prefer @Observable instead)
+    // @StateObject is DEPRECATED for new code
+
+    var body: some View {
+        ChildView()
+            .environment(appState)
+    }
+}
+
+struct ChildView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        Text(appState.phase.description)
+    }
+}
+```
+
+## Swift Concurrency and FFI Integration
+
+### Wrapping Synchronous FFI Calls
+
+Synchronous C/Rust FFI calls block threads. Wrap them using `withCheckedContinuation` to bridge to Swift Concurrency without blocking the MainActor.
+
+```swift
+// Domain/UseCases/TranscriptionUseCase.swift
+protocol TranscriptionUseCaseProtocol {
+    func transcribe(audio: Data) async throws -> String
+}
+
+final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
+    func transcribe(audio: Data) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let result = try rust_transcribe(audio)
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+}
+
+// Presentation/State/RecordingState.swift
+@MainActor
+@Observable
+final class RecordingState {
+    private let transcriptionUseCase: TranscriptionUseCaseProtocol
+
+    func startTranscription() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            result = try await transcriptionUseCase.transcribe(audio: audioData)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+```
+
+### Rules for Concurrency
+
+1. **Never** call synchronous FFI from MainActor directly
+2. **Always** use `withCheckedContinuation` or `withCheckedThrowingContinuation`
+3. **Always** dispatch blocking work to `DispatchQueue.global(qos: .userInitiated)`
+4. **Never** use `nonisolated(unsafe)` as a workaround
+5. **Always** mark ViewModels with `@MainActor`
+
+## Repository Pattern
+
+### Protocol in Domain
+
+```swift
+// Domain/Repositories/ApiKeyRepository.swift
+protocol ApiKeyRepository: Sendable {
+    func loadKey(for provider: ApiProvider) -> String?
+    func saveKey(_ key: String, for provider: ApiProvider) throws
+    func deleteKey(for provider: ApiProvider) throws
+}
+
+enum ApiProvider: Sendable {
+    case groq
+    case gemini
+}
+```
+
+### Implementation in Data
+
+```swift
+// Data/Repositories/KeychainApiKeyRepository.swift
+import Security
+
+final class KeychainApiKeyRepository: ApiKeyRepository {
+    func loadKey(for provider: ApiProvider) -> String? {
+        // Keychain implementation
+    }
+
+    func saveKey(_ key: String, for provider: ApiProvider) throws {
+        // Keychain implementation
+    }
+
+    func deleteKey(for provider: ApiProvider) throws {
+        // Keychain implementation
+    }
+}
+```
+
+### Usage in ViewModel
+
+```swift
+@MainActor
+@Observable
+final class OnboardingState {
+    private let apiKeyRepository: ApiKeyRepository
+
+    init(apiKeyRepository: ApiKeyRepository = KeychainApiKeyRepository()) {
+        self.apiKeyRepository = apiKeyRepository
+    }
+}
+```
+
+## Dependency Injection
+
+### Constructor Injection (Preferred)
+
+```swift
+@MainActor
+@Observable
+final class AppState {
+    private let permissionManager: PermissionManagerProtocol
+    private let apiKeyRepository: ApiKeyRepository
+
+    init(
+        permissionManager: PermissionManagerProtocol = PermissionManager(),
+        apiKeyRepository: ApiKeyRepository = KeychainApiKeyRepository()
+    ) {
+        self.permissionManager = permissionManager
+        self.apiKeyRepository = apiKeyRepository
+    }
+}
+```
+
+### Environment Injection (For SwiftUI Views)
+
+```swift
+// Define environment key
+private struct AppStateKey: EnvironmentKey {
+    static let defaultValue: AppState? = nil
+}
+
+extension EnvironmentValues {
+    var appState: AppState? {
+        get { self[AppStateKey.self] }
+        set { self[AppStateKey.self] = newValue }
+    }
+}
+
+// Usage in preview or tests
+ContentView()
+    .environment(AppState(
+        permissionManager: MockPermissionManager(),
+        apiKeyRepository: MockApiKeyRepository()
+    ))
+```
+
 ## Xcode Build & Debug (Command Line)
 
 When working with the macOS app, use `xcodebuild` command line tool instead of opening the Xcode GUI. This enables automated error collection and debugging.
@@ -143,12 +378,41 @@ This is because:
 
 Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory). That path is not referenced by the Xcode project and creates confusing duplicates.
 
-## Lesson: Use DispatchQueue instead of Swift Concurrency for macOS UI Work
+## Testing Strategy
 
-**Issue**: When implementing streaming ASR with Swift Concurrency (`Task`, `await`, `Task.detached`), UI animations (progress bars) were choppy and blocked.
+### Unit Tests (Domain Layer)
 
-**Root Cause**: Swift Concurrency's `Task` and `await` mechanisms can interfere with UI animation smoothness on macOS, even when correctly dispatched to background threads. The interaction between Swift Concurrency's structured concurrency and AppKit's runloop can cause unexpected blocking of UI updates.
+Test UseCases and Entities in isolation with mocked dependencies:
 
-**Solution**: Use `DispatchQueue.global(qos: .userInitiated).async` for background work and `DispatchQueue.main.async` for UI updates. This pattern provides more predictable behavior for macOS UI animations, especially when mixing synchronous C/Rust FFI calls with UI updates.
+```swift
+final class TranscriptionUseCaseTests: XCTestCase {
+    func testTranscriptionSuccess() async throws {
+        let mockRepository = MockTranscriptionRepository()
+        mockRepository.expectedResult = "Hello world"
 
-**Rule**: For macOS UI work requiring smooth animations, prefer `DispatchQueue` over Swift Concurrency. Do not use `Task`, `await`, or `Task.detached` for background-to-UI transitions without explicit testing of animation smoothness.
+        let useCase = TranscriptionUseCase(repository: mockRepository)
+        let result = try await useCase.transcribe(audio: testData)
+
+        XCTAssertEqual(result, "Hello world")
+    }
+}
+```
+
+### Integration Tests
+
+Test Repository implementations with real dependencies (Keychain, Network):
+
+```swift
+final class KeychainApiKeyRepositoryTests: XCTestCase {
+    func testSaveAndLoadKey() throws {
+        let repository = KeychainApiKeyRepository()
+        try repository.saveKey("test-key", for: .groq)
+        let loaded = repository.loadKey(for: .groq)
+        XCTAssertEqual(loaded, "test-key")
+    }
+}
+```
+
+### UI Tests
+
+Minimal UI tests focusing on user flows, not implementation details.
