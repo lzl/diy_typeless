@@ -30,10 +30,6 @@ final class RecordingState: ObservableObject {
     private var capturedContext: String?
     nonisolated(unsafe) private var currentGeneration: Int = 0
 
-    // For local streaming ASR
-    private var streamingSessionId: UInt64?
-    private var streamingTask: Task<Void, Never>?
-
     init(
         permissionManager: PermissionManager,
         keyStore: ApiKeyStore,
@@ -74,7 +70,6 @@ final class RecordingState: ObservableObject {
             _ = try? stopRecording()
             isRecording = false
         }
-        cleanupStreamingSession()
         currentGeneration += 1
         isProcessing = false
         capturedContext = nil
@@ -89,28 +84,16 @@ final class RecordingState: ObservableObject {
             currentGeneration += 1
             capturedContext = nil
             _ = try? stopRecording()
-            cleanupStreamingSession()
             capsuleState = .hidden
 
         case .transcribing, .polishing:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
-            cleanupStreamingSession()
             capsuleState = .hidden
 
         case .hidden, .done, .error:
             break
-        }
-    }
-
-    /// Clean up any active streaming session and task
-    private func cleanupStreamingSession() {
-        streamingTask?.cancel()
-        streamingTask = nil
-        if let sessionId = streamingSessionId {
-            _ = try? stopStreamingSession(sessionId: sessionId)
-            streamingSessionId = nil
         }
     }
 
@@ -131,23 +114,11 @@ final class RecordingState: ObservableObject {
 
         refreshKeys()
 
-        // Check current ASR provider dependencies
-        let provider = AsrSettings.shared.currentProvider
-        switch provider {
-        case .groq:
-            // Groq requires API key
-            if groqKey.isEmpty {
-                showError("Groq API key required")
-                onRequireOnboarding?()
-                return
-            }
-        case .local:
-            // Local ASR requires model to be loaded
-            if !LocalAsrManager.shared.isModelLoaded {
-                showError("Local ASR model not loaded")
-                onRequireOnboarding?()
-                return
-            }
+        // Check Groq API key
+        if groqKey.isEmpty {
+            showError("Groq API key required")
+            onRequireOnboarding?()
+            return
         }
 
         // Gemini always required (for polishing)
@@ -157,159 +128,32 @@ final class RecordingState: ObservableObject {
             return
         }
 
-        // For local ASR, start streaming immediately
-        // For Groq, just start recording
-        switch provider {
-        case .local:
-            startLocalStreamingRecording()
-        case .groq:
-            // Warm up TLS connections in background to reduce latency
-            DispatchQueue.global(qos: .background).async { [weak self] in
-                _ = try? warmupGroqConnection()
-                _ = try? warmupGeminiConnection()
-            }
-
-            do {
-                try startRecording()
-                isRecording = true
-                capsuleState = .recording
-                capturedContext = contextDetector.captureContext().formatted
-            } catch {
-                showError(error.localizedDescription)
-            }
+        // Warm up TLS connections in background to reduce latency
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            _ = try? warmupGroqConnection()
+            _ = try? warmupGeminiConnection()
         }
-    }
-
-    /// Start streaming recording for local ASR
-    private func startLocalStreamingRecording() {
-        currentGeneration += 1
-        let gen = currentGeneration
-
-        capsuleState = .recording
-        isRecording = true
-        isProcessing = true
-        capturedContext = contextDetector.captureContext().formatted
-
-        // Use DispatchQueue instead of Swift Concurrency to avoid UI animation stuttering
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-
-            do {
-                let sessionId = try self.setupStreamingSession()
-
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
-                    self.streamingSessionId = sessionId
-                }
-
-                // Wait for user to stop recording
-                self.waitForRecordingStop(generation: gen)
-
-                guard self.currentGeneration == gen else {
-                    self.cleanupStreamingSession()
-                    return
-                }
-
-                // Finalize transcription and polishing
-                self.finalizeStreamingTranscription(sessionId: sessionId, generation: gen)
-
-            } catch {
-                DispatchQueue.main.async {
-                    guard self.currentGeneration == gen else { return }
-                    self.showError(error.localizedDescription)
-                    self.isProcessing = false
-                    self.isRecording = false
-                }
-            }
-        }
-    }
-
-    /// Setup streaming session and return session ID
-    private func setupStreamingSession() throws -> UInt64 {
-        guard let modelDir = LocalAsrManager.shared.modelDirectory?.path else {
-            throw NSError(domain: "RecordingState", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local ASR model not found"])
-        }
-
-        return try startStreamingSession(modelDir: modelDir, language: nil)
-    }
-
-    /// Wait for recording to stop (polling isRecording flag)
-    private func waitForRecordingStop(generation: Int) {
-        while self.currentGeneration == generation && self.isRecording {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
-    }
-
-    /// Stop streaming and finalize transcription with polishing
-    private func finalizeStreamingTranscription(sessionId: UInt64, generation: Int) {
-        let geminiKeyForPolish = self.geminiKey
-        let contextForPolish = self.capturedContext
-
-        let rawText = self.stopStreamingAndGetText(sessionId: sessionId)
-
-        guard self.currentGeneration == generation else { return }
-
-        DispatchQueue.main.async {
-            guard self.currentGeneration == generation else { return }
-            self.capsuleState = .polishing
-        }
-
-        let outputText = self.polishWithFallback(rawText: rawText, apiKey: geminiKeyForPolish, context: contextForPolish)
-
-        DispatchQueue.main.async {
-            guard self.currentGeneration == generation else { return }
-            self.streamingSessionId = nil
-            self.finishOutput(raw: rawText, polished: outputText)
-        }
-    }
-
-    /// Stop streaming session and return text (quick or final)
-    private func stopStreamingAndGetText(sessionId: UInt64) -> String {
-        let quickText = getStreamingText(sessionId: sessionId)
 
         do {
-            let finalText = try stopStreamingSession(sessionId: sessionId)
-            return finalText.isEmpty ? quickText : finalText
+            try startRecording()
+            isRecording = true
+            capsuleState = .recording
+            capturedContext = contextDetector.captureContext().formatted
         } catch {
-            return quickText
-        }
-    }
-
-    /// Polish text with fallback to raw text on error
-    private func polishWithFallback(rawText: String, apiKey: String, context: String?) -> String {
-        do {
-            return try polishText(apiKey: apiKey, rawText: rawText, context: context)
-        } catch {
-            return rawText
+            showError(error.localizedDescription)
         }
     }
 
     private func handleKeyUp() {
         guard isRecording else { return }
 
-        let provider = AsrSettings.shared.currentProvider
+        guard !isProcessing else { return }
+        isRecording = false
+        isProcessing = true
 
-        switch provider {
-        case .local:
-            // For local streaming, mark recording as done and immediately switch UI
-            isRecording = false
-            // Immediately show transcribing UI for smooth transition
-            capsuleState = .transcribing
-        case .groq:
-            // For Groq, stop recording and start transcription
-            guard !isProcessing else { return }
-            isRecording = false
-            isProcessing = true
+        currentGeneration += 1
+        let gen = currentGeneration
 
-            currentGeneration += 1
-            let gen = currentGeneration
-
-            handleGroqTranscription(gen: gen, groqKey: groqKey, geminiKey: geminiKey, capturedContext: capturedContext)
-        }
-    }
-
-    /// Handle traditional transcription for Groq
-    private func handleGroqTranscription(gen: Int, groqKey: String, geminiKey: String, capturedContext: String?) {
         capsuleState = .transcribing
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -319,7 +163,7 @@ final class RecordingState: ObservableObject {
                 let wavData = try stopRecording()
                 guard self.currentGeneration == gen else { return }
 
-                let rawText = try transcribeWavBytes(apiKey: groqKey, wavBytes: wavData.bytes, language: nil)
+                let rawText = try transcribeWavBytes(apiKey: self.groqKey, wavBytes: wavData.bytes, language: nil)
                 guard self.currentGeneration == gen else { return }
 
                 DispatchQueue.main.async { [weak self] in
@@ -327,7 +171,7 @@ final class RecordingState: ObservableObject {
                     self.capsuleState = .polishing
                 }
 
-                let outputText = (try? polishText(apiKey: geminiKey, rawText: rawText, context: capturedContext)) ?? rawText
+                let outputText = (try? polishText(apiKey: self.geminiKey, rawText: rawText, context: self.capturedContext)) ?? rawText
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.currentGeneration == gen else { return }

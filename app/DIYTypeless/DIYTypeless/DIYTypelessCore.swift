@@ -419,22 +419,6 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
-    typealias FfiType = UInt64
-    typealias SwiftType = UInt64
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
-        return try lift(readInt(&buf))
-    }
-
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -796,23 +780,6 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
-/**
- * Get the current partial transcription for a streaming session
- * Returns the accumulated text so far, or empty string if session not found
- */
-public func getStreamingText(sessionId: UInt64) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_diy_typeless_core_fn_func_get_streaming_text(
-        FfiConverterUInt64.lower(sessionId),$0
-    )
-})
-}
-public func initLocalAsr(modelDir: String)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_init_local_asr(
-        FfiConverterString.lower(modelDir),$0
-    )
-}
-}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -827,19 +794,6 @@ public func startRecording()throws   {try rustCallWithError(FfiConverterTypeCore
     )
 }
 }
-/**
- * Start a streaming transcription session
- * Returns a session ID that can be used to poll for results and stop the session
- * This is only used for local ASR (streaming mode)
- */
-public func startStreamingSession(modelDir: String, language: String?)throws  -> UInt64  {
-    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_start_streaming_session(
-        FfiConverterString.lower(modelDir),
-        FfiConverterOptionString.lower(language),$0
-    )
-})
-}
 public func stopRecording()throws  -> WavData  {
     return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording($0
@@ -852,17 +806,6 @@ public func stopRecording()throws  -> WavData  {
 public func stopRecordingWav()throws  -> WavData  {
     return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording_wav($0
-    )
-})
-}
-/**
- * Stop a streaming transcription session and return the final text
- * This removes the session from the active sessions list
- */
-public func stopStreamingSession(sessionId: UInt64)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_stop_streaming_session(
-        FfiConverterUInt64.lower(sessionId),$0
     )
 })
 }
@@ -909,28 +852,16 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_get_streaming_text() != 49960) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_diy_typeless_core_checksum_func_init_local_asr() != 58840) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_start_streaming_session() != 33614) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 15390) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 25405) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_diy_typeless_core_checksum_func_stop_streaming_session() != 30364) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use diy_typeless_core::{start_recording, stop_recording};
 use std::fs;
@@ -28,11 +28,6 @@ enum Commands {
         output_dir: Option<PathBuf>,
         #[arg(long)]
         duration_seconds: Option<u64>,
-        #[arg(long)]
-        language: Option<String>,
-        /// Use local ASR model for real-time transcription
-        #[arg(long)]
-        local_asr: Option<PathBuf>,
     },
     Transcribe {
         file: PathBuf,
@@ -62,9 +57,6 @@ enum Commands {
         duration_seconds: Option<u64>,
         #[arg(long)]
         context: Option<String>,
-        /// Use local ASR model instead of Groq API (model directory path)
-        #[arg(long)]
-        local_asr: Option<PathBuf>,
     },
     Diagnose {
         #[command(subcommand)]
@@ -106,9 +98,7 @@ fn main() -> Result<()> {
         Commands::Record {
             output_dir,
             duration_seconds,
-            language,
-            local_asr,
-        } => cmd_record(output_dir, duration_seconds, language, local_asr),
+        } => cmd_record(output_dir, duration_seconds),
         Commands::Transcribe {
             file,
             groq_key,
@@ -126,7 +116,6 @@ fn main() -> Result<()> {
             language,
             duration_seconds,
             context,
-            local_asr,
         } => cmd_full(
             output_dir,
             groq_key,
@@ -134,7 +123,6 @@ fn main() -> Result<()> {
             language,
             duration_seconds,
             context,
-            local_asr,
         ),
         Commands::Diagnose { command } => match command {
             DiagnoseCommands::Env => run_diagnose_env(),
@@ -163,69 +151,10 @@ fn main() -> Result<()> {
     }
 }
 
-fn cmd_record(
-    output_dir: Option<PathBuf>,
-    duration_seconds: Option<u64>,
-    language: Option<String>,
-    local_asr: Option<PathBuf>,
-) -> Result<()> {
+fn cmd_record(output_dir: Option<PathBuf>, duration_seconds: Option<u64>) -> Result<()> {
     let output_dir = resolve_output_dir(output_dir)?;
     fs::create_dir_all(&output_dir)?;
 
-    if let Some(model_dir) = local_asr {
-        run_local_asr_recording(&output_dir, duration_seconds, language, model_dir)
-    } else {
-        run_traditional_recording(&output_dir, duration_seconds)
-    }
-}
-
-fn run_local_asr_recording(
-    output_dir: &PathBuf,
-    duration_seconds: Option<u64>,
-    language: Option<String>,
-    model_dir: PathBuf,
-) -> Result<()> {
-    if !model_dir.exists() {
-        return Err(anyhow!(
-            "Model directory does not exist: {}",
-            model_dir.display()
-        ));
-    }
-
-    let model_dir_str = model_dir.to_string_lossy().to_string();
-
-    println!("Initializing local ASR...");
-    diy_typeless_core::init_local_asr(model_dir_str.clone())
-        .context("Failed to initialize local ASR")?;
-
-    let session_id =
-        diy_typeless_core::start_streaming_session(model_dir_str, language.clone())
-            .context("Failed to start streaming session")?;
-
-    if let Some(duration) = duration_seconds {
-        println!("Recording for {duration}s (auto-start)...");
-        sleep(Duration::from_secs(duration));
-    } else {
-        println!("Recording... Press Enter to stop.");
-        wait_for_enter()?;
-    }
-
-    let text = diy_typeless_core::stop_streaming_session(session_id)
-        .context("Failed to stop streaming session")?;
-
-    let txt_path = output_dir.join(format!("recording_{}.txt", timestamp()));
-    fs::write(&txt_path, &text)?;
-
-    println!("Transcription:\n{text}");
-    println!("Saved to {}", txt_path.display());
-
-    Ok(())
-}
-
-fn run_traditional_recording(
-    output_dir: &PathBuf,
-    duration_seconds: Option<u64>,
-) -> Result<()> {
     if let Some(duration) = duration_seconds {
         start_recording().context("Failed to start recording")?;
         println!("Recording for {duration}s (auto-start)...");
@@ -283,22 +212,12 @@ fn cmd_full(
     language: Option<String>,
     duration_seconds: Option<u64>,
     context: Option<String>,
-    local_asr: Option<PathBuf>,
 ) -> Result<()> {
     let gemini_key = resolve_gemini_key(gemini_key)?;
     let output_dir = resolve_output_dir(output_dir)?;
     fs::create_dir_all(&output_dir)?;
 
-    let raw_text = if let Some(model_dir) = local_asr {
-        run_local_asr_full(&output_dir, duration_seconds, language.clone(), model_dir)?
-    } else {
-        run_groq_full(
-            &output_dir,
-            duration_seconds,
-            groq_key,
-            language.clone(),
-        )?
-    };
+    let raw_text = run_groq_full(&output_dir, duration_seconds, groq_key, language.clone())?;
 
     println!("Polishing...");
     let polished_text = diy_typeless_core::polish_text(gemini_key, raw_text, context)?;
@@ -312,47 +231,6 @@ fn cmd_full(
     println!("Saved: {}", polished_path.display());
 
     Ok(())
-}
-
-fn run_local_asr_full(
-    output_dir: &PathBuf,
-    duration_seconds: Option<u64>,
-    language: Option<String>,
-    model_dir: PathBuf,
-) -> Result<String> {
-    if !model_dir.exists() {
-        return Err(anyhow!(
-            "Model directory does not exist: {}",
-            model_dir.display()
-        ));
-    }
-
-    let model_dir_str = model_dir.to_string_lossy().to_string();
-
-    println!("Initializing local ASR...");
-    diy_typeless_core::init_local_asr(model_dir_str.clone())
-        .context("Failed to initialize local ASR")?;
-
-    let session_id = diy_typeless_core::start_streaming_session(model_dir_str, language)
-        .context("Failed to start streaming session")?;
-
-    if let Some(duration) = duration_seconds {
-        println!("Using local ASR... Recording for {duration}s (auto-start)...");
-        sleep(Duration::from_secs(duration));
-    } else {
-        println!("Using local ASR... Press Enter to stop recording.");
-        wait_for_enter()?;
-    }
-
-    let text = diy_typeless_core::stop_streaming_session(session_id)
-        .context("Failed to stop streaming session")?;
-    println!("Transcription completed.");
-
-    let base = format!("recording_{}", timestamp());
-    let txt_path = output_dir.join(format!("{base}_raw.txt"));
-    fs::write(&txt_path, &text)?;
-
-    Ok(text)
 }
 
 fn run_groq_full(

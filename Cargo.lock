@@ -584,11 +584,9 @@ name = "diy_typeless_core"
 version = "0.1.0"
 dependencies = [
  "biquad",
- "cc",
  "cpal",
  "flacenc",
  "hound",
- "libc",
  "log",
  "once_cell",
  "reqwest",

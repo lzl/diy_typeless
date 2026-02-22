@@ -121,21 +121,10 @@ final class AppState: ObservableObject {
     private func checkReadiness() -> Bool {
         let status = permissionManager.currentStatus()
         let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Gemini always required (for polishing)
-        guard status.allGranted && !geminiKey.isEmpty else {
-            return false
-        }
-
-        // Check conditions based on ASR provider
-        let provider = AsrSettings.shared.currentProvider
-        switch provider {
-        case .groq:
-            let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return !groqKey.isEmpty
-        case .local:
-            return LocalAsrManager.shared.isModelLoaded
-        }
+        // All required: permissions, Gemini key (for polishing), Groq key (for transcription)
+        return status.allGranted && !geminiKey.isEmpty && !groqKey.isEmpty
     }
 
     private func evaluateReadiness() {
