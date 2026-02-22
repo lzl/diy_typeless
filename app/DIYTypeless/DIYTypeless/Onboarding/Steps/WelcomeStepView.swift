@@ -18,21 +18,24 @@ struct WelcomeStepView: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             ZStack {
-                // Animated background glow
+                // Subtle ambient glow - smaller and softer
                 Circle()
                     .fill(dynamicGradient)
-                    .blur(radius: 20)
-                    .frame(width: 120, height: 120)
-                    .opacity(0.3 + gradientPhase * 0.2)
-                    .animation(AppAnimation.breathing(duration: 3.0), value: gradientPhase)
-                
+                    .blur(radius: 12)
+                    .frame(width: 100, height: 100)
+                    .opacity(0.15 + gradientPhase * 0.1)
+                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: gradientPhase)
+
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 80))
+                    .font(.system(size: 72))
                     .foregroundStyle(dynamicGradient)
-                    .symbolEffect(.bounce, options: .repeating)
+                    // Very subtle breathing effect instead of bounce
+                    .scaleEffect(1.0 + gradientPhase * 0.02)
+                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: gradientPhase)
             }
+            .frame(height: 100)
             .onAppear { gradientPhase = 1 }
             .onDisappear { gradientPhase = 0 }
 

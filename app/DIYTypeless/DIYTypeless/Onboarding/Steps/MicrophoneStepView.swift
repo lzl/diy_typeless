@@ -2,29 +2,16 @@ import SwiftUI
 
 struct MicrophoneStepView: View {
     @Bindable var state: OnboardingState
-    @State private var pulsePhase: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                // Pulsing background rings
-                if !state.permissions.microphone {
-                    pulsingRings
-                }
-                
-                PermissionIcon(
-                    icon: "mic.fill",
-                    granted: state.permissions.microphone
-                )
-                .breathing(intensity: state.permissions.microphone ? 0.02 : 0.05, duration: 1.5)
-            }
-            .onAppear {
-                if !state.permissions.microphone {
-                    withAnimation(AppAnimation.breathing(duration: 2.0).repeatForever(autoreverses: true)) {
-                        pulsePhase = 1
-                    }
-                }
-            }
+        VStack(spacing: 16) {
+            PermissionIcon(
+                icon: "mic.fill",
+                granted: state.permissions.microphone
+            )
+            .frame(height: 100)
+            .breathing(intensity: 0.03, duration: 3.0)
+            .opacity(state.permissions.microphone ? 1.0 : 0.7)
 
             VStack(spacing: 8) {
                 Text("Microphone Access")
@@ -58,19 +45,5 @@ struct MicrophoneStepView: View {
             .animation(AppAnimation.stateChange, value: state.permissions.microphone)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private var pulsingRings: some View {
-        ForEach(0..<3) { index in
-            let baseSize = 80 + CGFloat(index) * 30
-            let size = baseSize + pulsePhase * 20
-            let opacity = 1 - pulsePhase * 0.3 * CGFloat(index + 1)
-            let colorOpacity = 0.3 - Double(index) * 0.08
-            
-            Circle()
-                .stroke(Color.brandPrimary.opacity(colorOpacity), lineWidth: 2)
-                .frame(width: size, height: size)
-                .opacity(opacity)
-        }
     }
 }

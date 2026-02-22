@@ -48,14 +48,28 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
 struct OnboardingWindow: View {
     @Bindable var state: OnboardingState
-    @State private var previousStep: OnboardingStep = .welcome
+    @State private var transitionDirection: TransitionDirection = .forward
 
-    private var asymmetricTransition: AnyTransition {
-        let isForward = state.step.rawValue > previousStep.rawValue
-        return .asymmetric(
-            insertion: .move(edge: isForward ? .trailing : .leading).combined(with: .opacity),
-            removal: .move(edge: isForward ? .leading : .trailing).combined(with: .opacity)
-        )
+    enum TransitionDirection {
+        case forward
+        case backward
+    }
+
+    private var transition: AnyTransition {
+        switch transitionDirection {
+        case .forward:
+            // Continue: current slides left, new comes from right
+            return .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+        case .backward:
+            // Back: current slides right, new comes from left
+            return .asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            )
+        }
     }
 
     var body: some View {
@@ -74,9 +88,6 @@ struct OnboardingWindow: View {
         .padding(.horizontal, 40)
         .frame(minWidth: 480, minHeight: 440)
         .background(Color(NSColor.windowBackgroundColor))
-        .onChange(of: state.step) { oldValue, newValue in
-            previousStep = oldValue
-        }
     }
 
     private var stepIndicator: some View {
@@ -95,22 +106,22 @@ struct OnboardingWindow: View {
         switch state.step {
         case .welcome:
             WelcomeStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         case .microphone:
             MicrophoneStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         case .accessibility:
             AccessibilityStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         case .groqKey:
             GroqKeyStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         case .geminiKey:
             GeminiKeyStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         case .completion:
             CompletionStepView(state: state)
-                .transition(asymmetricTransition)
+                .transition(transition)
         }
     }
 
@@ -118,6 +129,7 @@ struct OnboardingWindow: View {
         HStack {
             if state.step != .welcome {
                 Button("Back") {
+                    transitionDirection = .backward
                     withAnimation(AppAnimation.pageTransition) {
                         state.goBack()
                     }
@@ -135,6 +147,7 @@ struct OnboardingWindow: View {
                 .buttonStyle(PrimaryButtonStyle())
             } else {
                 Button("Continue") {
+                    transitionDirection = .forward
                     withAnimation(AppAnimation.pageTransition) {
                         state.goNext()
                     }

@@ -27,19 +27,9 @@ struct WaveformView: View {
 private struct WaveformBar: View {
     let level: CGFloat
     
-    /// Map audio level to color (low = brandPrimary, high = brandAccent)
+    /// Bar color - white with opacity based on level for subtle effect
     private var barColor: Color {
-        // Normalize level to 0.0-1.0 range for interpolation
-        let normalizedLevel = min(1.0, max(0.0, level))
-        
-        // Interpolate between brandPrimary (low) and brandAccent (high)
-        if normalizedLevel < 0.5 {
-            // Low to medium: brandPrimary with increasing opacity
-            return .brandPrimary.opacity(0.6 + (normalizedLevel * 0.4))
-        } else {
-            // Medium to high: blend toward brandAccent
-            return .brandAccent.opacity(0.7 + ((normalizedLevel - 0.5) * 0.6))
-        }
+        .white.opacity(0.8 + (level * 0.2))
     }
     
     /// Calculate bar height based on level
