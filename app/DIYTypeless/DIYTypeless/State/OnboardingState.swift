@@ -5,7 +5,6 @@ enum OnboardingStep: Int, CaseIterable {
     case welcome
     case microphone
     case accessibility
-    case asrProvider
     case groqKey
     case geminiKey
     case completion
@@ -46,11 +45,6 @@ enum ValidationState: Equatable {
 final class OnboardingState: ObservableObject {
     @Published var step: OnboardingStep = .welcome
     @Published var permissions = PermissionStatus(accessibility: false, microphone: false)
-    @Published var asrProvider: AsrProvider = AsrSettings.shared.currentProvider {
-        didSet {
-            AsrSettings.shared.currentProvider = asrProvider
-        }
-    }
     @Published var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
@@ -79,16 +73,8 @@ final class OnboardingState: ObservableObject {
             return permissions.microphone
         case .accessibility:
             return permissions.accessibility
-        case .asrProvider:
-            // Just a selection step, always allow proceeding
-            return true
         case .groqKey:
-            // Show different content based on ASR provider
-            if asrProvider == .local {
-                return LocalAsrManager.shared.isModelLoaded
-            } else {
-                return groqValidation.isSuccess
-            }
+            return groqValidation.isSuccess
         case .geminiKey:
             return geminiValidation.isSuccess
         case .completion:
@@ -173,8 +159,6 @@ final class OnboardingState: ObservableObject {
             hasCompletedWelcome = true
         }
         if let next = step.next {
-            // After groqKey step with Local ASR, we already showed download view
-            // and now should go to geminiKey (which is next in the enum)
             step = next
         }
     }
@@ -280,20 +264,9 @@ final class OnboardingState: ObservableObject {
             return
         }
 
-        // Check if ASR provider is selected and configured
-        let settings = AsrSettings.shared
-        if settings.currentProvider == .local {
-            // Local ASR: check if model is loaded (at groqKey step which shows download view)
-            if !LocalAsrManager.shared.isModelLoaded {
-                step = .groqKey
-                return
-            }
-        } else {
-            // Groq ASR: check API key
-            if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                step = .groqKey
-                return
-            }
+        if groqKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            step = .groqKey
+            return
         }
 
         if geminiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

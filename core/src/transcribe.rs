@@ -1,98 +1,15 @@
 use crate::config::{GROQ_TRANSCRIBE_URL, GROQ_WHISPER_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
-use crate::qwen_asr_ffi::QwenTranscriber;
 use reqwest::StatusCode;
-use std::path::Path;
-use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::Duration;
-
-// Global local transcriber (lazy loaded)
-static LOCAL_TRANSCRIBER: OnceLock<QwenTranscriber> = OnceLock::new();
-
-/// Initialize local ASR model
-pub fn init_local_asr(model_dir: &Path) -> Result<(), CoreError> {
-    let transcriber = QwenTranscriber::new(model_dir)?;
-    LOCAL_TRANSCRIBER
-        .set(transcriber)
-        .map_err(|_| CoreError::Config("Local ASR already initialized".to_string()))?;
-    Ok(())
-}
-
-/// Check if local ASR is initialized
-pub fn is_local_asr_available() -> bool {
-    LOCAL_TRANSCRIBER.get().is_some()
-}
-
-/// Transcribe using local Qwen3-ASR
-pub fn transcribe_wav_bytes_local(
-    wav_bytes: &[u8],
-    language: Option<&str>,
-) -> Result<String, CoreError> {
-    let transcriber = LOCAL_TRANSCRIBER
-        .get()
-        .ok_or_else(|| CoreError::Config("Local ASR not initialized".to_string()))?;
-
-    // Parse WAV to get samples
-    let samples = decode_wav_to_f32(wav_bytes)?;
-
-    let text = transcriber.transcribe_samples(&samples, 16000, language)?;
-    Ok(text)
-}
-
-/// Decode WAV to f32 samples (16kHz mono)
-fn decode_wav_to_f32(wav_bytes: &[u8]) -> Result<Vec<f32>, CoreError> {
-    use hound::WavReader;
-    use std::io::Cursor;
-
-    let reader = WavReader::new(Cursor::new(wav_bytes))
-        .map_err(|e| CoreError::AudioProcessing(format!("Invalid WAV: {}", e)))?;
-
-    let spec = reader.spec();
-    if spec.sample_rate != 16000 {
-        return Err(CoreError::AudioProcessing(format!(
-            "Expected 16kHz, got {}Hz",
-            spec.sample_rate
-        )));
-    }
-
-    let samples: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Int => reader
-            .into_samples::<i16>()
-            .map(|s| s.map(|v| v as f32 / 32768.0))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| CoreError::AudioProcessing(format!("WAV decode error: {}", e)))?,
-        hound::SampleFormat::Float => reader
-            .into_samples::<f32>()
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| CoreError::AudioProcessing(format!("WAV decode error: {}", e)))?,
-    };
-
-    // If multi-channel, convert to mono
-    let channels = spec.channels as usize;
-    if channels > 1 {
-        let mono_samples: Vec<f32> = samples
-            .chunks(channels)
-            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
-            .collect();
-        Ok(mono_samples)
-    } else {
-        Ok(samples)
-    }
-}
 
 pub fn transcribe_wav_bytes(
     api_key: &str,
     wav_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
-    // If api_key is empty and local ASR is available, use local ASR
-    if api_key.is_empty() && is_local_asr_available() {
-        return transcribe_wav_bytes_local(wav_bytes, language);
-    }
-
-    // Otherwise use Groq API
     let client = get_http_client();
 
     for attempt in 0..3 {

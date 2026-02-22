@@ -243,16 +243,6 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_GET_STREAMING_TEXT
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_GET_STREAMING_TEXT
-RustBuffer uniffi_diy_typeless_core_fn_func_get_streaming_text(uint64_t session_id, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_INIT_LOCAL_ASR
-void uniffi_diy_typeless_core_fn_func_init_local_asr(RustBuffer model_dir, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
@@ -262,11 +252,6 @@ RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, Rust
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING
 void uniffi_diy_typeless_core_fn_func_start_recording(RustCallStatus *_Nonnull out_status
     
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_STREAMING_SESSION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_STREAMING_SESSION
-uint64_t uniffi_diy_typeless_core_fn_func_start_streaming_session(RustBuffer model_dir, RustBuffer language, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_RECORDING
@@ -279,11 +264,6 @@ RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording(RustCallStatus *_Nonn
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_RECORDING_WAV
 RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording_wav(RustCallStatus *_Nonnull out_status
     
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_STREAMING_SESSION
-RustBuffer uniffi_diy_typeless_core_fn_func_stop_streaming_session(uint64_t session_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
@@ -563,18 +543,6 @@ void ffi_diy_typeless_core_rust_future_free_void(uint64_t handle
 void ffi_diy_typeless_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_TEXT
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_GET_STREAMING_TEXT
-uint16_t uniffi_diy_typeless_core_checksum_func_get_streaming_text(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_INIT_LOCAL_ASR
-uint16_t uniffi_diy_typeless_core_checksum_func_init_local_asr(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_POLISH_TEXT
 uint16_t uniffi_diy_typeless_core_checksum_func_polish_text(void
@@ -587,12 +555,6 @@ uint16_t uniffi_diy_typeless_core_checksum_func_start_recording(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_STREAMING_SESSION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_STREAMING_SESSION
-uint16_t uniffi_diy_typeless_core_checksum_func_start_streaming_session(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording(void
@@ -602,12 +564,6 @@ uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING_WAV
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING_WAV
 uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording_wav(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_STREAMING_SESSION
-uint16_t uniffi_diy_typeless_core_checksum_func_stop_streaming_session(void
     
 );
 #endif

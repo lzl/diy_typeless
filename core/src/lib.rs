@@ -4,15 +4,10 @@ mod error;
 mod http_client;
 mod pipeline;
 mod polish;
-mod qwen_asr_ffi;
-mod streaming_asr;
 mod transcribe;
-
-use std::sync::Arc;
 
 pub use audio::WavData;
 pub use error::CoreError;
-pub use streaming_asr::StreamingHandle;
 
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {
@@ -46,83 +41,6 @@ pub fn polish_text(
     context: Option<String>,
 ) -> Result<String, CoreError> {
     polish::polish_text(&api_key, &raw_text, context.as_deref())
-}
-
-// Local ASR related functions
-#[uniffi::export]
-pub fn init_local_asr(model_dir: String) -> Result<(), CoreError> {
-    let path = std::path::Path::new(&model_dir);
-    transcribe::init_local_asr(path)
-}
-
-/// Global storage for active streaming sessions
-/// This allows Swift to reference sessions by ID and poll for results
-static ACTIVE_STREAMING_SESSIONS: std::sync::Mutex<Vec<(u64, Arc<crate::streaming_asr::StreamingHandle>)>> =
-    std::sync::Mutex::new(Vec::new());
-
-static NEXT_SESSION_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-
-/// Start a streaming transcription session
-/// Returns a session ID that can be used to poll for results and stop the session
-/// This is only used for local ASR (streaming mode)
-#[uniffi::export]
-pub fn start_streaming_session(
-    model_dir: String,
-    language: Option<String>,
-) -> Result<u64, CoreError> {
-    use crate::qwen_asr_ffi::QwenTranscriber;
-    use crate::streaming_asr::start_streaming_transcription;
-
-    let path = std::path::Path::new(&model_dir);
-    let transcriber = Arc::new(QwenTranscriber::new(path)?);
-
-    let handle = start_streaming_transcription(
-        transcriber,
-        language.as_deref(),
-        |_token| {
-            // Token callback is handled internally, Swift polls for results
-        },
-    )?;
-
-    let session_id = NEXT_SESSION_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-    sessions.push((session_id, Arc::new(handle)));
-    Ok(session_id)
-}
-
-/// Get the current partial transcription for a streaming session
-/// Returns the accumulated text so far, or empty string if session not found
-#[uniffi::export]
-pub fn get_streaming_text(session_id: u64) -> String {
-    let sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-    sessions.iter()
-        .find(|(id, _)| *id == session_id)
-        .map(|(_, handle)| handle.current_text())
-        .unwrap_or_default()
-}
-
-/// Stop a streaming transcription session and return the final text
-/// This removes the session from the active sessions list
-#[uniffi::export]
-pub fn stop_streaming_session(session_id: u64) -> Result<String, CoreError> {
-    let handle = {
-        let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-        let idx = sessions.iter().position(|(id, _)| *id == session_id);
-        idx.map(|i| sessions.remove(i).1).ok_or_else(|| {
-            CoreError::Transcription("Streaming session not found".to_string())
-        })?
-    };
-
-    match Arc::try_unwrap(handle) {
-        Ok(h) => h.stop(),
-        Err(arc) => {
-            let mut sessions = ACTIVE_STREAMING_SESSIONS.lock().unwrap();
-            sessions.push((session_id, arc));
-            Err(CoreError::Transcription(
-                "Streaming session is still in use".to_string()
-            ))
-        }
-    }
 }
 
 /// Warm up TLS connection to Groq API
