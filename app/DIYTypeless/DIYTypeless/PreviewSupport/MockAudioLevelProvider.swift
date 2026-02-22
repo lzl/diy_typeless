@@ -23,12 +23,16 @@ final class MockAudioLevelProvider: AudioLevelProviding {
     }
 
     func start() {
+        guard timer == nil else { return }
+
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor in
                 self.generateNextLevel()
             }
         }
+
+        RunLoop.current.add(timer!, forMode: .common)
     }
 
     func stop() {
