@@ -2,8 +2,17 @@ import SwiftUI
 
 struct CapsuleView: View {
     let state: RecordingState
-    @State private var audioMonitor = AudioLevelMonitor()
+    private let audioMonitor: AudioLevelProviding
     @State private var progress: CGFloat = 0
+
+    /// Creates a capsule view with a recording state and optional audio level provider
+    /// - Parameters:
+    ///   - state: The recording state to display
+    ///   - audioMonitor: Provider for audio level data (defaults to AudioLevelMonitor)
+    init(state: RecordingState, audioMonitor: AudioLevelProviding = AudioLevelMonitor()) {
+        self.state = state
+        self.audioMonitor = audioMonitor
+    }
 
     private let capsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
