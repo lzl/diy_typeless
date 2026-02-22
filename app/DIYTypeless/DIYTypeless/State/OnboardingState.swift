@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum OnboardingStep: Int, CaseIterable {
     case welcome
@@ -42,25 +42,26 @@ enum ValidationState: Equatable {
 }
 
 @MainActor
-final class OnboardingState: ObservableObject {
-    @Published var step: OnboardingStep = .welcome
-    @Published var permissions = PermissionStatus(accessibility: false, microphone: false)
-    @Published var groqKey: String = "" {
+@Observable
+final class OnboardingState {
+    var step: OnboardingStep = .welcome
+    var permissions = PermissionStatus(accessibility: false, microphone: false)
+    var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
                 groqValidation = .idle
             }
         }
     }
-    @Published var geminiKey: String = "" {
+    var geminiKey: String = "" {
         didSet {
             if geminiKey != oldValue {
                 geminiValidation = .idle
             }
         }
     }
-    @Published var groqValidation: ValidationState = .idle
-    @Published var geminiValidation: ValidationState = .idle
+    var groqValidation: ValidationState = .idle
+    var geminiValidation: ValidationState = .idle
 
     var onCompletion: (() -> Void)?
     var onRequestRestart: (() -> Void)?
@@ -83,7 +84,7 @@ final class OnboardingState: ObservableObject {
     }
 
     private let permissionManager: PermissionManager
-    private let keyStore: ApiKeyStore
+    private let apiKeyRepository: ApiKeyRepository
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
@@ -95,16 +96,16 @@ final class OnboardingState: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: Self.hasCompletedWelcomeKey) }
     }
 
-    init(permissionManager: PermissionManager, keyStore: ApiKeyStore) {
+    init(permissionManager: PermissionManager, apiKeyRepository: ApiKeyRepository) {
         self.permissionManager = permissionManager
-        self.keyStore = keyStore
+        self.apiKeyRepository = apiKeyRepository
         refreshPermissions()
         refresh()
     }
 
     func refresh() {
-        groqKey = keyStore.loadGroqKey() ?? ""
-        geminiKey = keyStore.loadGeminiKey() ?? ""
+        groqKey = apiKeyRepository.loadKey(for: .groq) ?? ""
+        geminiKey = apiKeyRepository.loadKey(for: .gemini) ?? ""
         groqValidation = groqKey.isEmpty ? .idle : .success
         geminiValidation = geminiKey.isEmpty ? .idle : .success
         refreshPermissions()
@@ -217,7 +218,7 @@ final class OnboardingState: ObservableObject {
                 try await validateGroqKeyValue(trimmed)
                 if Task.isCancelled { return }
                 groqValidation = .success
-                keyStore.saveGroqKey(trimmed)
+                try? apiKeyRepository.saveKey(trimmed, for: .groq)
             } catch {
                 if Task.isCancelled { return }
                 groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
@@ -240,7 +241,7 @@ final class OnboardingState: ObservableObject {
                 try await validateGeminiKeyValue(trimmed)
                 if Task.isCancelled { return }
                 geminiValidation = .success
-                keyStore.saveGeminiKey(trimmed)
+                try? apiKeyRepository.saveKey(trimmed, for: .gemini)
             } catch {
                 if Task.isCancelled { return }
                 geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))

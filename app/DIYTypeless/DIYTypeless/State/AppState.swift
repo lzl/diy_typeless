@@ -1,6 +1,6 @@
 import AppKit
-import Combine
 import Foundation
+import Observation
 
 struct PermissionStatus {
     var accessibility: Bool
@@ -12,7 +12,8 @@ struct PermissionStatus {
 }
 
 @MainActor
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     enum Phase {
         case onboarding
         case ready
@@ -21,12 +22,12 @@ final class AppState: ObservableObject {
     /// Delay before terminating app during restart to ensure new instance starts
     private static let restartTerminationDelay: TimeInterval = 0.5
 
-    @Published private(set) var phase: Phase = .onboarding
+    private(set) var phase: Phase = .onboarding
     let onboarding: OnboardingState
     let recording: RecordingState
 
     private let permissionManager: PermissionManager
-    private let keyStore: ApiKeyStore
+    private let apiKeyRepository: ApiKeyRepository
     private let keyMonitor: KeyMonitor
     private let outputManager: TextOutputManager
 
@@ -36,16 +37,17 @@ final class AppState: ObservableObject {
     private var isForcedOnboarding = false
     private var hasShownReadyConfirmation = false
 
-    init() {
+    init(apiKeyRepository: ApiKeyRepository? = nil) {
         permissionManager = PermissionManager()
-        keyStore = ApiKeyStore()
+        let repository = apiKeyRepository ?? KeychainApiKeyRepository()
+        self.apiKeyRepository = repository
         keyMonitor = KeyMonitor()
         outputManager = TextOutputManager()
 
-        onboarding = OnboardingState(permissionManager: permissionManager, keyStore: keyStore)
+        onboarding = OnboardingState(permissionManager: permissionManager, apiKeyRepository: repository)
         recording = RecordingState(
             permissionManager: permissionManager,
-            keyStore: keyStore,
+            apiKeyRepository: repository,
             keyMonitor: keyMonitor,
             outputManager: outputManager
         )
@@ -66,7 +68,9 @@ final class AppState: ObservableObject {
 
     func start() {
         uniffiEnsureDiyTypelessCoreInitialized()
-        keyStore.preloadKeys()
+        if let repository = apiKeyRepository as? KeychainApiKeyRepository {
+            repository.preloadKeys()
+        }
         configureWindows()
         // Force initial phase setup since phase defaults to .onboarding
         setPhase(checkReadiness() ? .ready : .onboarding, force: true)
@@ -120,8 +124,8 @@ final class AppState: ObservableObject {
     /// Checks if all requirements are met for the app to be ready.
     private func checkReadiness() -> Bool {
         let status = permissionManager.currentStatus()
-        let geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
         // All required: permissions, Gemini key (for polishing), Groq key (for transcription)
         return status.allGranted && !geminiKey.isEmpty && !groqKey.isEmpty

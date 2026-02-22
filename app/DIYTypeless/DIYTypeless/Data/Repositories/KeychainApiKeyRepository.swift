@@ -1,9 +1,15 @@
 import Foundation
 import Security
 
-final class ApiKeyStore {
+enum ApiKeyRepositoryError: Error {
+    case saveFailed(OSStatus)
+    case deleteFailed(OSStatus)
+}
+
+final class KeychainApiKeyRepository: ApiKeyRepository {
     private let service = "com.lizunlong.DIYTypeless"
     private let combinedAccount = "api_keys"
+
     // Legacy identifiers for migration
     private let legacyService = "com.diytypeless.api"
     private let legacyGroqAccount = "groq_api_key"
@@ -11,8 +17,7 @@ final class ApiKeyStore {
 
     // Thread synchronization lock for cache access
     private let lock = NSLock()
-    private var cachedGroqKey: String?
-    private var cachedGeminiKey: String?
+    private var cache: [ApiProvider: String] = [:]
     private var cacheLoaded = false
 
     /// Call once at startup to preload all keys into memory cache.
@@ -26,22 +31,22 @@ final class ApiKeyStore {
         // Try loading from combined storage (current service) first
         if let data = loadDataFromKeychain(account: combinedAccount),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-            cachedGroqKey = dict["groq"]
-            cachedGeminiKey = dict["gemini"]
+            cache[.groq] = dict["groq"]
+            cache[.gemini] = dict["gemini"]
         } else if let data = loadDataFromKeychain(account: combinedAccount, service: legacyService),
                   let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             // Migrate from legacy service (com.diytypeless.api) combined storage
-            cachedGroqKey = dict["groq"]
-            cachedGeminiKey = dict["gemini"]
+            cache[.groq] = dict["groq"]
+            cache[.gemini] = dict["gemini"]
             if saveAllKeysInternal() {
                 deleteFromKeychain(account: combinedAccount, service: legacyService)
             }
         } else {
             // Migrate from legacy separate accounts (oldest format)
-            cachedGroqKey = loadStringFromKeychain(account: legacyGroqAccount, service: legacyService)
-            cachedGeminiKey = loadStringFromKeychain(account: legacyGeminiAccount, service: legacyService)
+            cache[.groq] = loadStringFromKeychain(account: legacyGroqAccount, service: legacyService)
+            cache[.gemini] = loadStringFromKeychain(account: legacyGeminiAccount, service: legacyService)
 
-            if cachedGroqKey != nil || cachedGeminiKey != nil {
+            if cache[.groq] != nil || cache[.gemini] != nil {
                 if saveAllKeysInternal() {
                     deleteFromKeychain(account: legacyGroqAccount, service: legacyService)
                     deleteFromKeychain(account: legacyGeminiAccount, service: legacyService)
@@ -52,32 +57,29 @@ final class ApiKeyStore {
         cacheLoaded = true
     }
 
-    func saveGroqKey(_ key: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        cachedGroqKey = key
-        _ = saveAllKeysInternal()
-    }
-
-    func saveGeminiKey(_ key: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        cachedGeminiKey = key
-        _ = saveAllKeysInternal()
-    }
-
-    func loadGroqKey() -> String? {
+    func loadKey(for provider: ApiProvider) -> String? {
         ensureCacheLoaded()
         lock.lock()
         defer { lock.unlock() }
-        return cachedGroqKey
+        return cache[provider]
     }
 
-    func loadGeminiKey() -> String? {
-        ensureCacheLoaded()
+    func saveKey(_ key: String, for provider: ApiProvider) throws {
         lock.lock()
         defer { lock.unlock() }
-        return cachedGeminiKey
+        cache[provider] = key
+        if !saveAllKeysInternal() {
+            throw ApiKeyRepositoryError.saveFailed(errSecIO)
+        }
+    }
+
+    func deleteKey(for provider: ApiProvider) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.removeValue(forKey: provider)
+        if !saveAllKeysInternal() {
+            throw ApiKeyRepositoryError.deleteFailed(errSecIO)
+        }
     }
 
     private func ensureCacheLoaded() {
@@ -94,10 +96,10 @@ final class ApiKeyStore {
     @discardableResult
     private func saveAllKeysInternal() -> Bool {
         var dict: [String: String] = [:]
-        if let groq = cachedGroqKey, !groq.isEmpty {
+        if let groq = cache[.groq], !groq.isEmpty {
             dict["groq"] = groq
         }
-        if let gemini = cachedGeminiKey, !gemini.isEmpty {
+        if let gemini = cache[.gemini], !gemini.isEmpty {
             dict["gemini"] = gemini
         }
         guard let data = try? JSONEncoder().encode(dict) else { return false }

@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum CapsuleState: Equatable {
     case hidden
@@ -11,16 +11,19 @@ enum CapsuleState: Equatable {
 }
 
 @MainActor
-final class RecordingState: ObservableObject {
-    @Published private(set) var capsuleState: CapsuleState = .hidden
+@Observable
+final class RecordingState {
+    private(set) var capsuleState: CapsuleState = .hidden
 
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
 
     private let permissionManager: PermissionManager
-    private let keyStore: ApiKeyStore
+    private let apiKeyRepository: ApiKeyRepository
     private let keyMonitor: KeyMonitor
     private let outputManager: TextOutputManager
+    private let transcriptionUseCase: TranscriptionUseCaseProtocol
+    private let recordingControlUseCase: RecordingControlUseCaseProtocol
     private let contextDetector = AppContextDetector()
 
     private var groqKey: String = ""
@@ -32,23 +35,27 @@ final class RecordingState: ObservableObject {
 
     init(
         permissionManager: PermissionManager,
-        keyStore: ApiKeyStore,
+        apiKeyRepository: ApiKeyRepository,
         keyMonitor: KeyMonitor,
-        outputManager: TextOutputManager
+        outputManager: TextOutputManager,
+        transcriptionUseCase: TranscriptionUseCaseProtocol = TranscriptionPipelineUseCase(),
+        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCase()
     ) {
         self.permissionManager = permissionManager
-        self.keyStore = keyStore
+        self.apiKeyRepository = apiKeyRepository
         self.keyMonitor = keyMonitor
         self.outputManager = outputManager
+        self.transcriptionUseCase = transcriptionUseCase
+        self.recordingControlUseCase = recordingControlUseCase
 
         keyMonitor.onFnDown = { [weak self] in
             Task { @MainActor in
-                self?.handleKeyDown()
+                await self?.handleKeyDown()
             }
         }
         keyMonitor.onFnUp = { [weak self] in
             Task { @MainActor in
-                self?.handleKeyUp()
+                await self?.handleKeyUp()
             }
         }
     }
@@ -97,7 +104,7 @@ final class RecordingState: ObservableObject {
         }
     }
 
-    private func handleKeyDown() {
+    private func handleKeyDown() async {
         if isProcessing, !isRecording {
             handleCancel()
             return
@@ -129,13 +136,12 @@ final class RecordingState: ObservableObject {
         }
 
         // Warm up TLS connections in background to reduce latency
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            _ = try? warmupGroqConnection()
-            _ = try? warmupGeminiConnection()
+        Task {
+            await recordingControlUseCase.warmupConnections()
         }
 
         do {
-            try startRecording()
+            try await recordingControlUseCase.startRecording()
             isRecording = true
             capsuleState = .recording
             capturedContext = contextDetector.captureContext().formatted
@@ -144,7 +150,7 @@ final class RecordingState: ObservableObject {
         }
     }
 
-    private func handleKeyUp() {
+    private func handleKeyUp() async {
         guard isRecording else { return }
 
         guard !isProcessing else { return }
@@ -156,34 +162,27 @@ final class RecordingState: ObservableObject {
 
         capsuleState = .transcribing
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
+        do {
+            let result = try await transcriptionUseCase.execute(
+                groqKey: groqKey,
+                geminiKey: geminiKey,
+                context: capturedContext
+            )
 
-            do {
-                let wavData = try stopRecording()
-                guard self.currentGeneration == gen else { return }
+            guard currentGeneration == gen else { return }
 
-                let rawText = try transcribeWavBytes(apiKey: self.groqKey, wavBytes: wavData.bytes, language: nil)
-                guard self.currentGeneration == gen else { return }
+            capsuleState = .polishing
 
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.capsuleState = .polishing
-                }
+            // Short delay to show polishing state before completing
+            try? await Task.sleep(for: .milliseconds(100))
 
-                let outputText = (try? polishText(apiKey: self.geminiKey, rawText: rawText, context: self.capturedContext)) ?? rawText
+            guard currentGeneration == gen else { return }
 
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.finishOutput(raw: rawText, polished: outputText)
-                }
-            } catch {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.currentGeneration == gen else { return }
-                    self.showError(error.localizedDescription)
-                    self.isProcessing = false
-                }
-            }
+            finishOutput(raw: result.rawText, polished: result.polishedText)
+        } catch {
+            guard currentGeneration == gen else { return }
+            showError(error.localizedDescription)
+            isProcessing = false
         }
     }
 
@@ -210,7 +209,7 @@ final class RecordingState: ObservableObject {
     }
 
     private func refreshKeys() {
-        groqKey = (keyStore.loadGroqKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        geminiKey = (keyStore.loadGeminiKey() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

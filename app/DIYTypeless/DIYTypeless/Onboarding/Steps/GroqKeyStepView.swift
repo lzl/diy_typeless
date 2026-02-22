@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct GroqKeyStepView: View {
-    @ObservedObject var state: OnboardingState
+    @Bindable var state: OnboardingState
 
     var body: some View {
         VStack(spacing: 24) {
