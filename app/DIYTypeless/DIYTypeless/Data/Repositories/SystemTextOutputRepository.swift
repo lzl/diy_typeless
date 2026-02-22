@@ -1,11 +1,6 @@
 import AppKit
 
-enum OutputResult: Equatable {
-    case pasted
-    case copied
-}
-
-final class TextOutputManager {
+final class SystemTextOutputRepository: TextOutputRepository {
     func deliver(text: String) -> OutputResult {
         copyToClipboard(text)
         if let element = focusedTextElement(), isEditableTextElement(element) {
@@ -88,4 +83,3 @@ final class TextOutputManager {
         return true
     }
 }
-

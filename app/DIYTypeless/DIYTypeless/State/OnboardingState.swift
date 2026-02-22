@@ -18,29 +18,6 @@ enum OnboardingStep: Int, CaseIterable {
     }
 }
 
-enum ValidationState: Equatable {
-    case idle
-    case validating
-    case success
-    case failure(String)
-
-    var isSuccess: Bool {
-        if case .success = self { return true }
-        return false
-    }
-
-    var message: String? {
-        switch self {
-        case .idle, .success:
-            return nil
-        case .validating:
-            return "Validating..."
-        case .failure(let message):
-            return message
-        }
-    }
-}
-
 @MainActor
 @Observable
 final class OnboardingState {
@@ -83,7 +60,7 @@ final class OnboardingState {
         }
     }
 
-    private let permissionManager: PermissionManager
+    private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
@@ -96,8 +73,8 @@ final class OnboardingState {
         set { UserDefaults.standard.set(newValue, forKey: Self.hasCompletedWelcomeKey) }
     }
 
-    init(permissionManager: PermissionManager, apiKeyRepository: ApiKeyRepository) {
-        self.permissionManager = permissionManager
+    init(permissionRepository: PermissionRepository, apiKeyRepository: ApiKeyRepository) {
+        self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
         refreshPermissions()
         refresh()
@@ -144,7 +121,7 @@ final class OnboardingState {
     func startPolling() {
         permissionTimer?.invalidate()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.refreshPermissions()
             }
         }
@@ -183,24 +160,25 @@ final class OnboardingState {
     }
 
     func requestMicrophonePermission() {
-        permissionManager.requestMicrophone { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.refreshPermissions()
+        Task {
+            _ = await permissionRepository.requestMicrophone()
+            await MainActor.run {
+                refreshPermissions()
             }
         }
     }
 
     func requestAccessibilityPermission() {
-        _ = permissionManager.requestAccessibility()
+        _ = permissionRepository.requestAccessibility()
         refreshPermissions()
     }
 
     func openAccessibilitySettings() {
-        permissionManager.openAccessibilitySettings()
+        permissionRepository.openAccessibilitySettings()
     }
 
     func openMicrophoneSettings() {
-        permissionManager.openMicrophoneSettings()
+        permissionRepository.openMicrophoneSettings()
     }
 
     func validateGroqKey() {
@@ -279,7 +257,7 @@ final class OnboardingState {
     }
 
     private func refreshPermissions() {
-        permissions = permissionManager.currentStatus()
+        permissions = permissionRepository.currentStatus
     }
 
     private func errorMessage(for error: Error, provider: String) -> String {
@@ -337,10 +315,3 @@ final class OnboardingState {
     }
 }
 
-private struct ValidationError: LocalizedError {
-    let message: String
-
-    var errorDescription: String? {
-        message
-    }
-}

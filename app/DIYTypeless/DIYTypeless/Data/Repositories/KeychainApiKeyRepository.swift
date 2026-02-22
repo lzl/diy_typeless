@@ -6,7 +6,8 @@ enum ApiKeyRepositoryError: Error {
     case deleteFailed(OSStatus)
 }
 
-final class KeychainApiKeyRepository: ApiKeyRepository {
+// NSLock provides thread safety, @unchecked Sendable is appropriate
+final class KeychainApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
     private let service = "com.lizunlong.DIYTypeless"
     private let combinedAccount = "api_keys"
 

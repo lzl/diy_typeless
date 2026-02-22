@@ -18,15 +18,18 @@ struct WaveformView: View {
 }
 
 @MainActor
-final class AudioLevelMonitor: ObservableObject {
-    @Published var levels: [CGFloat] = Array(repeating: 0.1, count: 20)
+@Observable
+final class AudioLevelMonitor {
+    var levels: [CGFloat] = Array(repeating: 0.1, count: 20)
 
     private var audioEngine: AVAudioEngine?
     private var isMonitoring = false
 
     deinit {
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        audioEngine?.stop()
+        Task { @MainActor in
+            audioEngine?.inputNode.removeTap(onBus: 0)
+            audioEngine?.stop()
+        }
     }
 
     func start() {

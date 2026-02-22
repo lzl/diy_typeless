@@ -18,10 +18,10 @@ final class RecordingState {
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
 
-    private let permissionManager: PermissionManager
+    private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
-    private let keyMonitor: KeyMonitor
-    private let outputManager: TextOutputManager
+    private var keyMonitoringRepository: KeyMonitoringRepository
+    private let textOutputRepository: TextOutputRepository
     private let transcriptionUseCase: TranscriptionUseCaseProtocol
     private let recordingControlUseCase: RecordingControlUseCaseProtocol
     private let contextDetector = AppContextDetector()
@@ -31,29 +31,29 @@ final class RecordingState {
     private var isRecording = false
     private var isProcessing = false
     private var capturedContext: String?
-    nonisolated(unsafe) private var currentGeneration: Int = 0
+    private var currentGeneration: Int = 0
 
     init(
-        permissionManager: PermissionManager,
+        permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
-        keyMonitor: KeyMonitor,
-        outputManager: TextOutputManager,
+        keyMonitoringRepository: KeyMonitoringRepository,
+        textOutputRepository: TextOutputRepository,
         transcriptionUseCase: TranscriptionUseCaseProtocol = TranscriptionPipelineUseCase(),
         recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCase()
     ) {
-        self.permissionManager = permissionManager
+        self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
-        self.keyMonitor = keyMonitor
-        self.outputManager = outputManager
+        self.keyMonitoringRepository = keyMonitoringRepository
+        self.textOutputRepository = textOutputRepository
         self.transcriptionUseCase = transcriptionUseCase
         self.recordingControlUseCase = recordingControlUseCase
 
-        keyMonitor.onFnDown = { [weak self] in
+        keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
                 await self?.handleKeyDown()
             }
         }
-        keyMonitor.onFnUp = { [weak self] in
+        keyMonitoringRepository.onFnUp = { [weak self] in
             Task { @MainActor in
                 await self?.handleKeyUp()
             }
@@ -62,17 +62,17 @@ final class RecordingState {
 
     func activate() {
         refreshKeys()
-        let status = permissionManager.currentStatus()
+        let status = permissionRepository.currentStatus
         if status.allGranted {
-            _ = keyMonitor.start()
+            _ = keyMonitoringRepository.start()
         } else {
-            keyMonitor.stop()
+            keyMonitoringRepository.stop()
             onRequireOnboarding?()
         }
     }
 
     func deactivate() {
-        keyMonitor.stop()
+        keyMonitoringRepository.stop()
         if isRecording {
             _ = try? stopRecording()
             isRecording = false
@@ -110,7 +110,7 @@ final class RecordingState {
             return
         }
 
-        let status = permissionManager.currentStatus()
+        let status = permissionRepository.currentStatus
         guard status.allGranted else {
             showError("Permissions required")
             onRequireOnboarding?()
@@ -121,21 +121,18 @@ final class RecordingState {
 
         refreshKeys()
 
-        // Check Groq API key
         if groqKey.isEmpty {
             showError("Groq API key required")
             onRequireOnboarding?()
             return
         }
 
-        // Gemini always required (for polishing)
         if geminiKey.isEmpty {
             showError("Gemini API key required")
             onRequireOnboarding?()
             return
         }
 
-        // Warm up TLS connections in background to reduce latency
         Task {
             await recordingControlUseCase.warmupConnections()
         }
@@ -173,7 +170,6 @@ final class RecordingState {
 
             capsuleState = .polishing
 
-            // Short delay to show polishing state before completing
             try? await Task.sleep(for: .milliseconds(100))
 
             guard currentGeneration == gen else { return }
@@ -188,7 +184,7 @@ final class RecordingState {
 
     private func finishOutput(raw: String, polished: String) {
         onWillDeliverText?()
-        let result = outputManager.deliver(text: polished)
+        let result = textOutputRepository.deliver(text: polished)
         capsuleState = .done(result)
         isProcessing = false
         scheduleHide(after: 1.2, expectedState: .done(result))

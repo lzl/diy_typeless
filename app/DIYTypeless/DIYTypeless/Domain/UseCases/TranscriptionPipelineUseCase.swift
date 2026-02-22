@@ -11,13 +11,13 @@ final class TranscriptionPipelineUseCase: TranscriptionUseCaseProtocol {
         // 3. Polish text (async wrapped FFI)
         let polishedText = try await polishAsync(apiKey: geminiKey, rawText: rawText, context: context)
 
-        // 4. Determine output method and return result
-        let outputMethod: OutputMethod = .pasted // Default, actual delivery handled by caller
+        // 4. Determine output result and return
+        let outputResult: OutputResult = .pasted // Default, actual delivery handled by caller
 
         return TranscriptionResult(
             rawText: rawText,
             polishedText: polishedText,
-            outputMethod: outputMethod
+            outputResult: outputResult
         )
     }
 

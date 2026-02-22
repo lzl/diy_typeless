@@ -1,14 +1,9 @@
 import Foundation
 
-enum OutputMethod: Sendable {
-    case pasted
-    case copied
-}
-
 struct TranscriptionResult: Sendable {
     let rawText: String
     let polishedText: String
-    let outputMethod: OutputMethod
+    let outputResult: OutputResult
 }
 
 protocol TranscriptionUseCaseProtocol: Sendable {
