@@ -15,6 +15,7 @@ struct DIYTypelessApp: App {
         MenuBarExtra("DIY Typeless", systemImage: "waveform") {
             MenuBarView()
                 .environment(appState)
+                .environment(appState.recording)
         }
     }
 }

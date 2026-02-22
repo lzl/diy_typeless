@@ -48,6 +48,15 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
 struct OnboardingWindow: View {
     @Bindable var state: OnboardingState
+    @State private var previousStep: OnboardingStep = .welcome
+
+    private var asymmetricTransition: AnyTransition {
+        let isForward = state.step.rawValue > previousStep.rawValue
+        return .asymmetric(
+            insertion: .move(edge: isForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: isForward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,15 +74,18 @@ struct OnboardingWindow: View {
         .padding(.horizontal, 40)
         .frame(minWidth: 480, minHeight: 440)
         .background(Color(NSColor.windowBackgroundColor))
-        .animation(.easeInOut(duration: 0.2), value: state.step)
+        .onChange(of: state.step) { oldValue, newValue in
+            previousStep = oldValue
+        }
     }
 
     private var stepIndicator: some View {
         HStack(spacing: 8) {
             ForEach(OnboardingStep.allCases, id: \.self) { step in
                 Capsule()
-                    .fill(step.rawValue <= state.step.rawValue ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .fill(step.rawValue <= state.step.rawValue ? Color.brandPrimary : Color.secondary.opacity(0.3))
                     .frame(width: step == state.step ? 24 : 8, height: 8)
+                    .animation(AppAnimation.stateChange, value: state.step)
             }
         }
     }
@@ -83,16 +95,22 @@ struct OnboardingWindow: View {
         switch state.step {
         case .welcome:
             WelcomeStepView(state: state)
+                .transition(asymmetricTransition)
         case .microphone:
             MicrophoneStepView(state: state)
+                .transition(asymmetricTransition)
         case .accessibility:
             AccessibilityStepView(state: state)
+                .transition(asymmetricTransition)
         case .groqKey:
             GroqKeyStepView(state: state)
+                .transition(asymmetricTransition)
         case .geminiKey:
             GeminiKeyStepView(state: state)
+                .transition(asymmetricTransition)
         case .completion:
             CompletionStepView(state: state)
+                .transition(asymmetricTransition)
         }
     }
 
@@ -100,7 +118,9 @@ struct OnboardingWindow: View {
         HStack {
             if state.step != .welcome {
                 Button("Back") {
-                    state.goBack()
+                    withAnimation(AppAnimation.pageTransition) {
+                        state.goBack()
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
@@ -115,7 +135,9 @@ struct OnboardingWindow: View {
                 .buttonStyle(PrimaryButtonStyle())
             } else {
                 Button("Continue") {
-                    state.goNext()
+                    withAnimation(AppAnimation.pageTransition) {
+                        state.goNext()
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!state.canProceed)
@@ -124,36 +146,4 @@ struct OnboardingWindow: View {
     }
 }
 
-struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(.white)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isEnabled ? Color.accentColor : Color.secondary.opacity(0.5))
-            )
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(isEnabled ? .primary : .secondary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.secondary.opacity(0.12))
-            )
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-    }
-}
+// Button styles are now defined in Presentation/DesignSystem/ViewModifiers.swift
