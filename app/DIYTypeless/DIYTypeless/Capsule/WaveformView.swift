@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import os.log
 import SwiftUI
 
 // MARK: - Waveform View
@@ -51,10 +52,11 @@ private struct WaveformBar: View {
 final class AudioLevelMonitor: AudioLevelProviding {
     // MARK: AudioLevelProviding Protocol
     var levels: [CGFloat] = Array(repeating: 0.1, count: 20)
-    
+
     // MARK: Private Properties
     private var audioEngine: AVAudioEngine?
     private var isMonitoring = false
+    private let logger = Logger(subsystem: "com.diytypeless.app", category: "AudioLevelMonitor")
     
     // MARK: Initialization
     nonisolated init() {}
@@ -81,6 +83,7 @@ final class AudioLevelMonitor: AudioLevelProviding {
         do {
             try audioEngine.start()
         } catch {
+            logger.error("Failed to start audio engine: \(error.localizedDescription)")
             isMonitoring = false
         }
     }
