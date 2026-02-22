@@ -7,7 +7,7 @@ struct CompletionStepView: View {
         VStack(spacing: 24) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 80))
-                .foregroundColor(.green)
+                .foregroundColor(.brandPrimary)
 
             VStack(spacing: 8) {
                 Text("All Set")
@@ -37,9 +37,9 @@ private struct UsageRow: View {
         HStack(spacing: 12) {
             Text(step)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(.brandPrimary)
                 .frame(width: 20, height: 20)
-                .background(Circle().fill(Color.accentColor))
+                .background(Circle().fill(Color.brandPrimary.opacity(0.2)))
             Text(text)
                 .font(.system(size: 14))
         }

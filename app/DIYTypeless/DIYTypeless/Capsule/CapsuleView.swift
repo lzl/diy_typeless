@@ -1,18 +1,42 @@
 import SwiftUI
 
 struct CapsuleView: View {
-    @Bindable var state: RecordingState
-    @State private var audioMonitor = AudioLevelMonitor()
+    let state: RecordingState
+    private let audioMonitor: AudioLevelProviding
     @State private var progress: CGFloat = 0
+
+    /// Creates a capsule view with a recording state and optional audio level provider
+    /// - Parameters:
+    ///   - state: The recording state to display
+    ///   - audioMonitor: Provider for audio level data (defaults to AudioLevelMonitor)
+    init(state: RecordingState, audioMonitor: AudioLevelProviding = AudioLevelMonitor()) {
+        self.state = state
+        self.audioMonitor = audioMonitor
+    }
 
     private let capsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
 
     var body: some View {
         ZStack {
-            // Background with progress
+            // Subtle gradient background for depth
             Capsule(style: .continuous)
-                .fill(Color(white: 0.12))
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(white: 0.18),
+                            Color(white: 0.12),
+                            Color(white: 0.10)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            // Subtle top edge highlight
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                .padding(0.5)
 
             // Progress overlay for transcribing/polishing
             if case .transcribing = state.capsuleState {
@@ -25,7 +49,7 @@ struct CapsuleView: View {
             content
         }
         .frame(width: capsuleWidth, height: capsuleHeight)
-        .onChange(of: state.capsuleState) { newState in
+        .onChange(of: state.capsuleState) { _, newState in
             handleStateChange(newState)
         }
     }
@@ -34,7 +58,7 @@ struct CapsuleView: View {
     private var content: some View {
         switch state.capsuleState {
         case .recording:
-            WaveformView(levels: audioMonitor.levels)
+            WaveformView(audioProvider: audioMonitor)
                 .frame(width: capsuleWidth - 32)
 
         case .transcribing:
