@@ -5,9 +5,15 @@ import SwiftUI
 
 extension Color {
     // MARK: Background Colors
-    static let appBackground = Color(hex: "#0A0A0F")
-    static let appBackgroundSecondary = Color(hex: "#141419")
-    static let appSurface = Color(hex: "#1C1C24")
+    static var appBackground: Color {
+        Color(nsColor: .windowBackgroundColor)
+    }
+    static var appBackgroundSecondary: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+    static var appSurface: Color {
+        Color(nsColor: .controlColor)
+    }
 
     // MARK: Brand Colors
     static let brandPrimary = Color(hex: "#0D9488")
@@ -22,13 +28,19 @@ extension Color {
     static let info = Color(hex: "#3B82F6")
 
     // MARK: Text Colors
-    static let textPrimary = Color(hex: "#F8FAFC")
-    static let textSecondary = Color(hex: "#94A3B8")
-    static let textMuted = Color(hex: "#64748B")
+    static var textPrimary: Color {
+        Color(nsColor: .labelColor)
+    }
+    static var textSecondary: Color {
+        Color(nsColor: .secondaryLabelColor)
+    }
+    static var textMuted: Color {
+        Color(nsColor: .tertiaryLabelColor)
+    }
 
     // MARK: Dynamic Colors
     static var glassBackground: Color {
-        Color(nsColor: .windowBackgroundColor).opacity(0.85)
+        Color(nsColor: .underPageBackgroundColor)
     }
 
     static var glassBorder: Color {
