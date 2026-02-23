@@ -61,7 +61,8 @@ struct CardContainer: ViewModifier {
     }
 }
 
-// MARK: - Primary Button Style
+// MARK: - Primary Button Style (Deprecated)
+@available(*, deprecated, renamed: "EnhancedPrimaryButtonStyle", message: "Use EnhancedPrimaryButtonStyle from ButtonStyles.swift instead")
 struct PrimaryButtonStyle: ButtonStyle {
     @State private var isHovered = false
 
@@ -93,7 +94,8 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Secondary Button Style
+// MARK: - Secondary Button Style (Deprecated)
+@available(*, deprecated, renamed: "EnhancedSecondaryButtonStyle", message: "Use EnhancedSecondaryButtonStyle from ButtonStyles.swift instead")
 struct SecondaryButtonStyle: ButtonStyle {
     @State private var isHovered = false
 
@@ -123,7 +125,8 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Ghost Button Style
+// MARK: - Ghost Button Style (Deprecated)
+@available(*, deprecated, renamed: "GhostButtonStyle", message: "Use GhostButtonStyle from ButtonStyles.swift when available, or keep using this one for now")
 struct GhostButtonStyle: ButtonStyle {
     @State private var isHovered = false
 
@@ -143,7 +146,8 @@ struct GhostButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Icon Button Style
+// MARK: - Icon Button Style (Deprecated)
+@available(*, deprecated, renamed: "EnhancedIconButtonStyle", message: "Use EnhancedIconButtonStyle from ButtonStyles.swift instead")
 struct IconButtonStyle: ButtonStyle {
     let iconSize: CGFloat
     @State private var isHovered = false
@@ -216,21 +220,25 @@ extension View {
     }
 
     /// Applies primary button style
+    @available(*, deprecated, renamed: "enhancedPrimaryButton", message: "Use .enhancedPrimaryButton() from ButtonStyles.swift instead")
     func primaryButton() -> some View {
         buttonStyle(PrimaryButtonStyle())
     }
 
     /// Applies secondary button style
+    @available(*, deprecated, renamed: "enhancedSecondaryButton", message: "Use .enhancedSecondaryButton() from ButtonStyles.swift instead")
     func secondaryButton() -> some View {
         buttonStyle(SecondaryButtonStyle())
     }
 
     /// Applies ghost button style
+    @available(*, deprecated, message: "Ghost button style will be consolidated. Consider using a different style for now.")
     func ghostButton() -> some View {
         buttonStyle(GhostButtonStyle())
     }
 
     /// Applies icon button style
+    @available(*, deprecated, renamed: "enhancedIconButton", message: "Use .enhancedIconButton() from ButtonStyles.swift instead")
     func iconButton(size: CGFloat = 20) -> some View {
         buttonStyle(IconButtonStyle(iconSize: size))
     }

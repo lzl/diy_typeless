@@ -108,28 +108,28 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
 
     private func backgroundColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return Color(nsColor: .quaternarySystemFill).opacity(0.5)
+            return .buttonSecondaryBackground.opacity(0.5)
         }
         if configuration.isPressed {
-            return Color(nsColor: .tertiarySystemFill)
+            return .buttonSecondaryBackgroundPressed
         }
         if isHovered {
-            return Color(nsColor: .secondarySystemFill)
+            return .buttonSecondaryBackgroundHover
         }
-        return Color(nsColor: .quaternarySystemFill)
+        return .buttonSecondaryBackground
     }
 
     private func borderColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return Color(nsColor: .separatorColor).opacity(0.5)
+            return .buttonSecondaryBorder.opacity(0.5)
         }
         if configuration.isPressed {
-            return Color(nsColor: .separatorColor)
+            return .buttonSecondaryBorderPressed
         }
         if isHovered {
-            return Color(nsColor: .separatorColor)
+            return .buttonSecondaryBorderHover
         }
-        return Color(nsColor: .separatorColor).opacity(0.5)
+        return .buttonSecondaryBorder
     }
 
     private func scale(for configuration: Configuration) -> CGFloat {
@@ -259,10 +259,10 @@ struct EnhancedIconButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return Color(nsColor: .tertiarySystemFill)
+            return .buttonIconBackgroundPressed
         }
         if isHovered {
-            return Color(nsColor: .quaternarySystemFill)
+            return .buttonIconBackgroundHover
         }
         return .clear
     }
@@ -272,10 +272,10 @@ struct EnhancedIconButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return Color(nsColor: .separatorColor)
+            return .buttonSecondaryBorder
         }
         if isHovered {
-            return Color(nsColor: .separatorColor).opacity(0.5)
+            return .buttonSecondaryBorder.opacity(0.5)
         }
         return .clear
     }
@@ -327,10 +327,10 @@ struct MenuBarButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return Color(nsColor: .tertiarySystemFill)
+            return .buttonMenuBackgroundPressed
         }
         if isHovered {
-            return Color(nsColor: .quaternarySystemFill)
+            return .buttonMenuBackgroundHover
         }
         return .clear
     }
