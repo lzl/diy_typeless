@@ -62,6 +62,7 @@ final class OnboardingState {
 
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
+    private let externalLinkRepository: ExternalLinkRepository
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
@@ -73,9 +74,14 @@ final class OnboardingState {
         set { UserDefaults.standard.set(newValue, forKey: Self.hasCompletedWelcomeKey) }
     }
 
-    init(permissionRepository: PermissionRepository, apiKeyRepository: ApiKeyRepository) {
+    init(
+        permissionRepository: PermissionRepository,
+        apiKeyRepository: ApiKeyRepository,
+        externalLinkRepository: ExternalLinkRepository = NSWorkspaceExternalLinkRepository()
+    ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
+        self.externalLinkRepository = externalLinkRepository
         refreshPermissions()
         refresh()
     }
@@ -179,6 +185,10 @@ final class OnboardingState {
 
     func openMicrophoneSettings() {
         permissionRepository.openMicrophoneSettings()
+    }
+
+    func openProviderConsole(for provider: ApiProvider) {
+        externalLinkRepository.openConsole(for: provider)
     }
 
     func validateGroqKey() {
