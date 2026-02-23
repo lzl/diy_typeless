@@ -18,6 +18,29 @@ struct GeminiKeyStepView: View {
                     .foregroundColor(.secondary)
             }
 
+            Button {
+                if let url = URL(string: "https://aistudio.google.com/app/api-keys") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 0) {
+                    Text("Don't have an API key? ")
+                        .foregroundColor(.secondary)
+                    Text("Get one here")
+                        .foregroundColor(.accentColor)
+                        .underline()
+                }
+                .font(.system(size: 13))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+
             VStack(spacing: 16) {
                 SecureField("Enter your Gemini API key", text: $state.geminiKey)
                     .textFieldStyle(.roundedBorder)

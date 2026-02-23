@@ -18,6 +18,29 @@ struct GroqKeyStepView: View {
                     .foregroundColor(.secondary)
             }
 
+            Button {
+                if let url = URL(string: "https://console.groq.com/keys") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 0) {
+                    Text("Don't have an API key? ")
+                        .foregroundColor(.secondary)
+                    Text("Get one here")
+                        .foregroundColor(.accentColor)
+                        .underline()
+                }
+                .font(.system(size: 13))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .onHover { isHovered in
+                if isHovered {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+
             VStack(spacing: 16) {
                 SecureField("Enter your Groq API key", text: $state.groqKey)
                     .textFieldStyle(.roundedBorder)
