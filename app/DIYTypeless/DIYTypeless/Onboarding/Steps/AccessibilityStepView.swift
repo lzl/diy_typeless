@@ -31,7 +31,7 @@ struct AccessibilityStepView: View {
                     Button("Grant Access") {
                         state.requestAccessibilityPermission()
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(EnhancedSecondaryButtonStyle())
 
                     Button("Open System Settings") {
                         state.openAccessibilitySettings()

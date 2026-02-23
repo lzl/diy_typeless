@@ -108,28 +108,28 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
 
     private func backgroundColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .white.opacity(0.05)
+            return .buttonSecondaryBackground.opacity(0.5)
         }
         if configuration.isPressed {
-            return .white.opacity(0.12)
+            return .buttonSecondaryBackgroundPressed
         }
         if isHovered {
-            return .white.opacity(0.15)
+            return .buttonSecondaryBackgroundHover
         }
-        return .white.opacity(0.08)
+        return .buttonSecondaryBackground
     }
 
     private func borderColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .white.opacity(0.05)
+            return .buttonSecondaryBorder.opacity(0.5)
         }
         if configuration.isPressed {
-            return .white.opacity(0.2)
+            return .buttonSecondaryBorderPressed
         }
         if isHovered {
-            return .white.opacity(0.25)
+            return .buttonSecondaryBorderHover
         }
-        return .white.opacity(0.1)
+        return .buttonSecondaryBorder
     }
 
     private func scale(for configuration: Configuration) -> CGFloat {
@@ -259,10 +259,10 @@ struct EnhancedIconButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return .white.opacity(0.15)
+            return .buttonIconBackgroundPressed
         }
         if isHovered {
-            return .white.opacity(0.12)
+            return .buttonIconBackgroundHover
         }
         return .clear
     }
@@ -272,10 +272,10 @@ struct EnhancedIconButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return .white.opacity(0.2)
+            return .buttonSecondaryBorder
         }
         if isHovered {
-            return .white.opacity(0.15)
+            return .buttonSecondaryBorder.opacity(0.5)
         }
         return .clear
     }
@@ -327,10 +327,10 @@ struct MenuBarButtonStyle: ButtonStyle {
             return .clear
         }
         if configuration.isPressed {
-            return .white.opacity(0.12)
+            return .buttonMenuBackgroundPressed
         }
         if isHovered {
-            return .white.opacity(0.08)
+            return .buttonMenuBackgroundHover
         }
         return .clear
     }

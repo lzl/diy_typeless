@@ -104,3 +104,61 @@ extension Color {
         success.opacity(0.2)
     }
 }
+
+// MARK: - Button Colors
+extension Color {
+    /// Secondary button background (neutral, adaptive)
+    static var buttonSecondaryBackground: Color {
+        Color(nsColor: .quaternarySystemFill)
+    }
+
+    /// Secondary button background when hovered
+    static var buttonSecondaryBackgroundHover: Color {
+        Color(nsColor: .tertiarySystemFill)
+    }
+
+    /// Secondary button background when pressed
+    static var buttonSecondaryBackgroundPressed: Color {
+        Color(nsColor: .secondarySystemFill)
+    }
+
+    /// Secondary button border
+    static var buttonSecondaryBorder: Color {
+        Color(nsColor: .separatorColor)
+    }
+
+    /// Secondary button border when hovered
+    static var buttonSecondaryBorderHover: Color {
+        Color(nsColor: .separatorColor).opacity(0.8)
+    }
+
+    /// Secondary button border when pressed
+    static var buttonSecondaryBorderPressed: Color {
+        Color(nsColor: .separatorColor).opacity(0.6)
+    }
+
+    /// Icon button background when hovered
+    static var buttonIconBackgroundHover: Color {
+        Color(nsColor: .quaternarySystemFill)
+    }
+
+    /// Icon button background when pressed
+    static var buttonIconBackgroundPressed: Color {
+        Color(nsColor: .tertiarySystemFill)
+    }
+
+    /// Menu bar button background when hovered
+    static var buttonMenuBackgroundHover: Color {
+        Color(nsColor: .quaternarySystemFill)
+    }
+
+    /// Menu bar button background when pressed
+    static var buttonMenuBackgroundPressed: Color {
+        Color(nsColor: .tertiarySystemFill)
+    }
+
+    /// Ghost button background when hovered
+    static var buttonGhostBackgroundHover: Color {
+        Color(nsColor: .quaternarySystemFill)
+    }
+}

@@ -31,7 +31,7 @@ struct GroqKeyStepView: View {
                     Button("Validate") {
                         state.validateGroqKey()
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(EnhancedSecondaryButtonStyle())
                     .disabled(state.groqValidation == .validating || state.groqKey.isEmpty)
 
                     ValidationStatusView(state: state.groqValidation)
