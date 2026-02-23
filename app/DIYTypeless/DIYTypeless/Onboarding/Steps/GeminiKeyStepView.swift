@@ -18,6 +18,10 @@ struct GeminiKeyStepView: View {
                     .foregroundColor(.secondary)
             }
 
+            ProviderConsoleLink {
+                state.openProviderConsole(for: .gemini)
+            }
+
             VStack(spacing: 16) {
                 SecureField("Enter your Gemini API key", text: $state.geminiKey)
                     .textFieldStyle(.roundedBorder)

@@ -18,6 +18,10 @@ struct GroqKeyStepView: View {
                     .foregroundColor(.secondary)
             }
 
+            ProviderConsoleLink {
+                state.openProviderConsole(for: .groq)
+            }
+
             VStack(spacing: 16) {
                 SecureField("Enter your Groq API key", text: $state.groqKey)
                     .textFieldStyle(.roundedBorder)
