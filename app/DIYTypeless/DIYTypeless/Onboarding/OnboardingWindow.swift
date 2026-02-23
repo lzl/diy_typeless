@@ -144,7 +144,7 @@ struct OnboardingWindow: View {
                 Button("Finish") {
                     state.complete()
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(EnhancedPrimaryButtonStyle())
             } else {
                 Button("Continue") {
                     transitionDirection = .forward
@@ -152,7 +152,7 @@ struct OnboardingWindow: View {
                         state.goNext()
                     }
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(EnhancedPrimaryButtonStyle())
                 .disabled(!state.canProceed)
             }
         }

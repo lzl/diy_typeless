@@ -31,7 +31,7 @@ struct GeminiKeyStepView: View {
                     Button("Validate") {
                         state.validateGeminiKey()
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(EnhancedSecondaryButtonStyle())
                     .disabled(state.geminiValidation == .validating || state.geminiKey.isEmpty)
 
                     ValidationStatusView(state: state.geminiValidation)

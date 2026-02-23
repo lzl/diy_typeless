@@ -1,5 +1,8 @@
 import SwiftUI
 
+// NOTE: Button styles have been moved to ButtonStyles.swift
+// Use EnhancedPrimaryButtonStyle, EnhancedSecondaryButtonStyle, etc. from that file.
+
 // MARK: - Glassmorphism Modifier
 /// Creates a glass-like translucent background effect
 struct Glassmorphism: ViewModifier {
@@ -61,116 +64,6 @@ struct CardContainer: ViewModifier {
     }
 }
 
-// MARK: - Primary Button Style (Deprecated)
-@available(*, deprecated, renamed: "EnhancedPrimaryButtonStyle", message: "Use EnhancedPrimaryButtonStyle from ButtonStyles.swift instead")
-struct PrimaryButtonStyle: ButtonStyle {
-    @State private var isHovered = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, .md)
-            .padding(.vertical, .sm)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(backgroundColor(for: configuration))
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
-            .onHover { isHovered = $0 }
-    }
-
-    private func backgroundColor(for configuration: Configuration) -> Color {
-        if configuration.isPressed {
-            return .brandPrimary.opacity(0.8)
-        }
-        if isHovered {
-            return .brandPrimaryLight
-        }
-        return .brandPrimary
-    }
-}
-
-// MARK: - Secondary Button Style (Deprecated)
-@available(*, deprecated, renamed: "EnhancedSecondaryButtonStyle", message: "Use EnhancedSecondaryButtonStyle from ButtonStyles.swift instead")
-struct SecondaryButtonStyle: ButtonStyle {
-    @State private var isHovered = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(.textPrimary)
-            .padding(.horizontal, .md)
-            .padding(.vertical, .sm)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(backgroundColor(for: configuration))
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-            .onHover { isHovered = $0 }
-    }
-
-    private func backgroundColor(for configuration: Configuration) -> Color {
-        if configuration.isPressed {
-            return .white.opacity(0.15)
-        }
-        if isHovered {
-            return .white.opacity(0.12)
-        }
-        return .white.opacity(0.1)
-    }
-}
-
-// MARK: - Ghost Button Style (Deprecated)
-@available(*, deprecated, renamed: "GhostButtonStyle", message: "Use GhostButtonStyle from ButtonStyles.swift when available, or keep using this one for now")
-struct GhostButtonStyle: ButtonStyle {
-    @State private var isHovered = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(isHovered ? .white : .textSecondary)
-            .padding(.horizontal, .sm)
-            .padding(.vertical, .xs)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isHovered ? .white.opacity(0.1) : .clear)
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-            .onHover { isHovered = $0 }
-    }
-}
-
-// MARK: - Icon Button Style (Deprecated)
-@available(*, deprecated, renamed: "EnhancedIconButtonStyle", message: "Use EnhancedIconButtonStyle from ButtonStyles.swift instead")
-struct IconButtonStyle: ButtonStyle {
-    let iconSize: CGFloat
-    @State private var isHovered = false
-
-    init(iconSize: CGFloat = 20) {
-        self.iconSize = iconSize
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: iconSize, weight: .medium))
-            .foregroundColor(isHovered ? .white : .textSecondary)
-            .frame(width: 32, height: 32)
-            .background(
-                Circle()
-                    .fill(isHovered ? .white.opacity(0.1) : .clear)
-            )
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-            .onHover { isHovered = $0 }
-    }
-}
-
 // MARK: - Progress Bar Modifier
 struct AnimatedProgressBar: ViewModifier {
     let progress: Double
@@ -217,29 +110,5 @@ extension View {
     /// Wraps view in a standard card container
     func cardContainer(padding: CGFloat = 16, backgroundColor: Color = .appSurface, hasShadow: Bool = true) -> some View {
         modifier(CardContainer(padding: padding, backgroundColor: backgroundColor, hasShadow: hasShadow))
-    }
-
-    /// Applies primary button style
-    @available(*, deprecated, renamed: "enhancedPrimaryButton", message: "Use .enhancedPrimaryButton() from ButtonStyles.swift instead")
-    func primaryButton() -> some View {
-        buttonStyle(PrimaryButtonStyle())
-    }
-
-    /// Applies secondary button style
-    @available(*, deprecated, renamed: "enhancedSecondaryButton", message: "Use .enhancedSecondaryButton() from ButtonStyles.swift instead")
-    func secondaryButton() -> some View {
-        buttonStyle(SecondaryButtonStyle())
-    }
-
-    /// Applies ghost button style
-    @available(*, deprecated, message: "Ghost button style will be consolidated. Consider using a different style for now.")
-    func ghostButton() -> some View {
-        buttonStyle(GhostButtonStyle())
-    }
-
-    /// Applies icon button style
-    @available(*, deprecated, renamed: "enhancedIconButton", message: "Use .enhancedIconButton() from ButtonStyles.swift instead")
-    func iconButton(size: CGFloat = 20) -> some View {
-        buttonStyle(IconButtonStyle(iconSize: size))
     }
 }

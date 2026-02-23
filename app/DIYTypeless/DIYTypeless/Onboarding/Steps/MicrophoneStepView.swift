@@ -31,7 +31,7 @@ struct MicrophoneStepView: View {
                     Button("Grant Access") {
                         state.requestMicrophonePermission()
                     }
-                    .buttonStyle(SecondaryButtonStyle())
+                    .buttonStyle(EnhancedSecondaryButtonStyle())
 
                     Button("Open System Settings") {
                         state.openMicrophoneSettings()
