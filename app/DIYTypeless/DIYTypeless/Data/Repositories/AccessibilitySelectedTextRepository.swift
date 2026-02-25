@@ -6,7 +6,22 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
     func getSelectedText() async -> SelectedTextContext {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let context = self.performAccessibilityQuery()
+                // Try Accessibility API first
+                var context = self.performAccessibilityQuery()
+
+                // If no text found via AX API, try clipboard method (for browsers like Chrome)
+                if !context.hasSelection {
+                    if let clipboardText = self.getSelectedTextViaClipboard(),
+                       !clipboardText.isEmpty {
+                        context = SelectedTextContext(
+                            text: clipboardText,
+                            isEditable: context.isEditable,
+                            isSecure: context.isSecure,
+                            applicationName: context.applicationName
+                        )
+                    }
+                }
+
                 continuation.resume(returning: context)
             }
         }
@@ -17,7 +32,6 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Get current application name
         let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
-        print("[Accessibility] App name: \(appName)")
 
         // Get focused element
         var focusedElement: CFTypeRef?
@@ -28,7 +42,6 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         )
 
         guard focusResult == .success, let element = focusedElement else {
-            print("[Accessibility] Failed to get focused element, result: \(focusResult)")
             return SelectedTextContext(
                 text: nil,
                 isEditable: false,
@@ -38,11 +51,9 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         }
 
         let axElement = element as! AXUIElement
-        print("[Accessibility] Got focused element")
 
         // Check if secure text field (password)
         let isSecure = checkIfSecureTextField(axElement)
-        print("[Accessibility] isSecure: \(isSecure)")
         if isSecure {
             return SelectedTextContext(
                 text: nil,
@@ -54,11 +65,9 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Check if editable
         let isEditable = checkIfEditable(axElement)
-        print("[Accessibility] isEditable: \(isEditable)")
 
         // Get selected text
         let selectedText = readSelectedText(from: axElement)
-        print("[Accessibility] Selected text: '\(selectedText ?? "nil")'")
 
         return SelectedTextContext(
             text: selectedText,
@@ -68,15 +77,67 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         )
     }
 
-    private func readSelectedText(from element: AXUIElement) -> String? {
-        // Method 1: Direct kAXSelectedTextAttribute
-        if let text = readSelectedTextAttribute(from: element) {
-            return text.isEmpty ? nil : text
+    /// Get selected text by sending Cmd+C and reading from clipboard.
+    /// This is a workaround for apps that don't support Accessibility API (e.g., Chrome).
+    /// Note: This temporarily modifies the clipboard but restores the original content.
+    private func getSelectedTextViaClipboard() -> String? {
+        let pasteboard = NSPasteboard.general
+
+        // Save original clipboard content (as string for comparison)
+        let originalString = pasteboard.string(forType: .string)
+
+        // Send Cmd+C using session event tap
+        // This is more reliable for targeting the frontmost application
+        let source = CGEventSource(stateID: .hidSystemState)
+        let keyC: CGKeyCode = 0x08  // 'c' key
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: false) else {
+            return nil
         }
 
-        // Method 2: kAXValueAttribute + kAXSelectedTextRangeAttribute
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+
+        // Use annotated session event tap which targets the frontmost application
+        keyDown.post(tap: .cgAnnotatedSessionEventTap)
+        keyUp.post(tap: .cgAnnotatedSessionEventTap)
+
+        // Poll clipboard for change (more reliable than fixed delay)
+        var selectedText: String?
+        for _ in 0..<20 {  // Max 400ms wait
+            Thread.sleep(forTimeInterval: 0.02)
+            let current = pasteboard.string(forType: .string)
+            if current != originalString {
+                selectedText = current
+                break
+            }
+        }
+
+        if selectedText == nil {
+            selectedText = pasteboard.string(forType: .string)
+        }
+
+        // Restore original clipboard content
+        if let original = originalString {
+            pasteboard.clearContents()
+            pasteboard.setString(original, forType: .string)
+        } else {
+            pasteboard.clearContents()
+        }
+
+        return selectedText
+    }
+
+    private func readSelectedText(from element: AXUIElement) -> String? {
+        // Try kAXSelectedTextAttribute first (simpler, more reliable)
+        if let text = readSelectedTextAttribute(from: element) {
+            return text
+        }
+
+        // Fall back to kAXValueAttribute + kAXSelectedTextRangeAttribute
         if let text = readValueWithSelectedRange(from: element) {
-            return text.isEmpty ? nil : text
+            return text
         }
 
         return nil
@@ -90,15 +151,11 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
             &selectedValue
         )
 
-        print("[Accessibility] kAXSelectedTextAttribute result: \(selectedResult)")
-
         guard selectedResult == .success,
               let text = selectedValue as? String else {
-            print("[Accessibility] kAXSelectedTextAttribute failed or nil")
             return nil
         }
 
-        print("[Accessibility] kAXSelectedTextAttribute text: '\(text)'")
         return text
     }
 
