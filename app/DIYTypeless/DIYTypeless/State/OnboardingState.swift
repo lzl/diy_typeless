@@ -63,6 +63,7 @@ final class OnboardingState {
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
     private let externalLinkRepository: ExternalLinkRepository
+    private let validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
@@ -77,11 +78,13 @@ final class OnboardingState {
     init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
-        externalLinkRepository: ExternalLinkRepository = NSWorkspaceExternalLinkRepository()
+        externalLinkRepository: ExternalLinkRepository = NSWorkspaceExternalLinkRepository(),
+        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = ValidateApiKeyUseCase()
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
         self.externalLinkRepository = externalLinkRepository
+        self.validateApiKeyUseCase = validateApiKeyUseCase
         refreshPermissions()
         refresh()
     }
@@ -278,50 +281,11 @@ final class OnboardingState {
     }
 
     private func validateGroqKeyValue(_ key: String) async throws {
-        guard let url = URL(string: "https://api.groq.com/openai/v1/models") else {
-            throw ValidationError(message: "Groq validation failed: invalid URL.")
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw ValidationError(message: "Groq validation failed: no response.")
-        }
-
-        switch http.statusCode {
-        case 200:
-            return
-        case 401, 403:
-            throw ValidationError(message: "Groq API key is invalid or expired.")
-        default:
-            throw ValidationError(message: "Groq API error: HTTP \(http.statusCode).")
-        }
+        try await validateApiKeyUseCase.execute(key: key, for: .groq)
     }
 
     private func validateGeminiKeyValue(_ key: String) async throws {
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(key)") else {
-            throw ValidationError(message: "Gemini validation failed: invalid URL.")
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw ValidationError(message: "Gemini validation failed: no response.")
-        }
-
-        switch http.statusCode {
-        case 200:
-            return
-        case 401, 403:
-            throw ValidationError(message: "Gemini API key is invalid or expired.")
-        default:
-            throw ValidationError(message: "Gemini API error: HTTP \(http.statusCode).")
-        }
+        try await validateApiKeyUseCase.execute(key: key, for: .gemini)
     }
 }
 
