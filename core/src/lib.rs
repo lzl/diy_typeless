@@ -2,6 +2,7 @@ mod audio;
 mod config;
 mod error;
 mod http_client;
+mod llm_processor;
 mod pipeline;
 mod polish;
 mod transcribe;
@@ -55,6 +56,23 @@ pub fn warmup_groq_connection() -> Result<(), CoreError> {
 #[uniffi::export]
 pub fn warmup_gemini_connection() -> Result<(), CoreError> {
     http_client::warmup_gemini_connection()
+}
+
+/// Process text with LLM (Gemini API)
+/// Generic function for processing text with custom prompts
+#[uniffi::export]
+pub fn process_text_with_llm(
+    api_key: String,
+    prompt: String,
+    system_instruction: Option<String>,
+    temperature: Option<f32>,
+) -> Result<String, CoreError> {
+    llm_processor::process_text_with_llm(
+        &api_key,
+        &prompt,
+        system_instruction.as_deref(),
+        temperature,
+    )
 }
 
 uniffi::setup_scaffolding!();
