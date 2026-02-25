@@ -271,9 +271,9 @@ RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording_wav(RustCallStatus *_
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_WAV_BYTES
-RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_wav_bytes(RustBuffer api_key, RustBuffer wav_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_AUDIO_BYTES
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_AUDIO_BYTES
+RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes(RustBuffer api_key, RustBuffer audio_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_GEMINI_CONNECTION
@@ -554,6 +554,12 @@ uint16_t uniffi_diy_typeless_core_checksum_func_polish_text(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_PROCESS_TEXT_WITH_LLM
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_PROCESS_TEXT_WITH_LLM
+uint16_t uniffi_diy_typeless_core_checksum_func_process_text_with_llm(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_RECORDING
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_START_RECORDING
 uint16_t uniffi_diy_typeless_core_checksum_func_start_recording(void
@@ -572,9 +578,9 @@ uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording_wav(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_WAV_BYTES
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_WAV_BYTES
-uint16_t uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_AUDIO_BYTES
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_TRANSCRIBE_AUDIO_BYTES
+uint16_t uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes(void
     
 );
 #endif

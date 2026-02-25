@@ -1,17 +1,17 @@
 import Foundation
 
 final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
-    func execute(wavData: WavData, apiKey: String, language: String?) async throws -> String {
-        guard !wavData.bytes.isEmpty else {
+    func execute(audioData: AudioData, apiKey: String, language: String?) async throws -> String {
+        guard !audioData.bytes.isEmpty else {
             throw TranscriptionError.emptyAudio
         }
 
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let text = try transcribeWavBytes(
+                    let text = try transcribeAudioBytes(
                         apiKey: apiKey,
-                        wavBytes: wavData.bytes,
+                        audioBytes: audioData.bytes,
                         language: language
                     )
                     continuation.resume(returning: text)

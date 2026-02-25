@@ -492,6 +492,60 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 }
 
 
+public struct AudioData: Equatable, Hashable {
+    public var bytes: Data
+    public var durationSeconds: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(bytes: Data, durationSeconds: Float) {
+        self.bytes = bytes
+        self.durationSeconds = durationSeconds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AudioData: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAudioData: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AudioData {
+        return
+            try AudioData(
+                bytes: FfiConverterData.read(from: &buf), 
+                durationSeconds: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AudioData, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.bytes, into: &buf)
+        FfiConverterFloat.write(value.durationSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioData_lift(_ buf: RustBuffer) throws -> AudioData {
+    return try FfiConverterTypeAudioData.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioData_lower(_ value: AudioData) -> RustBuffer {
+    return FfiConverterTypeAudioData.lower(value)
+}
+
+
 public struct PipelineResult: Equatable, Hashable {
     public var rawText: String
     public var polishedText: String
@@ -543,60 +597,6 @@ public func FfiConverterTypePipelineResult_lift(_ buf: RustBuffer) throws -> Pip
 #endif
 public func FfiConverterTypePipelineResult_lower(_ value: PipelineResult) -> RustBuffer {
     return FfiConverterTypePipelineResult.lower(value)
-}
-
-
-public struct WavData: Equatable, Hashable {
-    public var bytes: Data
-    public var durationSeconds: Float
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(bytes: Data, durationSeconds: Float) {
-        self.bytes = bytes
-        self.durationSeconds = durationSeconds
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension WavData: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeWavData: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WavData {
-        return
-            try WavData(
-                bytes: FfiConverterData.read(from: &buf), 
-                durationSeconds: FfiConverterFloat.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: WavData, into buf: inout [UInt8]) {
-        FfiConverterData.write(value.bytes, into: &buf)
-        FfiConverterFloat.write(value.durationSeconds, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeWavData_lift(_ buf: RustBuffer) throws -> WavData {
-    return try FfiConverterTypeWavData.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeWavData_lower(_ value: WavData) -> RustBuffer {
-    return FfiConverterTypeWavData.lower(value)
 }
 
 
@@ -760,27 +760,6 @@ public func FfiConverterTypeCoreError_lower(_ value: CoreError) -> RustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
-    typealias SwiftType = String?
-
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        guard let value = value else {
-            writeInt(&buf, Int8(0))
-            return
-        }
-        writeInt(&buf, Int8(1))
-        FfiConverterString.write(value, into: &buf)
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
-        switch try readInt(&buf) as Int8 {
-        case 0: return nil
-        case 1: return try FfiConverterString.read(from: &buf)
-        default: throw UniffiInternalError.unexpectedOptionalTag
-        }
-    }
-}
-
 fileprivate struct FfiConverterOptionFloat: FfiConverterRustBuffer {
     typealias SwiftType = Float?
 
@@ -801,6 +780,30 @@ fileprivate struct FfiConverterOptionFloat: FfiConverterRustBuffer {
         }
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -810,13 +813,27 @@ public func polishText(apiKey: String, rawText: String, context: String?)throws 
     )
 })
 }
+/**
+ * Process text with LLM (Gemini API)
+ * Generic function for processing text with custom prompts
+ */
+public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_process_text_with_llm(
+        FfiConverterString.lower(apiKey),
+        FfiConverterString.lower(prompt),
+        FfiConverterOptionString.lower(systemInstruction),
+        FfiConverterOptionFloat.lower(temperature),$0
+    )
+})
+}
 public func startRecording()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_start_recording($0
     )
 }
 }
-public func stopRecording()throws  -> WavData  {
-    return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+public func stopRecording()throws  -> AudioData  {
+    return try  FfiConverterTypeAudioData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording($0
     )
 })
@@ -824,17 +841,17 @@ public func stopRecording()throws  -> WavData  {
 /**
  * Stop recording and return WAV format (for CLI compatibility)
  */
-public func stopRecordingWav()throws  -> WavData  {
-    return try  FfiConverterTypeWavData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+public func stopRecordingWav()throws  -> AudioData  {
+    return try  FfiConverterTypeAudioData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording_wav($0
     )
 })
 }
-public func transcribeWavBytes(apiKey: String, wavBytes: Data, language: String?)throws  -> String  {
+public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_transcribe_wav_bytes(
+    uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes(
         FfiConverterString.lower(apiKey),
-        FfiConverterData.lower(wavBytes),
+        FfiConverterData.lower(audioBytes),
         FfiConverterOptionString.lower(language),$0
     )
 })
@@ -876,16 +893,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 4986) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 15390) {
+    if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 2506) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 25405) {
+    if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 49562) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_transcribe_wav_bytes() != 61013) {
+    if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 53312) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 52706) {
@@ -909,25 +929,6 @@ public func uniffiEnsureDiyTypelessCoreInitialized() {
     case .apiChecksumMismatch:
         fatalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-}
-
-// MARK: - Voice Command Feature (Manually added until UniFFI regeneration)
-
-public func processTextWithLLM(
-    apiKey: String,
-    prompt: String,
-    systemInstruction: String?,
-    temperature: Float?
-) throws -> String {
-    return try FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-        uniffi_diy_typeless_core_fn_func_process_text_with_llm(
-            FfiConverterString.lower(apiKey),
-            FfiConverterString.lower(prompt),
-            FfiConverterOptionString.lower(systemInstruction),
-            FfiConverterOptionFloat.lower(temperature),
-            $0
-        )
-    })
 }
 
 // swiftlint:enable all

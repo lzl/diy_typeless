@@ -188,14 +188,14 @@ final class RecordingState {
         do {
             // Step 1: Get selected text and stop recording
             let selectedTextContext = await getSelectedTextUseCase.execute()
-            let wavData = try await stopRecordingUseCase.execute()
+            let audioData = try await stopRecordingUseCase.execute()
 
             guard currentGeneration == gen else { return }
 
             // Step 2: Transcribe audio
             capsuleState = .transcribing(progress: 0)
             let rawText = try await transcribeAudioUseCase.execute(
-                wavData: wavData,
+                audioData: audioData,
                 apiKey: groqKey,
                 language: nil
             )

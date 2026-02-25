@@ -31,12 +31,12 @@ final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
     }
 
     func execute(groqKey: String, geminiKey: String, context: String?) async throws -> TranscriptionResult {
-        // Step 1: Stop recording and get WAV data
-        let wavData = try await stopRecordingUseCase.execute()
+        // Step 1: Stop recording and get audio data
+        let audioData = try await stopRecordingUseCase.execute()
 
         // Step 2: Transcribe audio
         let rawText = try await transcribeAudioUseCase.execute(
-            wavData: wavData,
+            audioData: audioData,
             apiKey: groqKey,
             language: nil
         )

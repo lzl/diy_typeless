@@ -183,7 +183,7 @@ fn cmd_record(output_dir: Option<PathBuf>, duration_seconds: Option<u64>) -> Res
 fn cmd_transcribe(file: PathBuf, groq_key: Option<String>, language: Option<String>) -> Result<()> {
     let api_key = resolve_groq_key(groq_key)?;
     let wav_bytes = fs::read(&file).context("Failed to read WAV file")?;
-    let text = diy_typeless_core::transcribe_wav_bytes(api_key, wav_bytes, language)?;
+    let text = diy_typeless_core::transcribe_audio_bytes(api_key, wav_bytes, language)?;
     println!("{text}");
     Ok(())
 }
@@ -260,7 +260,7 @@ fn run_groq_full(
 
     println!("Transcribing with Groq API...");
     let text =
-        diy_typeless_core::transcribe_wav_bytes(groq_key, wav_data.bytes, language)?;
+        diy_typeless_core::transcribe_audio_bytes(groq_key, wav_data.bytes, language)?;
     let raw_path = output_dir.join(format!("{base}_raw.txt"));
     fs::write(&raw_path, &text)?;
 
