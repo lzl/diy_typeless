@@ -17,6 +17,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Get current application name
         let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        print("[Accessibility] App name: \(appName)")
 
         // Get focused element
         var focusedElement: CFTypeRef?
@@ -27,6 +28,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         )
 
         guard focusResult == .success, let element = focusedElement else {
+            print("[Accessibility] Failed to get focused element, result: \(focusResult)")
             return SelectedTextContext(
                 text: nil,
                 isEditable: false,
@@ -36,9 +38,11 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         }
 
         let axElement = element as! AXUIElement
+        print("[Accessibility] Got focused element")
 
         // Check if secure text field (password)
         let isSecure = checkIfSecureTextField(axElement)
+        print("[Accessibility] isSecure: \(isSecure)")
         if isSecure {
             return SelectedTextContext(
                 text: nil,
@@ -50,9 +54,11 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Check if editable
         let isEditable = checkIfEditable(axElement)
+        print("[Accessibility] isEditable: \(isEditable)")
 
         // Get selected text
         let selectedText = readSelectedText(from: axElement)
+        print("[Accessibility] Selected text: '\(selectedText ?? "nil")'")
 
         return SelectedTextContext(
             text: selectedText,
@@ -84,11 +90,15 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
             &selectedValue
         )
 
+        print("[Accessibility] kAXSelectedTextAttribute result: \(selectedResult)")
+
         guard selectedResult == .success,
               let text = selectedValue as? String else {
+            print("[Accessibility] kAXSelectedTextAttribute failed or nil")
             return nil
         }
 
+        print("[Accessibility] kAXSelectedTextAttribute text: '\(text)'")
         return text
     }
 

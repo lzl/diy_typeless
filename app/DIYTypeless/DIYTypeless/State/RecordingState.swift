@@ -170,6 +170,13 @@ final class RecordingState {
         // Step 1: Get selected text (parallel with stopping recording)
         let selectedTextContext = await getSelectedTextUseCase.execute()
 
+        // Debug logging
+        print("[VoiceCommand] Selected text: '\(selectedTextContext.text ?? "nil")'")
+        print("[VoiceCommand] hasSelection: \(selectedTextContext.hasSelection)")
+        print("[VoiceCommand] isSecure: \(selectedTextContext.isSecure)")
+        print("[VoiceCommand] isEditable: \(selectedTextContext.isEditable)")
+        print("[VoiceCommand] shouldUseVoiceCommandMode: \(shouldUseVoiceCommandMode(selectedTextContext))")
+
         capsuleState = .transcribing
 
         do {
