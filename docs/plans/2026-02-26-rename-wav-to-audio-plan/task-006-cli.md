@@ -16,15 +16,14 @@ Scenario 6: CLI build passes
 
 ### In cli/src/main.rs:
 
-Update the import:
+The import statement does not need to change:
 ```rust
-// Change:
-use diy_typeless_core::{start_recording, stop_recording};
-// To:
 use diy_typeless_core::{start_recording, stop_recording};
 ```
 
-Note: The import itself doesn't change because we still use `stop_recording` which now returns `AudioData` instead of `WavData`. The type inference handles this.
+This stays the same because:
+- Function name `stop_recording` is unchanged
+- Return type is inferred by the compiler (now `AudioData` instead of `WavData`)
 
 However, if CLI code explicitly references the type, update it:
 ```rust
@@ -34,7 +33,7 @@ let data: WavData = stop_recording()?;
 let data: AudioData = stop_recording()?;
 ```
 
-Search for explicit type annotations and update them.
+Search for explicit type annotations (`: WavData`) and update them to `: AudioData`.
 
 ## Verification Steps
 
