@@ -1,5 +1,162 @@
 # Best Practices - 语音指令处理选中文本
 
+**版本**: 2.0 (Reviewed)
+**更新日期**: 2026-02-25
+
+---
+
+## 0. Clean Architecture 最佳实践 (Review 新增)
+
+### 0.1 UseCase 单一职责原则 (SRP)
+
+**原则**: 一个 UseCase 只做一件事。
+
+**❌ 错误示例（臃肿的 UseCase）**:
+```swift
+// 不要做：一个 UseCase 做 5 件事
+final class SelectedTextCommandUseCase {
+    func execute() {
+        // 1. 获取选中文本
+        // 2. 停止录音
+        // 3. Groq 转录
+        // 4. Gemini 处理
+        // 5. 决定回退逻辑
+    }
+}
+```
+
+**✅ 正确示例（拆分后的 UseCase）**:
+```swift
+// GetSelectedTextUseCase.swift - 只做一件事：获取选中文本
+final class GetSelectedTextUseCase: GetSelectedTextUseCaseProtocol {
+    private let repository: SelectedTextRepository
+
+    func execute() async -> SelectedTextContext {
+        await repository.getSelectedText()
+    }
+}
+
+// ProcessVoiceCommandUseCase.swift - 只做一件事：处理语音指令
+final class ProcessVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol {
+    private let llmRepository: LLMRepository
+
+    func execute(transcription: String, selectedText: String, geminiKey: String)
+        async throws -> VoiceCommandResult {
+        // 构建 prompt
+        // 调用 LLM
+        // 返回结果
+    }
+}
+
+// ViewModel 负责编排
+@MainActor
+@Observable
+final class RecordingState {
+    private func handleKeyUp() async {
+        // 1. 获取选中文本
+        let selectedText = await getSelectedTextUseCase.execute()
+
+        // 2. 停止录音并转录
+        let transcription = try await transcribeAsync(...)
+
+        // 3. ViewModel 决定执行路径
+        if shouldUseVoiceCommandMode(selectedText) {
+            let result = try await processVoiceCommandUseCase.execute(...)
+        } else {
+            let result = try await transcriptionUseCase.execute(...)
+        }
+    }
+}
+```
+
+### 0.2 Entity 贫血化 (Anemic Entity)
+
+**原则**: Entity 只包含数据，业务逻辑移到 UseCase 或 Domain Service。
+
+**❌ 错误示例（Entity 包含业务逻辑）**:
+```swift
+struct SelectedTextContext: Sendable {
+    let text: String?
+    let isEditable: Bool
+    let isSecure: Bool
+
+    // 不要这样做：Entity 包含业务逻辑
+    var isValidForProcessing: Bool {
+        hasSelection && !isSecure && isEditable
+    }
+}
+```
+
+**✅ 正确示例（贫血 Entity + UseCase 业务逻辑）**:
+```swift
+// Entity 只包含数据和纯计算属性
+struct SelectedTextContext: Sendable {
+    let text: String?
+    let isEditable: Bool
+    let isSecure: Bool
+    let applicationName: String
+
+    // 纯数据计算，无业务逻辑
+    var hasSelection: Bool {
+        guard let text = text else { return false }
+        return !text.isEmpty
+    }
+}
+
+// 业务逻辑放在 UseCase 或 ViewModel
+private func shouldUseVoiceCommandMode(_ context: SelectedTextContext) -> Bool {
+    context.hasSelection && !context.isSecure
+}
+```
+
+### 0.3 Repository 命名规范
+
+**原则**: 遵循项目惯例，Repository 协议**不加 Protocol 后缀**。
+
+**❌ 错误**:
+```swift
+protocol SelectedTextRepositoryProtocol: Sendable { ... }
+```
+
+**✅ 正确**:
+```swift
+protocol SelectedTextRepository: Sendable { ... }
+// 实现类加上具体类型前缀
+final class AccessibilitySelectedTextRepository: SelectedTextRepository { ... }
+```
+
+参考项目现有代码：
+- `ApiKeyRepository`（不是 `ApiKeyRepositoryProtocol`）
+- `TextOutputRepository`（不是 `TextOutputRepositoryProtocol`）
+
+### 0.4 UseCase 依赖关系
+
+**原则**: UseCase 之间不直接依赖，通过 ViewModel 编排。
+
+**❌ 错误**:
+```swift
+final class SelectedTextCommandUseCase {
+    private let baseTranscriptionUseCase: TranscriptionUseCaseProtocol // UseCase 依赖 UseCase！
+}
+```
+
+**✅ 正确**:
+```swift
+// UseCase 只依赖 Repository
+final class ProcessVoiceCommandUseCase {
+    private let llmRepository: LLMRepository
+}
+
+// ViewModel 负责编排多个 UseCase
+final class RecordingState {
+    private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
+    private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
+    private let transcriptionUseCase: TranscriptionUseCaseProtocol
+}
+```
+
+---
+
 ## 1. macOS Accessibility API 最佳实践
 
 ### 1.1 选中文本获取策略
@@ -112,19 +269,52 @@ enum AppCompatibility {
 }
 ```
 
-### 1.3 性能优化
+### 1.3 线程执行（Review 修正）
 
-**AX API 调用在主线程执行，但需要控制频率**：
+**原则**: Accessibility API 调用应该在后台线程执行，避免阻塞 MainActor。
+
+**❌ 错误（阻塞主线程）**:
+```swift
+final class AccessibilitySelectedTextRepository: SelectedTextRepository {
+    func getSelectedText() async -> SelectedTextContext {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {  // 不要这样做
+                let context = self.performAccessibilityQuery()
+                continuation.resume(returning: context)
+            }
+        }
+    }
+}
+```
+
+**✅ 正确（后台线程执行）**:
+```swift
+final class AccessibilitySelectedTextRepository: SelectedTextRepository {
+    func getSelectedText() async -> SelectedTextContext {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {  // 正确
+                let context = self.performAccessibilityQuery()
+                continuation.resume(returning: context)
+            }
+        }
+    }
+}
+```
+
+**注意**: 虽然 AX API 可能在内部与窗口服务器通信，但它本身是同步/阻塞的，应该在后台线程执行以避免阻塞 UI。
+
+### 1.4 性能优化
+
+**避免在录音期间频繁轮询**：
 
 ```swift
 // ❌ 错误：在录音期间频繁轮询
 Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-    let text = getSelectedText()  // 阻塞主线程
+    let text = getSelectedText()
 }
 
 // ✅ 正确：只在 Fn 释放时获取一次
 func handleKeyUp() {
-    // 单次获取，不轮询
     let context = accessibilityRepo.getSelectedText()
     // ...
 }

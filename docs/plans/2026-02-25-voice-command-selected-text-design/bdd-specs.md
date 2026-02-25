@@ -1,5 +1,11 @@
 # BDD Specifications - 语音指令处理选中文本
 
+**版本**: 2.0 (Reviewed)
+**更新日期**: 2026-02-25
+**Review 状态**: 已更新，反映 UseCase 拆分后的架构
+
+---
+
 ## Feature: 语音指令处理选中文本
 
 As a user
@@ -305,51 +311,165 @@ And the system should prevent concurrent LLM API calls
 
 ## Testing Strategy
 
+> **Note**: 根据 Architecture Review 结果，UseCase 已拆分为 `GetSelectedTextUseCase` 和 `ProcessVoiceCommandUseCase`，ViewModel 负责编排。
+
 ### 单元测试
 
-1. **SelectedTextCommandUseCaseTests**
-   - 测试有选中文本时走 Voice Command 路径
-   - 测试无选中文本时回退到 Transcription 路径
-   - 测试 LLM 失败时保留原始文本
+#### 1. GetSelectedTextUseCaseTests
+- **职责**: 测试选中文本获取 UseCase
+- **测试场景**:
+  - 正常获取选中文本
+  - 无选中文本时返回空上下文
+  - 密码字段检测
+  - 可编辑性检查
 
-2. **AccessibilitySelectedTextRepositoryTests**
-   - 测试从 AXSelectedTextAttribute 读取
-   - 测试密码字段检测
-   - 测试可编辑性检查
+```swift
+@Test
+func testExecuteReturnsSelectedText() async throws {
+    let mockRepository = MockSelectedTextRepository()
+    mockRepository.mockContext = SelectedTextContext(
+        text: "Hello world",
+        isEditable: true,
+        isSecure: false,
+        applicationName: "TestApp"
+    )
 
-3. **LLM Processor Tests (Rust)**
-   - 测试 Prompt 构建
-   - 测试 API 重试逻辑
-   - 测试空响应处理
+    let useCase = GetSelectedTextUseCase(repository: mockRepository)
+    let result = await useCase.execute()
+
+    #expect(result.hasSelection == true)
+    #expect(result.text == "Hello world")
+}
+```
+
+#### 2. ProcessVoiceCommandUseCaseTests
+- **职责**: 测试语音指令处理 UseCase
+- **测试场景**:
+  - 正常处理语音指令
+  - LLM 返回结果解析
+  - LLM API 失败时抛出错误
+  - Prompt 构建正确
+
+```swift
+@Test
+func testExecuteProcessesVoiceCommand() async throws {
+    let mockLLMRepository = MockLLMRepository()
+    mockLLMRepository.mockResponse = "你好世界"
+
+    let useCase = ProcessVoiceCommandUseCase(llmRepository: mockLLMRepository)
+    let result = try await useCase.execute(
+        transcription: "Translate to Chinese",
+        selectedText: "Hello world",
+        geminiKey: "test-key"
+    )
+
+    #expect(result.processedText == "你好世界")
+    #expect(result.action == .replaceSelection)
+}
+```
+
+#### 3. AccessibilitySelectedTextRepositoryTests
+- **职责**: 测试 Accessibility API 封装
+- **测试场景**:
+  - 从 AXSelectedTextAttribute 读取成功
+  - 密码字段检测（返回 isSecure = true）
+  - 可编辑性检查
+  - 后台线程执行验证
+
+#### 4. RecordingStateTests (ViewModel)
+- **职责**: 测试 ViewModel 编排逻辑
+- **测试场景**:
+  - 有选中文本时调用 ProcessVoiceCommandUseCase
+  - 无选中文本时调用 TranscriptionUseCase（回退）
+  - 密码字段时显示错误
+  - 业务规则判断正确
+
+```swift
+@Test
+func testHandleKeyUpWithSelectedTextUsesVoiceCommandMode() async throws {
+    let mockGetTextUseCase = MockGetSelectedTextUseCase()
+    mockGetTextUseCase.mockContext = SelectedTextContext(
+        text: "Hello",
+        isEditable: true,
+        isSecure: false,
+        applicationName: "TestApp"
+    )
+
+    let mockProcessCommandUseCase = MockProcessVoiceCommandUseCase()
+    let mockTranscriptionUseCase = MockTranscriptionUseCase()
+
+    let viewModel = RecordingState(
+        getSelectedTextUseCase: mockGetTextUseCase,
+        processVoiceCommandUseCase: mockProcessCommandUseCase,
+        transcriptionUseCase: mockTranscriptionUseCase
+    )
+
+    // When
+    await viewModel.handleKeyUp()
+
+    // Then
+    #expect(mockProcessCommandUseCase.executeCalled == true)
+    #expect(mockTranscriptionUseCase.executeCalled == false)
+}
+```
+
+#### 5. LLM Processor Tests (Rust)
+- **职责**: 测试 Rust 层 LLM 处理
+- **测试场景**:
+  - Prompt 构建正确
+  - API 重试逻辑（指数退避）
+  - 空响应处理
+  - 错误转换
 
 ### 集成测试
 
-1. **VoiceCommandFlowTests**
-   - 完整的录音 → 选中文本获取 → LLM 处理 → 粘贴流程
-   - 使用 Mock 的 Accessibility API 和 LLM API
+#### 1. VoiceCommandFlowTests
+- **职责**: 测试完整流程集成
+- **测试场景**:
+  - 完整的录音 → 选中文本获取 → LLM 处理 → 粘贴流程
+  - 使用 Mock 的 Accessibility API 和 LLM API
+  - 验证各环节数据传递正确
+
+#### 2. RepositoryIntegrationTests
+- **职责**: 测试 Repository 与外部系统交互
+- **测试场景**:
+  - AccessibilitySelectedTextRepository 与真实 AX API 交互
+  - GeminiLLMRepository 与真实 Gemini API 交互（可选，使用 staging key）
 
 ### UI 测试
 
-1. **CapsuleStatusTests**
-   - 验证 Voice Command 模式下显示正确的状态文字
-   - 验证错误状态显示和超时隐藏
+#### 1. CapsuleStatusTests
+- **职责**: 验证 UI 状态显示
+- **测试场景**:
+  - Voice Command 模式下显示 "Voice command: \"...\" applied"
+  - Transcription 模式下显示 "Pasted"
+  - 错误状态显示和超时隐藏
 
 ---
 
 ## 实现优先级
 
 ### P0 - 核心功能
-- [ ] 选中文本获取（AccessibilitySelectedTextRepository）
-- [ ] 基础 Voice Command UseCase
-- [ ] LLM 处理函数（Rust）
-- [ ] 回退到转录模式
+- [ ] Rust: `process_text_with_llm` FFI 函数
+- [ ] Domain: `SelectedTextContext` Entity
+- [ ] Domain: `SelectedTextRepository` Protocol
+- [ ] Domain: `GetSelectedTextUseCase`
+- [ ] Data: `AccessibilitySelectedTextRepository`
+- [ ] ViewModel: 集成 `GetSelectedTextUseCase` 到 `RecordingState`
 
-### P1 - 错误处理
+### P1 - Voice Command 功能
+- [ ] Domain: `LLMRepository` Protocol
+- [ ] Domain: `ProcessVoiceCommandUseCase`
+- [ ] Data: `GeminiLLMRepository`
+- [ ] ViewModel: 编排逻辑（Voice Command vs Transcription 模式判断）
+
+### P2 - 错误处理
 - [ ] 密码字段保护
 - [ ] Accessibility 权限检测
 - [ ] LLM API 错误处理
-
-### P2 - 优化
 - [ ] 超长文本截断
+
+### P3 - 优化
 - [ ] 连接预热优化
 - [ ] 处理状态指示
+- [ ] 本地意图识别（可选）
