@@ -1,20 +1,8 @@
 import AppKit
+import ApplicationServices
 
-struct AppContext {
-    let appName: String
-    let bundleIdentifier: String?
-    let url: String?
-
-    var formatted: String {
-        var parts = ["app=\(appName)"]
-        if let url {
-            parts.append("url=\(url)")
-        }
-        return parts.joined(separator: "; ")
-    }
-}
-
-final class AppContextDetector {
+/// Repository implementation for capturing application context using system APIs.
+final class DefaultAppContextRepository: AppContextRepository {
 
     private static let browserBundles: Set<String> = [
         "com.google.Chrome",

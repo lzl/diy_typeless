@@ -30,7 +30,7 @@ final class RecordingState {
     private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
     private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
 
-    private let contextDetector = AppContextDetector()
+    private let appContextRepository: AppContextRepository
 
     private var groqKey: String = ""
     private var geminiKey: String = ""
@@ -47,7 +47,8 @@ final class RecordingState {
         transcriptionUseCase: TranscriptionUseCaseProtocol = TranscriptionPipelineUseCase(),
         recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCase(),
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase()
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase(),
+        appContextRepository: AppContextRepository = DefaultAppContextRepository()
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -57,6 +58,7 @@ final class RecordingState {
         self.recordingControlUseCase = recordingControlUseCase
         self.getSelectedTextUseCase = getSelectedTextUseCase
         self.processVoiceCommandUseCase = processVoiceCommandUseCase
+        self.appContextRepository = appContextRepository
 
         keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
@@ -151,7 +153,7 @@ final class RecordingState {
             try await recordingControlUseCase.startRecording()
             isRecording = true
             capsuleState = .recording
-            capturedContext = contextDetector.captureContext().formatted
+            capturedContext = appContextRepository.captureContext().formatted
         } catch {
             showError(error.localizedDescription)
         }
