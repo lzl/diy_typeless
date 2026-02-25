@@ -4,9 +4,9 @@ import Observation
 enum CapsuleState: Equatable {
     case hidden
     case recording
-    case transcribing
-    case polishing
-    case processingCommand(String)  // Shows voice command being processed
+    case transcribing(progress: Double)
+    case polishing(progress: Double)
+    case processingCommand(String, progress: Double)  // Shows voice command being processed
     case done(OutputResult)
     case error(String)
 }
@@ -23,14 +23,19 @@ final class RecordingState {
     private let apiKeyRepository: ApiKeyRepository
     private var keyMonitoringRepository: KeyMonitoringRepository
     private let textOutputRepository: TextOutputRepository
-    private let transcriptionUseCase: TranscriptionUseCaseProtocol
-    private let recordingControlUseCase: RecordingControlUseCaseProtocol
+    private let appContextRepository: AppContextRepository
 
-    // New use cases for voice command feature
+    // Recording control
+    private let recordingControlUseCase: RecordingControlUseCaseProtocol
+    private let stopRecordingUseCase: StopRecordingUseCaseProtocol
+
+    // Transcription pipeline
+    private let transcribeAudioUseCase: TranscribeAudioUseCaseProtocol
+    private let polishTextUseCase: PolishTextUseCaseProtocol
+
+    // Voice command
     private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
     private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
-
-    private let appContextRepository: AppContextRepository
 
     private var groqKey: String = ""
     private var geminiKey: String = ""
@@ -44,21 +49,28 @@ final class RecordingState {
         apiKeyRepository: ApiKeyRepository,
         keyMonitoringRepository: KeyMonitoringRepository,
         textOutputRepository: TextOutputRepository,
-        transcriptionUseCase: TranscriptionUseCaseProtocol = TranscriptionPipelineUseCase(),
-        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCase(),
+        appContextRepository: AppContextRepository = DefaultAppContextRepository(),
+        // Recording control
+        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCaseImpl(),
+        stopRecordingUseCase: StopRecordingUseCaseProtocol = StopRecordingUseCaseImpl(),
+        // Transcription pipeline
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = TranscribeAudioUseCaseImpl(),
+        polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl(),
+        // Voice command
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase(),
-        appContextRepository: AppContextRepository = DefaultAppContextRepository()
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase()
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
         self.keyMonitoringRepository = keyMonitoringRepository
         self.textOutputRepository = textOutputRepository
-        self.transcriptionUseCase = transcriptionUseCase
+        self.appContextRepository = appContextRepository
         self.recordingControlUseCase = recordingControlUseCase
+        self.stopRecordingUseCase = stopRecordingUseCase
+        self.transcribeAudioUseCase = transcribeAudioUseCase
+        self.polishTextUseCase = polishTextUseCase
         self.getSelectedTextUseCase = getSelectedTextUseCase
         self.processVoiceCommandUseCase = processVoiceCommandUseCase
-        self.appContextRepository = appContextRepository
 
         keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
@@ -86,7 +98,9 @@ final class RecordingState {
     func deactivate() {
         keyMonitoringRepository.stop()
         if isRecording {
-            _ = try? stopRecording()
+            Task {
+                _ = try? await stopRecordingUseCase.execute()
+            }
             isRecording = false
         }
         currentGeneration += 1
@@ -102,7 +116,9 @@ final class RecordingState {
             isProcessing = false
             currentGeneration += 1
             capturedContext = nil
-            _ = try? stopRecording()
+            Task {
+                _ = try? await stopRecordingUseCase.execute()
+            }
             capsuleState = .hidden
 
         case .transcribing, .polishing:
@@ -169,36 +185,36 @@ final class RecordingState {
         currentGeneration += 1
         let gen = currentGeneration
 
-        // Step 1: Get selected text (parallel with stopping recording)
-        let selectedTextContext = await getSelectedTextUseCase.execute()
-
-        capsuleState = .transcribing
-
         do {
-            // Step 2: Execute transcription pipeline
-            let transcriptionResult = try await transcriptionUseCase.execute(
-                groqKey: groqKey,
-                geminiKey: geminiKey,
-                context: capturedContext
+            // Step 1: Get selected text and stop recording
+            let selectedTextContext = await getSelectedTextUseCase.execute()
+            let wavData = try await stopRecordingUseCase.execute()
+
+            guard currentGeneration == gen else { return }
+
+            // Step 2: Transcribe audio
+            capsuleState = .transcribing(progress: 0)
+            let rawText = try await transcribeAudioUseCase.execute(
+                wavData: wavData,
+                apiKey: groqKey,
+                language: nil
             )
 
             guard currentGeneration == gen else { return }
 
-            // Step 3: Determine processing mode based on selected text
+            // Step 3: Determine mode and process
             if shouldUseVoiceCommandMode(selectedTextContext) {
-                // Voice Command Mode
-                capsuleState = .processingCommand(transcriptionResult.rawText)
-
                 try await handleVoiceCommandMode(
-                    transcription: transcriptionResult.rawText,
+                    transcription: rawText,
                     selectedText: selectedTextContext.text!,
                     geminiKey: geminiKey,
                     generation: gen
                 )
             } else {
-                // Transcription Mode (Fallback)
                 try await handleTranscriptionMode(
-                    transcriptionResult: transcriptionResult,
+                    rawText: rawText,
+                    geminiKey: geminiKey,
+                    context: capturedContext,
                     generation: gen
                 )
             }
@@ -210,7 +226,7 @@ final class RecordingState {
         }
     }
 
-    // MARK: - Business Logic (moved from Entity to ViewModel)
+    // MARK: - Business Logic
 
     private func shouldUseVoiceCommandMode(_ context: SelectedTextContext) -> Bool {
         // Note: isEditable is not required for voice command mode
@@ -227,6 +243,8 @@ final class RecordingState {
         geminiKey: String,
         generation: Int
     ) async throws {
+        capsuleState = .processingCommand(transcription, progress: 0)
+
         let result = try await processVoiceCommandUseCase.execute(
             transcription: transcription,
             selectedText: selectedText,
@@ -247,19 +265,23 @@ final class RecordingState {
     // MARK: - Transcription Mode (Fallback)
 
     private func handleTranscriptionMode(
-        transcriptionResult: TranscriptionResult,
+        rawText: String,
+        geminiKey: String,
+        context: String?,
         generation: Int
     ) async throws {
-        guard currentGeneration == generation else { return }
+        capsuleState = .polishing(progress: 0)
 
-        capsuleState = .polishing
-
-        try? await Task.sleep(for: .milliseconds(100))
+        let polishedText = try await polishTextUseCase.execute(
+            rawText: rawText,
+            apiKey: geminiKey,
+            context: context
+        )
 
         guard currentGeneration == generation else { return }
 
         onWillDeliverText?()
-        let outputResult = textOutputRepository.deliver(text: transcriptionResult.polishedText)
+        let outputResult = textOutputRepository.deliver(text: polishedText)
 
         capsuleState = .done(outputResult)
         isProcessing = false
