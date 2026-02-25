@@ -4,12 +4,12 @@ import Foundation
 protocol TranscribeAudioUseCaseProtocol: Sendable {
     /// Transcribes audio data to raw text
     /// - Parameters:
-    ///   - wavData: The WAV audio data to transcribe
+    ///   - audioData: The audio data to transcribe (FLAC format)
     ///   - apiKey: Groq API key
     ///   - language: Optional language hint (e.g., "zh", "en")
     /// - Returns: Raw transcribed text
     /// - Throws: TranscriptionError if transcription fails
-    func execute(wavData: WavData, apiKey: String, language: String?) async throws -> String
+    func execute(audioData: AudioData, apiKey: String, language: String?) async throws -> String
 }
 
 enum TranscriptionError: Error {

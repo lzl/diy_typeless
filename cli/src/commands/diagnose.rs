@@ -115,7 +115,7 @@ pub fn run_diagnose_pipeline(
 
     let groq_key = resolve_groq_key(groq_key)?;
     let transcribe_start = Instant::now();
-    let raw_text = diy_typeless_core::transcribe_wav_bytes(groq_key, wav_bytes, language)
+    let raw_text = diy_typeless_core::transcribe_audio_bytes(groq_key, wav_bytes, language)
         .context("Transcribe step failed")?;
     let transcribe_elapsed = transcribe_start.elapsed();
     let raw_path = output_dir.join(format!("{}_raw.txt", base));

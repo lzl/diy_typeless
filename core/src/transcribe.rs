@@ -5,9 +5,9 @@ use reqwest::StatusCode;
 use std::thread::sleep;
 use std::time::Duration;
 
-pub fn transcribe_wav_bytes(
+pub fn transcribe_audio_bytes(
     api_key: &str,
-    wav_bytes: &[u8],
+    audio_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
     let client = get_http_client();
@@ -24,7 +24,7 @@ pub fn transcribe_wav_bytes(
         }
 
         // Audio bytes are FLAC format (compressed, ~50-70% smaller)
-        let part = reqwest::blocking::multipart::Part::bytes(wav_bytes.to_vec())
+        let part = reqwest::blocking::multipart::Part::bytes(audio_bytes.to_vec())
             .file_name("audio.flac")
             .mime_str("audio/flac")
             .map_err(|e| CoreError::Http(e.to_string()))?;

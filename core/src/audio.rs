@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, uniffi::Record)]
-pub struct WavData {
+pub struct AudioData {
     pub bytes: Vec<u8>,
     pub duration_seconds: f32,
 }
@@ -98,7 +98,7 @@ pub fn start_recording() -> Result<(), CoreError> {
     Ok(())
 }
 
-pub fn stop_recording() -> Result<WavData, CoreError> {
+pub fn stop_recording() -> Result<AudioData, CoreError> {
     let mut state = RECORDING_STATE
         .lock()
         .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
@@ -135,7 +135,7 @@ pub fn stop_recording() -> Result<WavData, CoreError> {
     let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE)?;
     let bytes = flac_bytes_from_samples(&enhanced)?;
 
-    Ok(WavData {
+    Ok(AudioData {
         bytes,
         duration_seconds,
     })
@@ -269,7 +269,7 @@ fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreErro
 ///
 /// This preserves the original WAV format for compatibility with
 /// existing diagnostic tools and external audio processing.
-pub fn stop_recording_wav() -> Result<WavData, CoreError> {
+pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
     let mut state = RECORDING_STATE
         .lock()
         .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
@@ -303,7 +303,7 @@ pub fn stop_recording_wav() -> Result<WavData, CoreError> {
     let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE)?;
     let bytes = wav_bytes_from_samples(&enhanced)?;
 
-    Ok(WavData {
+    Ok(AudioData {
         bytes,
         duration_seconds,
     })

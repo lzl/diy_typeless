@@ -11,7 +11,7 @@ final class GeminiLLMRepository: LLMRepository {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let result = try processTextWithLLM(
+                    let result = try processTextWithLlm(
                         apiKey: apiKey,
                         prompt: prompt,
                         systemInstruction: nil,

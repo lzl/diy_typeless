@@ -7,7 +7,7 @@ mod pipeline;
 mod polish;
 mod transcribe;
 
-pub use audio::WavData;
+pub use audio::AudioData;
 pub use error::CoreError;
 
 #[uniffi::export]
@@ -16,23 +16,23 @@ pub fn start_recording() -> Result<(), CoreError> {
 }
 
 #[uniffi::export]
-pub fn stop_recording() -> Result<WavData, CoreError> {
+pub fn stop_recording() -> Result<AudioData, CoreError> {
     audio::stop_recording()
 }
 
 /// Stop recording and return WAV format (for CLI compatibility)
 #[uniffi::export]
-pub fn stop_recording_wav() -> Result<WavData, CoreError> {
+pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
     audio::stop_recording_wav()
 }
 
 #[uniffi::export]
-pub fn transcribe_wav_bytes(
+pub fn transcribe_audio_bytes(
     api_key: String,
-    wav_bytes: Vec<u8>,
+    audio_bytes: Vec<u8>,
     language: Option<String>,
 ) -> Result<String, CoreError> {
-    transcribe::transcribe_wav_bytes(&api_key, &wav_bytes, language.as_deref())
+    transcribe::transcribe_audio_bytes(&api_key, &audio_bytes, language.as_deref())
 }
 
 #[uniffi::export]
