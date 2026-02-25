@@ -1,6 +1,6 @@
 import Foundation
 
-enum OutputResult: Equatable {
+enum OutputResult: Equatable, Sendable {
     case pasted
     case copied
 }

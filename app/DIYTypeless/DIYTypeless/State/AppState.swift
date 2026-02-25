@@ -2,9 +2,9 @@ import AppKit
 import Foundation
 import Observation
 
-struct PermissionStatus {
-    var accessibility: Bool
-    var microphone: Bool
+struct PermissionStatus: Sendable {
+    let accessibility: Bool
+    let microphone: Bool
 
     var allGranted: Bool {
         accessibility && microphone
@@ -14,7 +14,7 @@ struct PermissionStatus {
 @MainActor
 @Observable
 final class AppState {
-    enum Phase {
+    enum Phase: Sendable {
         case onboarding
         case ready
     }

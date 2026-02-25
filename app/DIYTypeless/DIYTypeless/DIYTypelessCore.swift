@@ -780,6 +780,27 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
+
+fileprivate struct FfiConverterOptionFloat: FfiConverterRustBuffer {
+    typealias SwiftType = Float?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterFloat.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterFloat.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -888,6 +909,25 @@ public func uniffiEnsureDiyTypelessCoreInitialized() {
     case .apiChecksumMismatch:
         fatalError("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+}
+
+// MARK: - Voice Command Feature (Manually added until UniFFI regeneration)
+
+public func processTextWithLLM(
+    apiKey: String,
+    prompt: String,
+    systemInstruction: String?,
+    temperature: Float?
+) throws -> String {
+    return try FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+        uniffi_diy_typeless_core_fn_func_process_text_with_llm(
+            FfiConverterString.lower(apiKey),
+            FfiConverterString.lower(prompt),
+            FfiConverterOptionString.lower(systemInstruction),
+            FfiConverterOptionFloat.lower(temperature),
+            $0
+        )
+    })
 }
 
 // swiftlint:enable all

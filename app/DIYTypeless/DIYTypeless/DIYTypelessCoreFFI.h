@@ -248,6 +248,11 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
 RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM
+RustBuffer uniffi_diy_typeless_core_fn_func_process_text_with_llm(RustBuffer api_key, RustBuffer prompt, RustBuffer system_instruction, RustBuffer temperature, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING
 void uniffi_diy_typeless_core_fn_func_start_recording(RustCallStatus *_Nonnull out_status

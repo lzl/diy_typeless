@@ -1,6 +1,6 @@
 import Foundation
 
-enum ValidationState: Equatable {
+enum ValidationState: Equatable, Sendable {
     case idle
     case validating
     case success

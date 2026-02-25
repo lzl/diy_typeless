@@ -71,6 +71,11 @@ struct CapsuleView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
 
+        case .processingCommand:
+            Text("Processing")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+
         case .done(let result):
             Text(result == .pasted ? "Pasted" : "Copied")
                 .font(.system(size: 13, weight: .medium))
@@ -106,7 +111,7 @@ struct CapsuleView: View {
             audioMonitor.stop()
             startProgressAnimation(duration: 2.5)
 
-        case .polishing:
+        case .polishing, .processingCommand:
             startProgressAnimation(duration: 2.0)
 
         case .done, .error:
