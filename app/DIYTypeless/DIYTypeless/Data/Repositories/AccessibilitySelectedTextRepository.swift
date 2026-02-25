@@ -83,12 +83,20 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
     private func getSelectedTextViaClipboard() -> String? {
         let pasteboard = NSPasteboard.general
 
-        // Save original clipboard content (as string for comparison)
+        // Save original clipboard content
         let originalString = pasteboard.string(forType: .string)
 
+        // Small delay to ensure previous operations complete
+        Thread.sleep(forTimeInterval: 0.05)
+
+        // Clear clipboard first to ensure we can detect changes
+        pasteboard.clearContents()
+
+        // Small delay after clearing
+        Thread.sleep(forTimeInterval: 0.05)
+
         // Send Cmd+C using session event tap
-        // This is more reliable for targeting the frontmost application
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         let keyC: CGKeyCode = 0x08  // 'c' key
 
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: true),
@@ -99,24 +107,28 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
 
-        // Use annotated session event tap which targets the frontmost application
+        // Use annotated session event tap
         keyDown.post(tap: .cgAnnotatedSessionEventTap)
+        Thread.sleep(forTimeInterval: 0.05)
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
 
-        // Poll clipboard for change (more reliable than fixed delay)
+        // Poll clipboard for new content
         var selectedText: String?
-        for _ in 0..<20 {  // Max 400ms wait
+        var pollCount = 0
+        let maxPolls = 30
+
+        while pollCount < maxPolls {
             Thread.sleep(forTimeInterval: 0.02)
             let current = pasteboard.string(forType: .string)
-            if current != originalString {
+            if current != nil && current != "" {
                 selectedText = current
                 break
             }
+            pollCount += 1
         }
 
-        if selectedText == nil {
-            selectedText = pasteboard.string(forType: .string)
-        }
+        // Small delay before restoring
+        Thread.sleep(forTimeInterval: 0.05)
 
         // Restore original clipboard content
         if let original = originalString {
