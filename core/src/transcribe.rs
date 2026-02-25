@@ -23,10 +23,10 @@ pub fn transcribe_wav_bytes(
             }
         }
 
-        // Audio bytes are WAV format (16-bit PCM, 16kHz, mono)
+        // Audio bytes are FLAC format (compressed, ~50-70% smaller)
         let part = reqwest::blocking::multipart::Part::bytes(wav_bytes.to_vec())
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
+            .file_name("audio.flac")
+            .mime_str("audio/flac")
             .map_err(|e| CoreError::Http(e.to_string()))?;
 
         form = form.part("file", part);
