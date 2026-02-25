@@ -116,7 +116,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Convert CFRange to NSRange
         var range = CFRange(location: 0, length: 0)
-        AXValueGetValue(rangeRef as! AXValue, kAXValueCFRangeType, &range)
+        AXValueGetValue(rangeRef as! AXValue, AXValueType(rawValue: kAXValueCFRangeType) ?? AXValueType(rawValue: 0)!, &range)
 
         // Validate range
         guard range.location >= 0, range.length >= 0 else {
@@ -134,7 +134,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
     }
 
     private func checkIfSecureTextField(_ element: AXUIElement) -> Bool {
-        // Method 1: Check role
+        // Method 1: Check role for secure text field
         var roleValue: CFTypeRef?
         let roleResult = AXUIElementCopyAttributeValue(
             element,
@@ -144,7 +144,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         if roleResult == .success,
            let role = roleValue as? String,
-           role == (kAXSecureTextFieldRole as String) {
+           role == "AXSecureTextField" {
             return true
         }
 
