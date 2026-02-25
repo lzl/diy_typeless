@@ -17,6 +17,15 @@ struct CapsuleView: View {
     private let capsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
 
+    private var shouldShowProgress: Bool {
+        switch state.capsuleState {
+        case .transcribing, .polishing, .processingCommand:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
         ZStack {
             // Subtle gradient background for depth
@@ -38,10 +47,8 @@ struct CapsuleView: View {
                 .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
                 .padding(0.5)
 
-            // Progress overlay for transcribing/polishing
-            if case .transcribing = state.capsuleState {
-                progressOverlay
-            } else if case .polishing = state.capsuleState {
+            // Progress overlay for processing states
+            if shouldShowProgress {
                 progressOverlay
             }
 
