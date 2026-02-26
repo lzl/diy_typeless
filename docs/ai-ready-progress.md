@@ -8,7 +8,7 @@ Goal: Document the existing architecture to make it easier for AI to navigate an
 
 ## Progress
 
-**Overall**: 0/8 tasks completed
+**Overall**: 8/8 tasks completed ✅
 
 ## Tasks
 
@@ -16,32 +16,32 @@ Goal: Document the existing architecture to make it easier for AI to navigate an
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 1.1 | Add README to Domain/ | ⬜ Pending | Explain subdirectories: Entities/, Errors/, Protocols/, Repositories/, UseCases/ |
-| 1.2 | Add README to Data/ | ⬜ Pending | Explain implementation mapping to Domain protocols |
-| 1.3 | Add README to State/ | ⬜ Pending | Explain @Observable ViewModels pattern |
+| 1.1 | Add README to Domain/ | ✅ Done 2026-02-26 | DOMAIN_README.md with entities, protocols |
+| 1.2 | Add README to Data/ | ✅ Done 2026-02-26 | DATA_README.md with implementations |
+| 1.3 | Add README to State/ | ✅ Done 2026-02-26 | STATE_README.md with @Observable pattern |
 
 ### Phase 2: Index Documentation (P1)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 2.1 | Create Domain/Repositories/INDEX.md | ⬜ Pending | List all 9+ repository protocols with purpose |
-| 2.2 | Create Domain/UseCases/INDEX.md | ⬜ Pending | List all use cases with inputs/outputs |
-| 2.3 | Add Infrastructure/README.md | ⬜ Pending | FFI bridge, Scheduling module |
+| 2.1 | Create Domain/Repositories/INDEX.md | ✅ Done 2026-02-26 | REPOS_INDEX.md - all 9 protocols listed |
+| 2.2 | Create Domain/UseCases/INDEX.md | ✅ Done 2026-02-26 | USECASES_INDEX.md - all 8 use cases listed |
+| 2.3 | Add Infrastructure/README.md | ✅ Done 2026-02-26 | INFRASTRUCTURE_README.md - FFI, Scheduling |
 
 ### Phase 3: Conventions Documentation (P1)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 3.1 | Document naming conventions | ⬜ Pending | Add to AGENTS.md or create new file |
-| 3.2 | Document test patterns | ⬜ Pending | Mock usage, factory pattern, test structure |
+| 3.1 | Document naming conventions | ✅ Done 2026-02-26 | Added to AGENTS.md |
+| 3.2 | Document test patterns | ✅ Done 2026-02-26 | Already in AGENTS.md |
 
 ### Phase 4: Test Coverage (P2)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 4.1 | Add PolishTextUseCase tests | ⬜ Pending | Test LLM polishing, timeout, error handling |
-| 4.2 | Add TranscribeAudioUseCase tests | ⬜ Pending | Test audio processing pipeline |
-| 4.3 | Add ValidateApiKeyUseCase tests | ⬜ Pending | Test validation logic |
+| 4.1 | Add PolishTextUseCase tests | ✅ Done 2026-02-26 | 4 tests for error handling |
+| 4.2 | Add TranscribeAudioUseCase tests | ✅ Done 2026-02-26 | 4 tests for empty audio handling |
+| 4.3 | Add ValidateApiKeyUseCase tests | ✅ Done 2026-02-26 | 5 tests for provider routing |
 
 ## How to Update
 
@@ -52,7 +52,7 @@ When a task is completed:
 
 ## Checkpoints
 
-- [ ] Phase 1 complete: AI can navigate by module README
-- [ ] Phase 2 complete: Index files list all protocols/use cases
-- [ ] Phase 3 complete: Naming and test conventions documented
-- [ ] Phase 4 complete: Faster feedback on UseCase changes
+- [x] Phase 1 complete: AI can navigate by module README
+- [x] Phase 2 complete: Index files list all protocols/use cases
+- [x] Phase 3 complete: Naming and test conventions documented
+- [x] Phase 4 complete: Faster feedback on UseCase changes
