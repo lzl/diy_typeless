@@ -190,7 +190,7 @@ final class RecordingState {
         do {
             // Step 1: Get selected text and stop recording (PARALLEL)
             async let selectedTextContext = getSelectedTextUseCase.execute()
-            async let audioData = try await stopRecordingUseCase.execute()
+            async let audioData = stopRecordingUseCase.execute()
 
             // Await both results
             let (context, audio) = try await (selectedTextContext, audioData)
