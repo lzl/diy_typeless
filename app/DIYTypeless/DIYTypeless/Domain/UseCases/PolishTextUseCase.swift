@@ -12,7 +12,7 @@ protocol PolishTextUseCaseProtocol: Sendable {
     func execute(rawText: String, apiKey: String, context: String?) async throws -> String
 }
 
-enum PolishingError: Error {
+enum PolishingError: Error, Equatable {
     case emptyInput
     case apiError(String)
     case invalidResponse

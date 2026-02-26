@@ -12,7 +12,7 @@ protocol TranscribeAudioUseCaseProtocol: Sendable {
     func execute(audioData: AudioData, apiKey: String, language: String?) async throws -> String
 }
 
-enum TranscriptionError: Error {
+enum TranscriptionError: Error, Equatable {
     case emptyAudio
     case apiError(String)
     case decodingFailed

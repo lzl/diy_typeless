@@ -1,6 +1,6 @@
 import Foundation
 
-struct ValidationError: LocalizedError {
+struct ValidationError: LocalizedError, Equatable {
     let message: String
 
     var errorDescription: String? {
