@@ -10,8 +10,11 @@ Based on: [Prefetch Selected Text Design](../2026-02-26-prefetch-selected-text-d
 
 ## Architecture
 
-- **Modified File**: `RecordingState.swift` - Core prefetch logic
+- **New File**: `PrefetchScheduler.swift` - Protocol for time-based scheduling
+- **New File**: `RealPrefetchScheduler.swift` - Production scheduler implementation
+- **Modified File**: `RecordingState.swift` - Core prefetch logic with injected scheduler
 - **Modified File**: `SelectedTextContext.swift` - Add `.empty` static property
+- **Test File**: `MockPrefetchScheduler.swift` - Test double for scheduler
 - **Test File**: `RecordingStateTests.swift` - Add prefetch test cases
 
 ## Constraints
@@ -26,20 +29,23 @@ Based on: [Prefetch Selected Text Design](../2026-02-26-prefetch-selected-text-d
 ### Setup
 - [Task 001: Add SelectedTextContext.empty](./task-001-add-empty-context.md)
 
+### Infrastructure
+- [Task 002: Add PrefetchScheduler protocol and implementations](./task-002-add-scheduler.md)
+
 ### Core Prefetch Implementation (Red-Green)
-- [Task 002: Test - Normal prefetch flow](./task-002-test-normal-prefetch.md)
-- [Task 003: Implement - Normal prefetch flow](./task-003-implement-normal-prefetch.md)
+- [Task 003: Test - Normal prefetch flow](./task-003-test-normal-prefetch.md)
+- [Task 004: Implement - Normal prefetch flow](./task-004-implement-normal-prefetch.md)
 
 ### Short Press Handling (Red-Green)
-- [Task 004: Test - Short press cancellation](./task-004-test-short-press.md)
-- [Task 005: Implement - Short press handling](./task-005-implement-short-press.md)
+- [Task 005: Test - Short press cancellation](./task-005-test-short-press.md)
+- [Task 006: Implement - Short press handling](./task-006-implement-short-press.md)
 
 ### State Cleanup (Red-Green)
-- [Task 006: Test - Rapid key presses and cleanup](./task-006-test-cleanup.md)
-- [Task 007: Implement - State cleanup](./task-007-implement-cleanup.md)
+- [Task 007: Test - Rapid key presses and cleanup](./task-007-test-cleanup.md)
+- [Task 008: Implement - State cleanup](./task-008-implement-cleanup.md)
 
 ### Validation
-- [Task 008: Build verification and manual validation](./task-008-validation.md)
+- [Task 009: Build verification and manual validation](./task-009-validation.md)
 
 ## Verification Strategy
 

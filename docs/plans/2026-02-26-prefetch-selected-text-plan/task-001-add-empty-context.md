@@ -18,7 +18,7 @@ N/A - Infrastructure task
 
 ## Implementation Notes
 
-Add extension to `SelectedTextContext.swift` or create new file `SelectedTextContext+Empty.swift`:
+Add to `SelectedTextContext.swift`:
 
 ```swift
 extension SelectedTextContext {
@@ -36,8 +36,6 @@ extension SelectedTextContext {
 ## Location
 
 File: `app/DIYTypeless/DIYTypeless/Domain/Entities/SelectedTextContext.swift`
-
-Or create: `app/DIYTypeless/DIYTypeless/Domain/Extensions/SelectedTextContext+Empty.swift`
 
 ## depends-on
 

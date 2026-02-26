@@ -1,8 +1,8 @@
-# Task 002: Test - Normal Prefetch Flow
+# Task 003: Test - Normal Prefetch Flow
 
 ## Description
 
-Write failing test for normal prefetch flow scenario (Red phase).
+Write failing test for normal prefetch flow using injected scheduler (Red phase).
 
 ## BDD Scenario
 
@@ -21,23 +21,18 @@ Scenario: Normal prefetch flow with selected text
 
 1. **Test**: `testNormalPrefetchFlow()`
    - Mock `getSelectedTextUseCase` to return context with `hasSelection: true`
-   - Call `handleKeyDown()`
-   - Wait 300ms+
-   - Verify `getSelectedTextUseCase.execute()` was called
+   - Use `MockPrefetchScheduler` to control timing
+   - Call `handleKeyDown()` - verify scheduler.schedule was called with 300ms
+   - Execute scheduled operation immediately (no real wait)
    - Call `handleKeyUp()`
-   - Verify transcription flow uses the prefetched context
-
-2. **Test Infrastructure**:
-   - Need ability to control/mock time delay in tests
-   - Consider making `prefetchDelay` injectable for testing
+   - Verify voice command mode is entered
 
 ## Implementation Notes
 
-Create test that will fail until implementation is added:
-
 ```swift
+@Test("Normal prefetch flow with selected text")
 func testNormalPrefetchFlow() async {
-    // Arrange
+    let mockScheduler = MockPrefetchScheduler()
     let mockUseCase = MockGetSelectedTextUseCase()
     mockUseCase.result = SelectedTextContext(
         text: "selected text",
@@ -46,19 +41,21 @@ func testNormalPrefetchFlow() async {
         applicationName: "TestApp"
     )
 
-    let state = RecordingState(
-        // ... dependencies ...
-        getSelectedTextUseCase: mockUseCase
+    let state = RecordingStateTestFactory.makeRecordingState(
+        getSelectedTextUseCase: mockUseCase,
+        prefetchScheduler: mockScheduler,
+        prefetchDelay: .milliseconds(300)
     )
 
-    // Act
     await state.handleKeyDown()
-    try? await Task.sleep(for: .milliseconds(350)) // Wait for prefetch
-    await state.handleKeyUp()
+    #expect(mockScheduler.scheduledOperations.count == 1)
+    #expect(mockScheduler.scheduledOperations[0].delay == .milliseconds(300))
 
-    // Assert
-    XCTAssertTrue(mockUseCase.executeWasCalled)
-    // Verify voice command mode was entered (based on prefetched context)
+    await mockScheduler.executeScheduled()
+    #expect(mockUseCase.executeWasCalled)
+
+    await state.handleKeyUp()
+    // Verify voice command mode
 }
 ```
 
@@ -68,7 +65,7 @@ File: `app/DIYTypeless/DIYTypelessTests/State/RecordingStateTests.swift`
 
 ## depends-on
 
-- Task 001
+- Task 002
 
 ## Estimated Effort
 
