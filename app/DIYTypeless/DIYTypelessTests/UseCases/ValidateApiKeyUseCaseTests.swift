@@ -55,7 +55,7 @@ struct ValidateApiKeyUseCaseTests {
     func testGroqKey_ErrorPropagated() async throws {
         // Given: Use case with mock that throws
         let mockGroqRepo = MockApiKeyValidationRepository()
-        mockGroqRepo.shouldThrow = ValidationError.invalidKey("Invalid Groq key")
+        mockGroqRepo.shouldThrow = ValidationError(message: "Invalid Groq key")
 
         let useCase = ValidateApiKeyUseCase(
             groqRepository: mockGroqRepo,
@@ -63,7 +63,7 @@ struct ValidateApiKeyUseCaseTests {
         )
 
         // When/Then: Error should propagate
-        await #expect(throws: ValidationError.invalidKey("Invalid Groq key")) {
+        await #expect(throws: ValidationError(message: "Invalid Groq key")) {
             try await useCase.execute(key: "bad-key", for: .groq)
         }
     }
@@ -91,7 +91,7 @@ struct ValidateApiKeyUseCaseTests {
     func testGeminiKey_ErrorPropagated() async throws {
         // Given: Use case with mock that throws
         let mockGeminiRepo = MockApiKeyValidationRepository()
-        mockGeminiRepo.shouldThrow = ValidationError.invalidKey("Invalid Gemini key")
+        mockGeminiRepo.shouldThrow = ValidationError(message: "Invalid Gemini key")
 
         let useCase = ValidateApiKeyUseCase(
             groqRepository: MockApiKeyValidationRepository(),
@@ -99,7 +99,7 @@ struct ValidateApiKeyUseCaseTests {
         )
 
         // When/Then: Error should propagate
-        await #expect(throws: ValidationError.invalidKey("Invalid Gemini key")) {
+        await #expect(throws: ValidationError(message: "Invalid Gemini key")) {
             try await useCase.execute(key: "bad-key", for: .gemini)
         }
     }
