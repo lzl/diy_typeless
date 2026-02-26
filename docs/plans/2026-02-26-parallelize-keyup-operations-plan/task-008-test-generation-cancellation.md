@@ -38,7 +38,7 @@ Write a failing test that verifies generation-based cancellation works correctly
 Run the new tests and confirm they **fail** or reveal incorrect cancellation behavior:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testGenerationCancellation_IgnoresStaleResults
 ```

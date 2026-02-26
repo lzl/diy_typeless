@@ -10,13 +10,6 @@
 
 ## Scenario 1: Normal transcription mode with parallel execution
 
-**Given** the user is recording audio with Fn key held
-**And** no text is selected in the active application
-**When** the user releases the Fn key
-**Then** `getSelectedTextUseCase.execute()` and `stopRecordingUseCase.execute()` should run in parallel
-**And** the UI should transition to "Transcribing" state after both operations complete
-**And** the total delay should be approximately `max(getSelectedText_time, stopRecording_time)` instead of `getSelectedText_time + stopRecording_time`
-
 ```gherkin
 Scenario: Normal transcription mode with parallel execution
   Given the user is recording audio with Fn key held
@@ -30,14 +23,6 @@ Scenario: Normal transcription mode with parallel execution
 ---
 
 ## Scenario 2: Voice command mode with selected text
-
-**Given** the user is recording audio with Fn key held
-**And** text "hello world" is selected in the active application
-**When** the user releases the Fn key
-**Then** `getSelectedTextUseCase.execute()` should capture "hello world"
-**And** `stopRecordingUseCase.execute()` should capture audio data
-**And** both operations should run in parallel
-**And** voice command mode should be activated with the selected text
 
 ```gherkin
 Scenario: Voice command mode with selected text
@@ -54,13 +39,6 @@ Scenario: Voice command mode with selected text
 
 ## Scenario 3: Stop recording fails during parallel execution
 
-**Given** the user is recording audio with Fn key held
-**When** the user releases the Fn key
-**And** `stopRecordingUseCase.execute()` throws an error
-**Then** the error should be caught and displayed
-**And** the capsule should show error state
-**And** `getSelectedTextUseCase.execute()` result should be discarded
-
 ```gherkin
 Scenario: Stop recording fails during parallel execution
   Given the user is recording audio with Fn key held
@@ -74,12 +52,6 @@ Scenario: Stop recording fails during parallel execution
 ---
 
 ## Scenario 4: Generation cancellation during parallel execution
-
-**Given** the user released Fn key and parallel operations started
-**When** the user presses Fn again before operations complete
-**Then** `currentGeneration` should be incremented
-**And** the parallel operations should complete but their results should be ignored
-**And** a new recording should start
 
 ```gherkin
 Scenario: Generation cancellation during parallel execution

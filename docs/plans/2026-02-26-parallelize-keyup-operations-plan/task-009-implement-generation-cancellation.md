@@ -39,7 +39,7 @@ Ensure generation-based cancellation works correctly with parallel execution.
 Run tests from Task 008 - they should now **pass**:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testGenerationCancellation_IgnoresStaleResults
 ```

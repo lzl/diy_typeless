@@ -41,7 +41,7 @@ Write a failing test that verifies voice command mode works correctly with paral
 Run the new tests and confirm they **fail** or reveal missing behavior:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testVoiceCommandMode_WithSelectedText
 ```

@@ -41,7 +41,7 @@ Ensure error handling works correctly with parallel execution using `async let`.
 Run tests from Task 006 - they should now **pass**:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testStopRecordingFailure_ErrorHandled
 ```

@@ -69,24 +69,19 @@ handleKeyUp()             handleKeyUp()
 ```
 Task 001 (Setup)
     │
-    ├── Task 002 (Red: Parallel Test)
-    │       │
-    │       └── Task 003 (Green: Parallel Impl)
-    │               │
-    │               ├── Task 004 (Red: Voice Command Test)
-    │               │       │
-    │               │       └── Task 005 (Green: Voice Command)
-    │               │
-    │               ├── Task 006 (Red: Error Test)
-    │               │       │
-    │               │       └── Task 007 (Green: Error Handling)
-    │               │
-    │               └── Task 008 (Red: Cancellation Test)
-    │                       │
-    │                       └── Task 009 (Green: Cancellation)
+    ├── Task 002 (Red: Parallel Test) ──┐
+    │                                   ├── Task 003 (Green: Parallel Impl)
+    ├── Task 004 (Red: Voice Command) ──┤
+    │                                   ├── Task 005 (Green: Voice Command)
+    ├── Task 006 (Red: Error Test) ─────┤
+    │                                   ├── Task 007 (Green: Error Handling)
+    ├── Task 008 (Red: Cancellation) ───┤
+    │                                   ├── Task 009 (Green: Cancellation)
     │
     └── Task 010 (Integration) - depends on all above
 ```
+
+**Note**: Tasks 002, 004, 006, and 008 are independent "Red" test tasks that can be written in parallel after Task 001. Each Red task is paired with its corresponding Green implementation task.
 
 ---
 

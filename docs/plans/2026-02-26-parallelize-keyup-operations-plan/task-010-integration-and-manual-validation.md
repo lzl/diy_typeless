@@ -41,7 +41,7 @@ Run all tests to ensure no regressions, and perform manual validation of the per
 
 1. **Automated tests**:
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS'
 ```
 

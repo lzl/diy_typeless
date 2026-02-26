@@ -39,7 +39,7 @@ Write a failing test that verifies error handling when `stopRecordingUseCase` th
 Run the new tests and confirm they **fail** or reveal incorrect error handling:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testStopRecordingFailure_ErrorHandled
 ```

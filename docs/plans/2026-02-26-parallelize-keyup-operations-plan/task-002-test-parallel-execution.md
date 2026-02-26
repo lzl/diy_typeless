@@ -41,7 +41,7 @@ Write a failing test that verifies `getSelectedTextUseCase.execute()` and `stopR
 Run the test and confirm it **fails** because the current implementation executes serially:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testParallelExecution_ReducedDelay
 ```

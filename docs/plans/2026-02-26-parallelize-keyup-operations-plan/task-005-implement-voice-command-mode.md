@@ -36,7 +36,7 @@ Ensure voice command mode logic works correctly with parallel execution.
 Run tests from Task 004 - they should now **pass**:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testVoiceCommandMode_WithSelectedText
 ```

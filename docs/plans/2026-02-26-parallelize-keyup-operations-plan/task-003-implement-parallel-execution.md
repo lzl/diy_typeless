@@ -39,7 +39,7 @@ Modify `RecordingState.handleKeyUp()` to execute `getSelectedTextUseCase` and `s
 Run the test from Task 002 - it should now **pass**:
 
 ```bash
-cd app/DIYTypeless
+cd /Users/lzl/conductor/workspaces/diy_typeless/monrovia/app/DIYTypeless
 xcodebuild test -scheme DIYTypeless -destination 'platform=macOS' \
   -only-testing:DIYTypelessTests/RecordingStateTests/testParallelExecution_ReducedDelay
 ```
