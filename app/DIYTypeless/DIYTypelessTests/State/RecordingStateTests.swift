@@ -299,4 +299,169 @@ struct RecordingStateTests {
         #expect(mockGetSelectedText.executeCount >= 1)
         #expect(mockStopRecording.executeCount >= 1)
     }
+
+    // MARK: - Prefetch Tests
+
+    @Test("Normal prefetch flow with selected text")
+    func testNormalPrefetchFlow() async throws {
+        // Given: Mock scheduler and selected text use case
+        let mockScheduler = MockPrefetchScheduler()
+        let mockUseCase = MockGetSelectedTextUseCase()
+        mockUseCase.result = SelectedTextContext(
+            text: "selected text",
+            isEditable: true,
+            isSecure: false,
+            applicationName: "TestApp"
+        )
+
+        let mockStopRecording = MockStopRecordingUseCase()
+        mockStopRecording.returnValue = createAudioData()
+
+        let mockProcessVoiceCommand = MockProcessVoiceCommandUseCase()
+        mockProcessVoiceCommand.returnValue = VoiceCommandResult(
+            processedText: "processed hello world",
+            action: .replaceSelection
+        )
+
+        let state = RecordingStateTestFactory.makeRecordingState(
+            stopRecordingUseCase: mockStopRecording,
+            getSelectedTextUseCase: mockUseCase,
+            processVoiceCommandUseCase: mockProcessVoiceCommand,
+            prefetchScheduler: mockScheduler,
+            prefetchDelay: .milliseconds(300)
+        )
+
+        state.activate()
+
+        // When: Key down is triggered
+        await state.handleKeyDown()
+
+        // Then: A prefetch operation should be scheduled with 300ms delay
+        #expect(mockScheduler.scheduledOperations.count == 1)
+        #expect(mockScheduler.scheduledOperations[0].delay == .milliseconds(300))
+
+        // When: Execute the scheduled prefetch
+        await mockScheduler.executeScheduled()
+
+        // Then: The selected text use case should have been executed for prefetch
+        #expect(mockUseCase.executeWasCalled)
+
+        // When: Key up is triggered
+        await state.handleKeyUp()
+
+        // Wait for async processing
+        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        // Then: Voice command mode should be activated (because hasSelection is true)
+        #expect(mockProcessVoiceCommand.executeCount == 1)
+    }
+
+    @Test("Short press cancels prefetch")
+    func testShortPressCancelsPrefetch() async throws {
+        let mockScheduler = MockPrefetchScheduler()
+        let mockUseCase = MockGetSelectedTextUseCase()
+        mockUseCase.result = SelectedTextContext(
+            text: "selected text",
+            isEditable: true,
+            isSecure: false,
+            applicationName: "TestApp"
+        )
+
+        let mockStopRecording = MockStopRecordingUseCase()
+        mockStopRecording.returnValue = createAudioData()
+
+        let mockPolishText = MockPolishTextUseCase()
+        mockPolishText.returnValue = "polished text"
+
+        let state = RecordingStateTestFactory.makeRecordingState(
+            stopRecordingUseCase: mockStopRecording,
+            polishTextUseCase: mockPolishText,
+            getSelectedTextUseCase: mockUseCase,
+            prefetchScheduler: mockScheduler,
+            prefetchDelay: .milliseconds(300)
+        )
+
+        state.activate()
+
+        // Key down - starts recording and schedules prefetch
+        await state.handleKeyDown()
+
+        // Verify prefetch was scheduled
+        #expect(mockScheduler.scheduledOperations.count == 1, "Prefetch should be scheduled")
+
+        // Immediately release (before prefetch executes)
+        await state.handleKeyUp()
+
+        // Wait for async processing
+        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        // Verify prefetch was cancelled
+        #expect(mockScheduler.cancelledTasks.count == 1, "Prefetch task should be cancelled, but was \(mockScheduler.cancelledTasks.count)")
+
+        // Verify transcription mode (not voice command)
+        // Polish should be called, not processVoiceCommand
+        #expect(mockPolishText.executeCount == 1, "Polish text should be called once")
+    }
+
+    // MARK: - Rapid Key Presses and Cleanup Tests
+
+    @Test("Rapid key presses schedule new prefetch")
+    func testRapidKeyPresses() async throws {
+        let mockScheduler = MockPrefetchScheduler()
+        let state = RecordingStateTestFactory.makeRecordingState(
+            prefetchScheduler: mockScheduler
+        )
+
+        state.activate()
+
+        // First key down/up cycle
+        await state.handleKeyDown()
+        #expect(mockScheduler.scheduledOperations.count == 1, "First prefetch should be scheduled")
+
+        await state.handleKeyUp()
+
+        // Second key down
+        await state.handleKeyDown()
+        #expect(mockScheduler.scheduledOperations.count == 2, "Second prefetch should be scheduled")
+    }
+
+    @Test("Deactivate cancels prefetch")
+    func testDeactivateCancelsPrefetch() async throws {
+        let mockScheduler = MockPrefetchScheduler()
+        let state = RecordingStateTestFactory.makeRecordingState(
+            prefetchScheduler: mockScheduler
+        )
+
+        state.activate()
+
+        // Key down - starts recording and schedules prefetch
+        await state.handleKeyDown()
+        #expect(mockScheduler.scheduledOperations.count == 1, "Prefetch should be scheduled")
+
+        // Deactivate while prefetch is pending
+        state.deactivate()
+
+        // Verify prefetch was cancelled
+        #expect(mockScheduler.cancelledTasks.count >= 1, "Prefetch task should be cancelled on deactivate, but was \(mockScheduler.cancelledTasks.count)")
+    }
+
+    @Test("Handle cancel cancels prefetch")
+    func testHandleCancelCancelsPrefetch() async throws {
+        let mockScheduler = MockPrefetchScheduler()
+        let state = RecordingStateTestFactory.makeRecordingState(
+            prefetchScheduler: mockScheduler
+        )
+
+        state.activate()
+
+        // Key down - starts recording and schedules prefetch
+        await state.handleKeyDown()
+        #expect(mockScheduler.scheduledOperations.count == 1, "Prefetch should be scheduled")
+
+        // Cancel while prefetch is pending
+        state.handleCancel()
+
+        // Verify prefetch was cancelled
+        #expect(mockScheduler.cancelledTasks.count >= 1, "Prefetch task should be cancelled on handleCancel, but was \(mockScheduler.cancelledTasks.count)")
+    }
 }

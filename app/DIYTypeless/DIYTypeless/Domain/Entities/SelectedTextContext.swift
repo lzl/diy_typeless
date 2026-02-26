@@ -14,3 +14,14 @@ struct SelectedTextContext: Sendable {
         return !text.isEmpty
     }
 }
+
+extension SelectedTextContext {
+    static var empty: SelectedTextContext {
+        SelectedTextContext(
+            text: nil,
+            isEditable: false,
+            isSecure: false,
+            applicationName: ""
+        )
+    }
+}
