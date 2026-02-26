@@ -1,9 +1,16 @@
 import AppKit
 
 /// Repository implementation that retrieves selected text using macOS Accessibility API.
-/// - Accessibility API calls run on background thread to avoid blocking MainActor
+///
+/// Thread Safety:
+/// - Accessibility API calls run on background threads via `withCheckedContinuation`
 /// - Clipboard operations run on MainActor as NSPasteboard requires main thread access
-final class AccessibilitySelectedTextRepository: SelectedTextRepository {
+///
+/// @unchecked Sendable is safe because:
+/// - No mutable instance state
+/// - NSPasteboard.general and AXUIElement APIs handle their own thread safety
+/// - @MainActor methods are explicitly isolated
+final class AccessibilitySelectedTextRepository: SelectedTextRepository, @unchecked Sendable {
     func getSelectedText() async -> SelectedTextContext {
         // Step 1: Accessibility API query on background thread
         var context = await performAccessibilityQueryAsync()
@@ -89,6 +96,21 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
     // MARK: - Clipboard Method
 
+    /// Configuration for clipboard polling operations.
+    private enum ClipboardPollingConfig {
+        /// Initial delay after clearing clipboard (ensures clear completes)
+        static let initialClearDelay: Duration = .milliseconds(20)
+
+        /// Polling interval between clipboard checks
+        static let pollInterval: Duration = .milliseconds(15)
+
+        /// Maximum polling attempts before timeout (50 * 15ms = 750ms max wait)
+        static let maxPollAttempts = 50
+
+        /// Delay before restoring clipboard
+        static let restoreDelay: Duration = .milliseconds(10)
+    }
+
     /// Get selected text by sending Cmd+C and reading from clipboard.
     /// This is a workaround for apps that don't support Accessibility API (e.g., Chrome).
     /// Note: This temporarily modifies the clipboard but restores the original content.
@@ -106,15 +128,14 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         pasteboard.clearContents()
 
         // Brief delay to ensure clear completes
-        try? await Task.sleep(for: .milliseconds(20))
+        try? await Task.sleep(for: ClipboardPollingConfig.initialClearDelay)
 
         // Send Cmd+C
         sendCopyCommand()
 
         // Poll for clipboard change using changeCount (more efficient than reading content)
-        let maxAttempts = 50
-        for _ in 0..<maxAttempts {
-            try? await Task.sleep(for: .milliseconds(15))
+        for _ in 0..<ClipboardPollingConfig.maxPollAttempts {
+            try? await Task.sleep(for: ClipboardPollingConfig.pollInterval)
 
             // Check if clipboard content changed
             if pasteboard.changeCount != originalChangeCount {
@@ -151,7 +172,7 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
     @MainActor
     private func restoreClipboard(_ original: String?) async {
         // Brief delay to ensure any pending reads complete
-        try? await Task.sleep(for: .milliseconds(10))
+        try? await Task.sleep(for: ClipboardPollingConfig.restoreDelay)
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -214,7 +235,10 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
 
         // Convert CFRange to NSRange
         var range = CFRange(location: 0, length: 0)
-        AXValueGetValue(rangeRef as! AXValue, AXValueType(rawValue: kAXValueCFRangeType) ?? AXValueType(rawValue: 0)!, &range)
+        guard let valueType = AXValueType(rawValue: kAXValueCFRangeType) else {
+            return nil
+        }
+        AXValueGetValue(rangeRef as! AXValue, valueType, &range)
 
         // Validate range
         guard range.location >= 0, range.length >= 0 else {
