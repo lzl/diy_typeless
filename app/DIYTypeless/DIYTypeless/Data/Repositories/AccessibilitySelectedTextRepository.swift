@@ -1,28 +1,38 @@
 import AppKit
 
 /// Repository implementation that retrieves selected text using macOS Accessibility API.
-/// Executes API calls on background thread to avoid blocking MainActor.
+/// - Accessibility API calls run on background thread to avoid blocking MainActor
+/// - Clipboard operations run on MainActor as NSPasteboard requires main thread access
 final class AccessibilitySelectedTextRepository: SelectedTextRepository {
     func getSelectedText() async -> SelectedTextContext {
+        // Step 1: Accessibility API query on background thread
+        var context = await performAccessibilityQueryAsync()
+
+        // Step 2: If no selection, try clipboard method on MainActor (for browsers like Chrome)
+        if !context.hasSelection {
+            if let clipboardText = await getSelectedTextViaClipboardAsync(),
+               !clipboardText.isEmpty {
+                context = SelectedTextContext(
+                    text: clipboardText,
+                    isEditable: context.isEditable,
+                    isSecure: context.isSecure,
+                    applicationName: context.applicationName
+                )
+            }
+        }
+
+        return context
+    }
+
+    // MARK: - Accessibility API
+
+    /// Wraps synchronous Accessibility API calls in async continuation.
+    /// Runs on background thread to avoid blocking MainActor.
+    private func performAccessibilityQueryAsync() async -> SelectedTextContext {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                // Try Accessibility API first
-                var context = self.performAccessibilityQuery()
-
-                // If no text found via AX API, try clipboard method (for browsers like Chrome)
-                if !context.hasSelection {
-                    if let clipboardText = self.getSelectedTextViaClipboard(),
-                       !clipboardText.isEmpty {
-                        context = SelectedTextContext(
-                            text: clipboardText,
-                            isEditable: context.isEditable,
-                            isSecure: context.isSecure,
-                            applicationName: context.applicationName
-                        )
-                    }
-                }
-
-                continuation.resume(returning: context)
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                let result = performAccessibilityQuery()
+                continuation.resume(returning: result)
             }
         }
     }
@@ -77,68 +87,77 @@ final class AccessibilitySelectedTextRepository: SelectedTextRepository {
         )
     }
 
+    // MARK: - Clipboard Method
+
     /// Get selected text by sending Cmd+C and reading from clipboard.
     /// This is a workaround for apps that don't support Accessibility API (e.g., Chrome).
     /// Note: This temporarily modifies the clipboard but restores the original content.
-    private func getSelectedTextViaClipboard() -> String? {
+    ///
+    /// Must run on MainActor as NSPasteboard requires main thread access.
+    @MainActor
+    private func getSelectedTextViaClipboardAsync() async -> String? {
         let pasteboard = NSPasteboard.general
 
-        // Save original clipboard content
+        // Save original clipboard state
         let originalString = pasteboard.string(forType: .string)
+        let originalChangeCount = pasteboard.changeCount
 
-        // Small delay to ensure previous operations complete
-        Thread.sleep(forTimeInterval: 0.05)
-
-        // Clear clipboard first to ensure we can detect changes
+        // Clear clipboard
         pasteboard.clearContents()
 
-        // Small delay after clearing
-        Thread.sleep(forTimeInterval: 0.05)
+        // Brief delay to ensure clear completes
+        try? await Task.sleep(for: .milliseconds(20))
 
-        // Send Cmd+C using session event tap
+        // Send Cmd+C
+        sendCopyCommand()
+
+        // Poll for clipboard change using changeCount (more efficient than reading content)
+        let maxAttempts = 50
+        for _ in 0..<maxAttempts {
+            try? await Task.sleep(for: .milliseconds(15))
+
+            // Check if clipboard content changed
+            if pasteboard.changeCount != originalChangeCount {
+                if let text = pasteboard.string(forType: .string), !text.isEmpty {
+                    // Restore original clipboard before returning
+                    await restoreClipboard(originalString)
+                    return text
+                }
+            }
+        }
+
+        // Timeout - restore original clipboard
+        await restoreClipboard(originalString)
+        return nil
+    }
+
+    @MainActor
+    private func sendCopyCommand() {
         let source = CGEventSource(stateID: .combinedSessionState)
         let keyC: CGKeyCode = 0x08  // 'c' key
 
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: false) else {
-            return nil
+            return
         }
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
 
-        // Use annotated session event tap
         keyDown.post(tap: .cgAnnotatedSessionEventTap)
-        Thread.sleep(forTimeInterval: 0.05)
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
+    }
 
-        // Poll clipboard for new content
-        var selectedText: String?
-        var pollCount = 0
-        let maxPolls = 30
+    @MainActor
+    private func restoreClipboard(_ original: String?) async {
+        // Brief delay to ensure any pending reads complete
+        try? await Task.sleep(for: .milliseconds(10))
 
-        while pollCount < maxPolls {
-            Thread.sleep(forTimeInterval: 0.02)
-            let current = pasteboard.string(forType: .string)
-            if current != nil && current != "" {
-                selectedText = current
-                break
-            }
-            pollCount += 1
-        }
-
-        // Small delay before restoring
-        Thread.sleep(forTimeInterval: 0.05)
-
-        // Restore original clipboard content
-        if let original = originalString {
-            pasteboard.clearContents()
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if let original = original {
             pasteboard.setString(original, forType: .string)
-        } else {
-            pasteboard.clearContents()
         }
-
-        return selectedText
     }
 
     private func readSelectedText(from element: AXUIElement) -> String? {
