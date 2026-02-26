@@ -132,7 +132,9 @@ final class RecordingState {
         }
     }
 
-    private func handleKeyDown() async {
+    // MARK: - Key Event Handlers (Internal for Testing)
+
+    func handleKeyDown() async {
         if isProcessing, !isRecording {
             handleCancel()
             return
@@ -175,7 +177,7 @@ final class RecordingState {
         }
     }
 
-    private func handleKeyUp() async {
+    func handleKeyUp() async {
         guard isRecording else { return }
 
         guard !isProcessing else { return }
@@ -186,16 +188,19 @@ final class RecordingState {
         let gen = currentGeneration
 
         do {
-            // Step 1: Get selected text and stop recording
-            let selectedTextContext = await getSelectedTextUseCase.execute()
-            let audioData = try await stopRecordingUseCase.execute()
+            // Step 1: Get selected text and stop recording (PARALLEL)
+            async let selectedTextContext = getSelectedTextUseCase.execute()
+            async let audioData = stopRecordingUseCase.execute()
+
+            // Await both results
+            let (context, audio) = try await (selectedTextContext, audioData)
 
             guard currentGeneration == gen else { return }
 
             // Step 2: Transcribe audio
             capsuleState = .transcribing(progress: 0)
             let rawText = try await transcribeAudioUseCase.execute(
-                audioData: audioData,
+                audioData: audio,
                 apiKey: groqKey,
                 language: nil
             )
@@ -203,10 +208,10 @@ final class RecordingState {
             guard currentGeneration == gen else { return }
 
             // Step 3: Determine mode and process
-            if shouldUseVoiceCommandMode(selectedTextContext) {
+            if shouldUseVoiceCommandMode(context) {
                 try await handleVoiceCommandMode(
                     transcription: rawText,
-                    selectedText: selectedTextContext.text!,
+                    selectedText: context.text!,
                     geminiKey: geminiKey,
                     generation: gen
                 )
