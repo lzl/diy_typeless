@@ -52,6 +52,10 @@ final class RecordingStateTestFactory {
         MockProcessVoiceCommandUseCase()
     }
 
+    static func makePrefetchScheduler() -> PrefetchScheduler {
+        MockPrefetchScheduler()
+    }
+
     // MARK: - Factory Method
 
     /// Creates a RecordingState with minimal configuration.
@@ -67,6 +71,8 @@ final class RecordingStateTestFactory {
     ///   - polishTextUseCase: Optional custom polish text use case (default: mock)
     ///   - getSelectedTextUseCase: Optional custom get selected text use case (default: mock)
     ///   - processVoiceCommandUseCase: Optional custom process voice command use case (default: mock)
+    ///   - prefetchScheduler: Optional custom prefetch scheduler (default: mock, unused until prefetch implemented)
+    ///   - prefetchDelay: Optional delay for prefetch scheduling (default: 300ms, unused until prefetch implemented)
     /// - Returns: Configured RecordingState instance
     static func makeRecordingState(
         permissionRepository: PermissionRepository? = nil,
@@ -79,7 +85,9 @@ final class RecordingStateTestFactory {
         transcribeAudioUseCase: TranscribeAudioUseCaseProtocol? = nil,
         polishTextUseCase: PolishTextUseCaseProtocol? = nil,
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol? = nil,
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol? = nil
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol? = nil,
+        prefetchScheduler: PrefetchScheduler? = nil,
+        prefetchDelay: Duration? = nil
     ) -> RecordingState {
         RecordingState(
             permissionRepository: permissionRepository ?? makePermissionRepository(),
@@ -92,7 +100,9 @@ final class RecordingStateTestFactory {
             transcribeAudioUseCase: transcribeAudioUseCase ?? makeTranscribeAudioUseCase(),
             polishTextUseCase: polishTextUseCase ?? makePolishTextUseCase(),
             getSelectedTextUseCase: getSelectedTextUseCase ?? makeGetSelectedTextUseCase(),
-            processVoiceCommandUseCase: processVoiceCommandUseCase ?? makeProcessVoiceCommandUseCase()
+            processVoiceCommandUseCase: processVoiceCommandUseCase ?? makeProcessVoiceCommandUseCase(),
+            prefetchScheduler: prefetchScheduler ?? makePrefetchScheduler(),
+            prefetchDelay: prefetchDelay ?? .milliseconds(300)
         )
     }
 }

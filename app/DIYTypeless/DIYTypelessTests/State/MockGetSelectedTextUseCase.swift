@@ -16,8 +16,17 @@ final class MockGetSelectedTextUseCase: GetSelectedTextUseCaseProtocol {
         applicationName: "TestApp"
     )
 
+    /// Alias for returnValue to match test naming convention
+    var result: SelectedTextContext {
+        get { returnValue }
+        set { returnValue = newValue }
+    }
+
     /// Track execution count
     private(set) var executeCount = 0
+
+    /// Track if execute was called (for simple boolean checks)
+    var executeWasCalled: Bool { executeCount > 0 }
 
     /// Track last execution time
     private(set) var lastExecutionTime: Date?

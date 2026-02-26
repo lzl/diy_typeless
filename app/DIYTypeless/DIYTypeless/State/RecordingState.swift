@@ -37,6 +37,12 @@ final class RecordingState {
     private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
     private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
 
+    // Prefetch
+    private var preselectedContext: SelectedTextContext?
+    private var prefetchTask: Task<Void, Never>?
+    private let prefetchScheduler: PrefetchScheduler
+    private let prefetchDelay: Duration
+
     private var groqKey: String = ""
     private var geminiKey: String = ""
     private var isRecording = false
@@ -58,7 +64,10 @@ final class RecordingState {
         polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl(),
         // Voice command
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase()
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase(),
+        // Prefetch
+        prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
+        prefetchDelay: Duration = .milliseconds(300)
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -71,6 +80,8 @@ final class RecordingState {
         self.polishTextUseCase = polishTextUseCase
         self.getSelectedTextUseCase = getSelectedTextUseCase
         self.processVoiceCommandUseCase = processVoiceCommandUseCase
+        self.prefetchScheduler = prefetchScheduler
+        self.prefetchDelay = prefetchDelay
 
         keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
@@ -97,6 +108,7 @@ final class RecordingState {
 
     func deactivate() {
         keyMonitoringRepository.stop()
+        cleanupPrefetch()
         if isRecording {
             Task {
                 _ = try? await stopRecordingUseCase.execute()
@@ -110,6 +122,8 @@ final class RecordingState {
     }
 
     func handleCancel() {
+        cleanupPrefetch()
+
         switch capsuleState {
         case .recording, .processingCommand:
             isRecording = false
@@ -172,6 +186,14 @@ final class RecordingState {
             isRecording = true
             capsuleState = .recording
             capturedContext = appContextRepository.captureContext().formatted
+
+            // Schedule prefetch of selected text after delay
+            prefetchTask = prefetchScheduler.schedule(delay: prefetchDelay) { [weak self] in
+                guard let self else { return }
+                let context = await self.getSelectedTextUseCase.execute()
+                guard !Task.isCancelled else { return }
+                self.preselectedContext = context
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -179,6 +201,8 @@ final class RecordingState {
 
     func handleKeyUp() async {
         guard isRecording else { return }
+
+        cleanupPrefetch()  // Cancel any pending prefetch
 
         guard !isProcessing else { return }
         isRecording = false
@@ -188,12 +212,14 @@ final class RecordingState {
         let gen = currentGeneration
 
         do {
-            // Step 1: Get selected text and stop recording (PARALLEL)
-            async let selectedTextContext = getSelectedTextUseCase.execute()
+            // Step 1: Use prefetched context or empty, and stop recording (PARALLEL)
+            let context = preselectedContext ?? .empty
+            preselectedContext = nil  // Clear after use
+
             async let audioData = stopRecordingUseCase.execute()
 
-            // Await both results
-            let (context, audio) = try await (selectedTextContext, audioData)
+            // Await audio data
+            let audio = try await audioData
 
             guard currentGeneration == gen else { return }
 
@@ -311,5 +337,13 @@ final class RecordingState {
     private func refreshKeys() {
         groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func cleanupPrefetch() {
+        if let task = prefetchTask {
+            prefetchScheduler.cancel(task)
+        }
+        prefetchTask = nil
+        preselectedContext = nil
     }
 }
