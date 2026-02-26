@@ -309,37 +309,16 @@ To verify the app builds successfully without launching it or modifying permissi
 ./scripts/dev-loop.sh --testing
 ```
 
-This is the preferred way to validate macOS app builds during development.
-
-### Project Location
-
-The Xcode project is located at:
-```
-/Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless/DIYTypeless.xcodeproj
-```
-
-### Build Commands
-
-**Debug build:**
-```bash
-cd /Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless
-xcodebuild -scheme DIYTypeless -configuration Debug build 2>&1
-```
-
-**Release archive (arm64 only):**
-```bash
-cd /Users/lzl/Documents/GitHub/diy_typeless_mac/DIYTypeless
-xcodebuild archive -scheme DIYTypeless -archivePath ~/Downloads/DIYTypeless.xcarchive ARCHS=arm64 ONLY_ACTIVE_ARCH=NO 2>&1
-```
+This is the **only** way to validate macOS app builds during development. Do not use direct `xcodebuild` commands.
 
 ### Error Handling Workflow
 
-1. Run the build command and capture output
+1. Run `./scripts/dev-loop.sh --testing`
 2. If build fails, parse the error output (look for `error:` lines)
 3. Common issues:
-   - **Architecture mismatch**: Rust library only supports arm64. Use `ARCHS=arm64` flag.
-   - **Missing entitlements**: Ensure Release config has `CODE_SIGN_ENTITLEMENTS` set.
-   - **Library not found**: Run `cargo build -p diy_typeless_core --release` first.
+   - **Architecture mismatch**: Rust library only supports arm64
+   - **Missing entitlements**: Ensure Release config has `CODE_SIGN_ENTITLEMENTS` set
+   - **Library not found**: Run `cargo build -p diy_typeless_core --release` first
 4. Fix issues and re-run build to verify
 
 ### Creating DMG for Distribution
