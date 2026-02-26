@@ -416,3 +416,48 @@ final class KeychainApiKeyRepositoryTests: XCTestCase {
 ### UI Tests
 
 Minimal UI tests focusing on user flows, not implementation details.
+
+## File Naming Conventions
+
+Use these patterns when creating new files:
+
+| Pattern | Layer | Example |
+|---------|-------|---------|
+| `XXXRepository.swift` | Domain (Protocol) | `ApiKeyRepository.swift` |
+| `XXXRepository.swift` | Data (Implementation) | `KeychainApiKeyRepository.swift` |
+| `XXXUseCase.swift` | Domain (Protocol) | `PolishTextUseCase.swift` |
+| `XXXUseCaseImpl.swift` | Data (Implementation) | `PolishTextUseCaseImpl.swift` |
+| `XXXState.swift` | State | `RecordingState.swift` |
+| `XXXEntities.swift` | Domain/Entities | `TranscriptionEntities.swift` |
+| `XXXError.swift` | Domain/Errors | `ValidationError.swift` |
+
+## Test File Naming
+
+| Pattern | Example |
+|---------|---------|
+| `XXXTests.swift` | `RecordingStateTests.swift` |
+| `XXXTestFactory.swift` | `RecordingStateTestFactory.swift` |
+| `MockXXX.swift` | `MockGetSelectedTextUseCase.swift` |
+
+## Directory Structure
+
+```
+DIYTypeless/
+├── Domain/           # Protocols only
+│   ├── Entities/
+│   ├── Errors/
+│   ├── Protocols/
+│   ├── Repositories/
+│   └── UseCases/
+├── Data/             # Implementations
+│   ├── Repositories/
+│   └── UseCases/
+├── State/            # @Observable ViewModels
+├── Infrastructure/   # FFI, Scheduling
+├── Presentation/     # SwiftUI Views
+│   ├── DesignSystem/
+│   └── Components/
+├── Capsule/          # UI components
+├── MenuBar/          # Menu bar UI
+└── Onboarding/       # Onboarding UI
+```
