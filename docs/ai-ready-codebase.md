@@ -10,24 +10,29 @@ This initiative is inspired by the video ["Your codebase is NOT ready for AI (he
 
 ### Already Good (No Action Needed)
 
+The codebase is already well-structured for AI collaboration. Most improvements are about **documenting the existing architecture** rather than refactoring.
+
 | Aspect | Status |
 |--------|--------|
-| Clean Architecture | ✅ Domain/Data/Presentation separation |
+| Clean Architecture | ✅ Domain/Data/Presentation/State/Infrastructure separation |
 | Deep Modules | ✅ Protocols in Domain, implementations in Data |
 | Repository Pattern | ✅ Protocol in Domain, implementation in Data |
 | Dependency Injection | ✅ Constructor injection, no singletons |
 | State Management | ✅ @Observable (modern Swift) |
 | CLI for Validation | ✅ Core logic exposed via Rust CLI |
 | Test Coverage | ✅ RecordingState has 12+ comprehensive tests |
+| AGENTS.md | ✅ Already exists with agent guidance |
 
-### Improvement Opportunities (Priority List)
+### Improvement Opportunities (Revised)
 
-| Priority | Item | Impact | AI Benefit |
-|----------|------|--------|------------|
-| P0 | Add module-level READMEs | High | AI knows boundaries of each module |
-| P1 | Add module export files (Type.swift) | High | Single entry point per module |
-| P2 | Group Entities by domain | Medium | Better navigation |
-| P3 | Expand UseCase test coverage | Medium | Faster feedback loops |
+> **Important**: P2 (Entity Grouping) has been removed. The current role-based grouping (Entity/UseCase/Repository) is already correct. Do NOT reorganize by domain.
+
+| Priority | Item | Impact | Notes |
+|----------|------|--------|-------|
+| P0 | Add module-level READMEs | High | Document existing architecture |
+| P1 | Add INDEX.md to key directories | High | List all protocols/use cases |
+| P1 | Document naming conventions | Medium | Help AI name new files correctly |
+| P2 | Expand UseCase test coverage | Medium | Faster feedback loops |
 
 ## Principles
 
@@ -43,6 +48,18 @@ This initiative is inspired by the video ["Your codebase is NOT ready for AI (he
 ### Progressive Disclosure
 - Start with interface documentation
 - Only dive into implementation when needed
+
+### Role-Based Grouping (Do NOT change)
+- Current grouping by role (Entity/UseCase/Repository) is **correct**
+- Do NOT reorganize by domain (Api/, Transcription/, etc.)
+- This would break Clean Architecture principles
+
+### Naming Conventions (Document existing patterns)
+- `XXXRepository.swift` - Protocol in Domain, Implementation in Data
+- `XXXUseCase.swift` - Business logic protocol
+- `XXXUseCaseImpl.swift` - Implementation in Data layer
+- `XXXState.swift` - @Observable ViewModel (in State/, not Presentation/)
+- `XXXEntities.swift` - Domain entities
 
 ## Implementation Notes
 

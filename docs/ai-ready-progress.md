@@ -4,11 +4,11 @@ Last Updated: 2026-02-26
 
 ## Overview
 
-Goal: Make the codebase easier for AI to understand and modify by applying "deep module" and "graybox module" principles from [the video](https://www.youtube.com/watch?v=uC44zFz7JSM).
+Goal: Document the existing architecture to make it easier for AI to navigate and understand.
 
 ## Progress
 
-**Overall**: 0/6 tasks completed
+**Overall**: 0/8 tasks completed
 
 ## Tasks
 
@@ -16,32 +16,31 @@ Goal: Make the codebase easier for AI to understand and modify by applying "deep
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 1.1 | Add README to Domain/ | ⬜ Pending | Explain Domain layer purpose, protocols, entities |
-| 1.2 | Add README to Data/ | ⬜ Pending | Explain Data layer purpose, implementations |
-| 1.3 | Add README to Presentation/ | ⬜ Pending | Explain Views and ViewModels |
+| 1.1 | Add README to Domain/ | ⬜ Pending | Explain subdirectories: Entities/, Errors/, Protocols/, Repositories/, UseCases/ |
+| 1.2 | Add README to Data/ | ⬜ Pending | Explain implementation mapping to Domain protocols |
+| 1.3 | Add README to State/ | ⬜ Pending | Explain @Observable ViewModels pattern |
 
-### Phase 2: Module Exports (P1)
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| 2.1 | Create Domain/Types.swift | ⬜ Pending | Re-export all UseCase protocols and Entities |
-| 2.2 | Create Data/Types.swift | ⬜ Pending | Re-export all repository implementations |
-| 2.3 | Update imports across codebase | ⬜ Pending | Verify no circular deps |
-
-### Phase 3: Entity Grouping (P2)
+### Phase 2: Index Documentation (P1)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 3.1 | Group API-related entities | ⬜ Pending | Move ApiProvider, ValidationState to Api/ |
-| 3.2 | Group Transcription-related entities | ⬜ Pending | Move TranscriptionEntities, VoiceCommandResult |
-| 3.3 | Update imports | ⬜ Pending | Fix any broken imports |
+| 2.1 | Create Domain/Repositories/INDEX.md | ⬜ Pending | List all 9+ repository protocols with purpose |
+| 2.2 | Create Domain/UseCases/INDEX.md | ⬜ Pending | List all use cases with inputs/outputs |
+| 2.3 | Add Infrastructure/README.md | ⬜ Pending | FFI bridge, Scheduling module |
 
-### Phase 4: Test Coverage (P3)
+### Phase 3: Conventions Documentation (P1)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| 4.1 | Add PolishTextUseCase tests | ⬜ Pending | Test LLM polishing logic |
-| 4.2 | Add TranscribeAudioUseCase tests | ⬜ Pending | Test audio processing |
+| 3.1 | Document naming conventions | ⬜ Pending | Add to AGENTS.md or create new file |
+| 3.2 | Document test patterns | ⬜ Pending | Mock usage, factory pattern, test structure |
+
+### Phase 4: Test Coverage (P2)
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| 4.1 | Add PolishTextUseCase tests | ⬜ Pending | Test LLM polishing, timeout, error handling |
+| 4.2 | Add TranscribeAudioUseCase tests | ⬜ Pending | Test audio processing pipeline |
 | 4.3 | Add ValidateApiKeyUseCase tests | ⬜ Pending | Test validation logic |
 
 ## How to Update
@@ -54,6 +53,6 @@ When a task is completed:
 ## Checkpoints
 
 - [ ] Phase 1 complete: AI can navigate by module README
-- [ ] Phase 2 complete: Single entry point per layer
-- [ ] Phase 3 complete: Logical entity groupings
+- [ ] Phase 2 complete: Index files list all protocols/use cases
+- [ ] Phase 3 complete: Naming and test conventions documented
 - [ ] Phase 4 complete: Faster feedback on UseCase changes
