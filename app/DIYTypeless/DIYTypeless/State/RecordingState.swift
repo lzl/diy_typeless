@@ -202,7 +202,7 @@ final class RecordingState {
     func handleKeyUp() async {
         guard isRecording else { return }
 
-        cleanupPrefetch()  // Cancel any pending prefetch
+        cancelPrefetchTask()  // Cancel any pending prefetch task, but keep preselectedContext
 
         guard !isProcessing else { return }
         isRecording = false
@@ -339,11 +339,15 @@ final class RecordingState {
         geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func cleanupPrefetch() {
+    private func cancelPrefetchTask() {
         if let task = prefetchTask {
             prefetchScheduler.cancel(task)
         }
         prefetchTask = nil
+    }
+
+    private func cleanupPrefetch() {
+        cancelPrefetchTask()
         preselectedContext = nil
     }
 }
