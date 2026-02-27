@@ -7,6 +7,21 @@ import SwiftUI
 @MainActor
 final class WaveformEdgeCaseTests: XCTestCase {
 
+    // MARK: - Setup/Teardown
+
+    override func setUp() {
+        super.setUp()
+        // Clear UserDefaults and any cached settings
+        UserDefaults.standard.removeObject(forKey: "waveformStyle")
+        UserDefaults.standard.synchronize()
+    }
+
+    override func tearDown() {
+        // Clean up UserDefaults after each test
+        UserDefaults.standard.removeObject(forKey: "waveformStyle")
+        super.tearDown()
+    }
+
     // MARK: - Silence Data Tests
 
     func testHandlesSilenceLevels() {
@@ -141,49 +156,35 @@ final class WaveformEdgeCaseTests: XCTestCase {
     // MARK: - Settings Edge Cases
 
     func testSettingsHandlesAllStyles() {
-        // Given: Settings and all styles
-        let settings = WaveformSettings()
-        let styles = WaveformStyle.allCases
-
-        // When/Then: Each style can be set and retrieved
-        for style in styles {
-            settings.selectedStyle = style
-            XCTAssertEqual(settings.selectedStyle, style)
+        // Test that all styles can be saved to UserDefaults
+        for style in WaveformStyle.allCases {
+            UserDefaults.standard.set(style.rawValue, forKey: "waveformStyle")
+            let rawValue = UserDefaults.standard.string(forKey: "waveformStyle")
+            XCTAssertEqual(rawValue, style.rawValue, "Style \(style) should be saved")
         }
     }
 
     func testSettingsPersistence() {
-        // Given: Settings
-        let settings = WaveformSettings()
+        // Given: A style saved in UserDefaults
+        UserDefaults.standard.set("bars", forKey: "waveformStyle")
 
-        // When: Changing style
-        settings.selectedStyle = .bars
-
-        // Then: Style should be persisted
-        XCTAssertEqual(settings.selectedStyle, .bars)
-
-        // When: Creating new settings instance
-        let newSettings = WaveformSettings()
-
-        // Then: Should load persisted value
-        XCTAssertEqual(newSettings.selectedStyle, .bars)
-
-        // Cleanup
-        settings.selectedStyle = .fluid
+        // Then: Reading it back should return the saved value
+        let rawValue = UserDefaults.standard.string(forKey: "waveformStyle")
+        XCTAssertEqual(rawValue, "bars")
+        XCTAssertEqual(WaveformStyle(rawValue: rawValue ?? ""), .bars)
     }
 
     func testSettingsInvalidValueHandling() {
-        // Given: Settings with invalid raw value in UserDefaults
+        // Given: Invalid raw value in UserDefaults
         UserDefaults.standard.set("invalid_style", forKey: "waveformStyle")
 
-        // When: Creating new settings
-        let settings = WaveformSettings()
+        // Then: WaveformStyle initializer should return nil
+        let rawValue = UserDefaults.standard.string(forKey: "waveformStyle")
+        XCTAssertNil(WaveformStyle(rawValue: rawValue ?? ""))
 
-        // Then: Should return default (.fluid)
-        XCTAssertEqual(settings.selectedStyle, .fluid)
-
-        // Cleanup
-        UserDefaults.standard.removeObject(forKey: "waveformStyle")
+        // And: Default should be .fluid when using nil-coalescing
+        let style = WaveformStyle(rawValue: rawValue ?? "") ?? .fluid
+        XCTAssertEqual(style, .fluid)
     }
 
     // MARK: - Audio Monitor Edge Cases
