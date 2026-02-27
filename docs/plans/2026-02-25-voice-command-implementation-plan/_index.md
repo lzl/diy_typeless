@@ -125,7 +125,7 @@ Phase 5: 测试
 cargo build -p diy_typeless_core --release
 
 # Swift (CLI 验证)
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ### 测试验证

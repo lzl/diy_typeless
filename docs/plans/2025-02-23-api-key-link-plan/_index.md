@@ -63,7 +63,7 @@ Task 002 ──┘
 - [ ] Gemini step displays "Get API Key" link with correct styling
 - [ ] Clicking Groq link opens https://console.groq.com/keys
 - [ ] Clicking Gemini link opens https://aistudio.google.com/app/apikey
-- [ ] Build passes: `./scripts/dev-loop.sh --testing`
+- [ ] Build passes: `./scripts/dev-loop-build.sh --testing`
 - [ ] Existing validation functionality remains intact
 - [ ] No crashes when opening links
 

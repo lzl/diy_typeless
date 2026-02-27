@@ -24,7 +24,7 @@ Move AudioLevelProviding protocol from Presentation/Protocols to Domain/Protocol
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass. Check that Domain layer has no external dependencies.

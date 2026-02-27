@@ -86,7 +86,7 @@ Scenario 3, 4: Swift UseCase uses correct naming
 ## Verification Steps
 
 1. Wait for Task 007 (FFI regeneration) to complete
-2. Build: `./scripts/dev-loop.sh --testing`
+2. Build: `./scripts/dev-loop-build.sh --testing`
 3. Expected: Clean build, no Swift errors
 
 ## Dependencies

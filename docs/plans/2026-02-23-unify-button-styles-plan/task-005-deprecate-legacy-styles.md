@@ -77,7 +77,7 @@ extension View {
 
 1. Build the project:
    ```bash
-   ./scripts/dev-loop.sh --testing
+   ./scripts/dev-loop-build.sh --testing
    ```
 
 2. Expected: Compiler warnings for any usages of deprecated styles

@@ -83,7 +83,7 @@ final class ProcessVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol {
 
 ### Build Test
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ### Unit Test

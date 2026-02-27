@@ -66,7 +66,7 @@
 ## Verification Strategy
 
 1. **Visual Testing**: Build and verify in both Light and Dark modes
-2. **Build Verification**: Use `./scripts/dev-loop.sh --testing` to ensure no compilation errors
+2. **Build Verification**: Use `./scripts/dev-loop-build.sh --testing` to ensure no compilation errors
 3. **Usage Audit**: Grep for deprecated style names to ensure complete migration
 
 ## Success Criteria

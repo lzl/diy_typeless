@@ -102,7 +102,7 @@ Since URLs are hardcoded constants, there is no user input injection risk.
 ### Build Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ## Future Considerations

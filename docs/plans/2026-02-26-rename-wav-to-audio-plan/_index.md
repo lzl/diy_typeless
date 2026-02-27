@@ -69,4 +69,4 @@ If issues arise:
 - [ ] `cargo build -p diy_typeless_core` passes
 - [ ] `cargo build -p diy-typeless-cli` passes
 - [ ] `cargo test -p diy_typeless_core` passes
-- [ ] `./scripts/dev-loop.sh --testing` passes (Xcode build)
+- [ ] `./scripts/dev-loop-build.sh --testing` passes (Xcode build)

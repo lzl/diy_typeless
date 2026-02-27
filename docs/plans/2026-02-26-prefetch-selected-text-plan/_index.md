@@ -50,7 +50,7 @@ Based on: [Prefetch Selected Text Design](../2026-02-26-prefetch-selected-text-d
 ## Verification Strategy
 
 1. Unit tests cover all BDD scenarios
-2. Build passes with `./scripts/dev-loop.sh --testing`
+2. Build passes with `./scripts/dev-loop-build.sh --testing`
 3. Manual test: Verify voice command mode starts immediately on Fn up
 
 ## Rollback Plan

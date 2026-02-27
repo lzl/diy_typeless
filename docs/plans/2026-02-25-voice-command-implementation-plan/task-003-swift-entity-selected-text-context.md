@@ -42,7 +42,7 @@ struct SelectedTextContext: Sendable {
 
 ### Build Test
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ### Unit Test

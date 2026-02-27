@@ -20,7 +20,7 @@ Fix AudioLevelMonitor's Timer to continue firing during UI interactions by addin
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass. Manual test: show capsule, start recording, move mouse rapidly over window - waveform should continue animating smoothly.

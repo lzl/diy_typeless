@@ -8,7 +8,7 @@ Verify implementation builds and passes tests.
 
 1. **Build**:
    ```bash
-   ./scripts/dev-loop.sh --testing
+   ./scripts/dev-loop-build.sh --testing
    ```
 
 2. **Run Tests**:

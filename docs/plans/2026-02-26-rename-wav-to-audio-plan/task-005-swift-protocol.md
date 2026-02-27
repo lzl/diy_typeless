@@ -64,7 +64,7 @@ extension AudioData: @unchecked Sendable {}
 
 ## Verification Steps
 
-1. Build: `./scripts/dev-loop.sh --testing`
+1. Build: `./scripts/dev-loop-build.sh --testing`
 2. Expected: Clean build, no Swift errors
 
 ## Dependencies

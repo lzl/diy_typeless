@@ -21,7 +21,7 @@ Modify CapsuleView to inject AudioLevelMonitor via constructor instead of creati
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass without errors.

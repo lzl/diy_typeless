@@ -40,7 +40,7 @@ Scenario: Click link to open browser
 
 ## Verification Steps
 
-1. Build the project: `./scripts/dev-loop.sh --testing`
+1. Build the project: `./scripts/dev-loop-build.sh --testing`
 2. Run the app and navigate to Groq API Key step
 3. Verify the link text is displayed correctly
 4. Verify the link has correct styling (underlined, accent color)

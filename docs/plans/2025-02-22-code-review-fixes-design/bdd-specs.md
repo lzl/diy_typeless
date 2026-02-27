@@ -61,7 +61,7 @@ And should be located in PreviewSupport/ directory
 
 ```bash
 # Build verification
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 
 # Check protocol location exists
 ls app/DIYTypeless/DIYTypeless/Domain/Protocols/AudioLevelProviding.swift

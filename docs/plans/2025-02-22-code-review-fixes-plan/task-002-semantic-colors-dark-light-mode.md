@@ -22,7 +22,7 @@ Update Colors.swift to use semantic system colors for backgrounds and text, whil
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass. Manual verification: toggle macOS appearance and observe capsule window.
