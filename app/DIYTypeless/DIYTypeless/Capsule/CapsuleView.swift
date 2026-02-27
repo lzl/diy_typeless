@@ -2,14 +2,14 @@ import SwiftUI
 
 struct CapsuleView: View {
     let state: RecordingState
-    private let audioMonitor: AudioLevelProviding
+    private let audioMonitor: AudioLevelMonitor
     @State private var progress: CGFloat = 0
 
-    /// Creates a capsule view with a recording state and optional audio level provider
+    /// Creates a capsule view with a recording state and optional audio level monitor
     /// - Parameters:
     ///   - state: The recording state to display
-    ///   - audioMonitor: Provider for audio level data (defaults to AudioLevelMonitor)
-    init(state: RecordingState, audioMonitor: AudioLevelProviding = AudioLevelMonitor()) {
+    ///   - audioMonitor: Monitor for audio level data (defaults to AudioLevelMonitor)
+    init(state: RecordingState, audioMonitor: AudioLevelMonitor = AudioLevelMonitor()) {
         self.state = state
         self.audioMonitor = audioMonitor
     }
@@ -65,8 +65,13 @@ struct CapsuleView: View {
     private var content: some View {
         switch state.capsuleState {
         case .recording:
-            WaveformView(audioProvider: audioMonitor)
-                .frame(width: capsuleWidth - 32)
+            WaveformContainerView(
+                audioMonitor: audioMonitor,
+                style: .fluid
+            )
+            .frame(width: capsuleWidth - 32, height: 32)
+            .transition(.opacity.animation(.easeOut(duration: 0.2)))
+            .accessibilityLabel("Recording audio")
 
         case .transcribing:
             Text("Transcribing")
@@ -111,24 +116,32 @@ struct CapsuleView: View {
     private func handleStateChange(_ newState: CapsuleState) {
         switch newState {
         case .recording:
-            audioMonitor.start()
+            Task {
+                try? audioMonitor.startMonitoring()
+            }
             progress = 0
 
         case .transcribing:
-            audioMonitor.stop()
+            Task {
+                await audioMonitor.stopMonitoring()
+            }
             startProgressAnimation(duration: 2.5)
 
         case .polishing, .processingCommand:
             startProgressAnimation(duration: 2.0)
 
         case .done, .error:
-            audioMonitor.stop()
+            Task {
+                await audioMonitor.stopMonitoring()
+            }
             withAnimation(.easeOut(duration: 0.2)) {
                 progress = 1.0
             }
 
         case .hidden:
-            audioMonitor.stop()
+            Task {
+                await audioMonitor.stopMonitoring()
+            }
             progress = 0
         }
     }
