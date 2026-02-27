@@ -45,34 +45,55 @@ Implement the `WaveformContainerView`. This SwiftUI view combines `TimelineView`
 import SwiftUI
 
 struct WaveformContainerView: View {
-    private let audioProvider: AudioLevelProviding
+    private let audioMonitor: AudioLevelMonitor
     private let style: WaveformStyle
 
     @State private var renderer: WaveformRendering?
+    @State private var levels: [Double] = []
+    @State private var animationTime: Date = Date()
 
     init(
-        audioProvider: AudioLevelProviding,
+        audioMonitor: AudioLevelMonitor,
         style: WaveformStyle = .fluid
     ) {
-        self.audioProvider = audioProvider
+        self.audioMonitor = audioMonitor
         self.style = style
     }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { timeline in
             Canvas { context, size in
                 renderer?.render(
                     context: context,
                     size: size,
-                    levels: audioProvider.levels,
+                    levels: levels,
                     time: timeline.date
                 )
             }
         }
         .onAppear {
-            if renderer == nil {
-                renderer = WaveformRendererFactory.makeRenderer(for: style)
-            }
+            initializeRenderer()
+        }
+        .onChange(of: style) { _, newStyle in
+            // Recreate renderer when style changes
+            renderer = WaveformRendererFactory.makeRenderer(for: newStyle)
+        }
+        .task {
+            // Subscribe to audio level updates via AsyncStream
+            await subscribeToAudioLevels()
+        }
+    }
+
+    private func initializeRenderer() {
+        if renderer == nil {
+            renderer = WaveformRendererFactory.makeRenderer(for: style)
+        }
+    }
+
+    private func subscribeToAudioLevels() async {
+        let stream = await audioMonitor.levelsStream
+        for await newLevels in stream {
+            levels = newLevels
         }
     }
 }
@@ -81,7 +102,7 @@ struct WaveformContainerView: View {
 
 #Preview {
     WaveformContainerView(
-        audioProvider: MockAudioLevelProvider(),
+        audioMonitor: MockAudioLevelMonitor(),
         style: .fluid
     )
     .frame(width: 200, height: 40)
@@ -92,8 +113,11 @@ struct WaveformContainerView: View {
 
 - **CRITICAL**: Renderer is cached in `@State` and only created in `.onAppear`
 - **CRITICAL**: Do NOT create renderer in Canvas closure (that would recreate every frame)
-- TimelineView provides `timeline.date` for animation phase
+- **CRITICAL**: Use `AsyncStream` from `AudioLevelMonitor` to receive level updates (not direct polling)
+- **CRITICAL**: Use `.onChange(of: style)` to recreate renderer when style changes
+- Use `TimelineView(.animation(minimumInterval: 1.0 / 60))` to cap at 60fps (respects ProMotion/projection)
 - Canvas closure runs on GPU, not main thread
+- `levels` state drives Canvas redraws, `TimelineView.date` drives animation phase
 
 ## Depends On
 

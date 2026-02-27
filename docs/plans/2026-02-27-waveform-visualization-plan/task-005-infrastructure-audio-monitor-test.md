@@ -30,18 +30,32 @@ Create tests for the `AudioLevelMonitor` in the Infrastructure layer. This compo
 
 1. Test that `AudioLevelMonitor` exists in `Infrastructure/Audio/AudioLevelMonitor.swift`
 2. Test that it conforms to `AudioLevelProviding`
-3. Test that it publishes levels as `[Double]`
+3. Test that it publishes levels as `[Double]` via `AsyncStream`
 4. Test that levels are normalized to 0.0...1.0 range
 5. Test that it handles audio interruption gracefully
-6. Test proper isolation (`@MainActor` or actor-isolated)
+6. Test proper isolation (actor-isolated, NOT @MainActor)
+7. Test that `nonisolated` methods allow AVAudioEngine tap callbacks
+8. Test that AsyncStream properly emits level updates
 
 ## Mock Strategy
 
 Create a mock for testing:
 
 ```swift
-final class MockAudioLevelProvider: AudioLevelProviding {
-    var levels: [Double] = []
+actor MockAudioLevelMonitor: AudioLevelProviding {
+    private(set) var levels: [Double] = []
+    private var continuation: AsyncStream<[Double]>.Continuation?
+
+    var levelsStream: AsyncStream<[Double]> {
+        AsyncStream { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func simulateLevels(_ newLevels: [Double]) {
+        levels = newLevels
+        continuation?.yield(newLevels)
+    }
 }
 ```
 

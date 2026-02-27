@@ -33,13 +33,19 @@ Create tests for integrating the waveform visualization into the existing Capsul
 4. Test 200ms fade-out transition when stopping
 5. Test memory cleanup after view disappears
 6. Test that waveform doesn't appear in other states
+7. Test dependency injection (constructor or @Environment)
+8. Test that `AudioLevelMonitor.startMonitoring()` is called on recording start
+9. Test that `AudioLevelMonitor.stopMonitoring()` is called on recording stop
+10. Test VoiceOver accessibility label "Recording audio"
 
 ## Implementation Notes
 
 - Capsule window is managed by `CapsuleWindow.swift`
 - State transitions: idle → recording → processing → idle
 - Waveform should only appear during recording state
-- Consider accessibility labels for VoiceOver
+- Use constructor injection or @Environment for `AudioLevelMonitor` and `WaveformSettings`
+- CapsuleState should control audio monitoring lifecycle
+- Accessibility label: "Recording audio"
 
 ## Depends On
 

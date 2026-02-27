@@ -37,11 +37,13 @@ Create tests for the `WaveformContainerView`. This is the main SwiftUI view that
 ## Acceptance Criteria
 
 1. Test that `WaveformContainerView` exists in `Presentation/Waveform/WaveformContainerView.swift`
-2. Test that it uses `TimelineView` for animation scheduling
+2. Test that it uses `TimelineView(.animation(minimumInterval:))` for animation scheduling
 3. Test that it uses `Canvas` for rendering
 4. Test that renderer is cached in `@State` (not recreated each frame)
-5. Test that it accepts an `AudioLevelProviding` dependency
-6. Test that preview uses `MockAudioLevelProvider`
+5. Test that it accepts `AudioLevelMonitor` (actor) via constructor
+6. Test that it subscribes to `levelsStream` via `.task` modifier
+7. Test that it handles style changes via `.onChange(of: style)`
+8. Test that preview uses `MockAudioLevelMonitor`
 
 ## Implementation Notes
 
@@ -49,8 +51,23 @@ Create tests for the `WaveformContainerView`. This is the main SwiftUI view that
   ```swift
   @State private var renderer: WaveformRendering?
   ```
+- **CRITICAL**: Use `AsyncStream` from `AudioLevelMonitor` to receive level updates:
+  ```swift
+  .task {
+      for await newLevels in await audioMonitor.levelsStream {
+          levels = newLevels
+      }
+  }
+  ```
+- **CRITICAL**: Handle style changes to recreate renderer:
+  ```swift
+  .onChange(of: style) { _, newStyle in
+      renderer = WaveformRendererFactory.makeRenderer(for: newStyle)
+  }
+  ```
 - Must NOT create new renderer in Canvas closure
 - Must use `.onAppear` to initialize renderer once
+- Use `TimelineView(.animation(minimumInterval: 1.0 / 60))` to cap at 60fps
 
 ## Depends On
 

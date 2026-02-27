@@ -47,16 +47,23 @@ final class BarWaveformRenderer: WaveformRendering {
         guard !levels.isEmpty else { return }
 
         let barCount = levels.count
-        let spacing: CGFloat = 4
-        let barWidth = (size.width - CGFloat(barCount - 1) * spacing) / CGFloat(barCount)
-        let maxBarHeight = size.height
+        let spacing = 4.0
+        let totalSpacing = spacing * Double(barCount - 1)
+        let barWidth = (Double(size.width) - totalSpacing) / Double(barCount)
+        let maxBarHeight = Double(size.height)
+        let minBarHeight = 4.0
 
         for (index, level) in levels.enumerated() {
-            let x = CGFloat(index) * (barWidth + spacing)
-            let barHeight = max(4, level * Double(maxBarHeight)) // Min 4pt height
-            let y = (size.height - CGFloat(barHeight)) / 2
+            let x = Double(index) * (barWidth + spacing)
+            let barHeight = max(minBarHeight, level * maxBarHeight)
+            let y = (maxBarHeight - barHeight) / 2.0
 
-            let rect = CGRect(x: x, y: y, width: barWidth, height: CGFloat(barHeight))
+            let rect = CGRect(
+                x: x,
+                y: y,
+                width: barWidth,
+                height: barHeight
+            )
             let path = Path(roundedRect: rect, cornerRadius: 2)
 
             context.fill(path, with: .color(.accentColor))
@@ -64,6 +71,13 @@ final class BarWaveformRenderer: WaveformRendering {
     }
 }
 ```
+
+## Key Implementation Notes
+
+- Use `Double` for all calculations, convert to `CGFloat` only at `CGRect` creation
+- Minimum bar height is 4pt to ensure visibility during silence
+- Bars are centered vertically within the available size
+- Use semantic color `.accentColor` for consistency with system theme
 
 ## Depends On
 

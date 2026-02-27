@@ -42,28 +42,110 @@ Integrate the waveform visualization into the existing Capsule window system. Re
 
 ## Implementation Sketch
 
-```swift
-// In CapsuleView.swift, replace legacy waveform with:
+### Option A: Constructor Injection (Recommended for explicit dependencies)
 
-@ViewBuilder
-private var waveformSection: some View {
-    if case .recording = state {
-        WaveformContainerView(
-            audioProvider: audioLevelMonitor,
-            style: waveformSettings.selectedStyle
-        )
-        .frame(height: 40)
-        .transition(.opacity.animation(.easeOut(duration: 0.2)))
+```swift
+// CapsuleView.swift
+struct CapsuleView: View {
+    private let audioMonitor: AudioLevelMonitor
+    private let waveformSettings: WaveformSettings
+
+    @State private var state: CapsuleState
+
+    init(
+        state: CapsuleState,
+        audioMonitor: AudioLevelMonitor,
+        waveformSettings: WaveformSettings
+    ) {
+        self._state = State(initialValue: state)
+        self.audioMonitor = audioMonitor
+        self.waveformSettings = waveformSettings
+    }
+
+    var body: some View {
+        HStack {
+            // ... other capsule content
+
+            waveformSection
+
+            // ... other capsule content
+        }
+    }
+
+    @ViewBuilder
+    private var waveformSection: some View {
+        if case .recording = state.phase {
+            WaveformContainerView(
+                audioMonitor: audioMonitor,
+                style: waveformSettings.selectedStyle
+            )
+            .frame(height: 40)
+            .transition(.opacity.animation(.easeOut(duration: 0.2)))
+            .accessibilityLabel("Recording audio")
+        }
+    }
+}
+```
+
+### Option B: Environment Injection (for global state)
+
+```swift
+// In App entry point or parent view:
+ContentView()
+    .environment(audioMonitor)
+    .environment(waveformSettings)
+
+// CapsuleView.swift
+struct CapsuleView: View {
+    @Environment(AudioLevelMonitor.self) private var audioMonitor
+    @Environment(WaveformSettings.self) private var waveformSettings
+    @State private var state: CapsuleState
+
+    // ... rest of implementation
+}
+```
+
+### CapsuleState Updates
+
+```swift
+// CapsuleState.swift
+@MainActor
+@Observable
+final class CapsuleState {
+    enum Phase {
+        case idle
+        case recording
+        case processing
+    }
+
+    private(set) var phase: Phase = .idle
+    private let audioMonitor: AudioLevelMonitor
+
+    init(audioMonitor: AudioLevelMonitor) {
+        self.audioMonitor = audioMonitor
+    }
+
+    func startRecording() async {
+        phase = .recording
+        try? await audioMonitor.startMonitoring()
+    }
+
+    func stopRecording() {
+        phase = .processing
+        Task {
+            await audioMonitor.stopMonitoring()
+        }
     }
 }
 ```
 
 ## Integration Points
 
-1. Inject `AudioLevelMonitor` into CapsuleView/CapsuleState
-2. Inject `WaveformSettings` for style configuration
-3. Ensure state machine properly starts/stops audio monitoring
-4. Handle cleanup when capsule closes
+1. **Dependency Injection**: Pass `AudioLevelMonitor` and `WaveformSettings` via constructor or @Environment
+2. **State Management**: CapsuleState controls when audio monitoring starts/stops
+3. **Lifecycle**: Audio monitoring starts on `.recording`, stops when leaving that state
+4. **Cleanup**: AudioLevelMonitor handles tap removal and engine stop
+5. **Accessibility**: Added VoiceOver label "Recording audio"
 
 ## Depends On
 

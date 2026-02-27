@@ -49,7 +49,7 @@ Replace the existing HStack-based waveform with a GPU-accelerated Canvas-based s
 │                   Infrastructure Layer                       │
 │  ┌──────────────────────────┐      ┌──────────────────────┐ │
 │  │    AudioLevelMonitor     │─────▶│    AVAudioEngine     │ │
-│  │  (Concrete Implementation)│     │   (System Framework)  │ │
+│  │  (actor + AsyncStream)    │     │   (System Framework)  │ │
 │  └──────────────────────────┘      └──────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -111,6 +111,8 @@ Replace the existing HStack-based waveform with a GPU-accelerated Canvas-based s
 3. **@MainActor Classes for Renderers**: NOT structs - state must persist across frames
 4. **Renderer Caching in @State**: Do NOT create new renderer in Canvas closure
 5. **No didSet in @Observable**: Use computed properties with get/set instead
+6. **AudioLevelMonitor is an Actor**: NOT @MainActor - uses AsyncStream for cross-actor communication
+7. **TimelineView with minimumInterval**: Use `TimelineView(.animation(minimumInterval: 1.0 / 60))` to cap at 60fps
 
 ---
 

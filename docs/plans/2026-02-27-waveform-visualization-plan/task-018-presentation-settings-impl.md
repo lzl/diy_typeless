@@ -47,27 +47,47 @@ import SwiftUI
 @MainActor
 @Observable
 final class WaveformSettings {
+    private let defaults = UserDefaults.standard
     private let styleKey = "waveformStyle"
+
+    /// Cached style value to avoid repeated UserDefaults reads
+    private var cachedStyle: WaveformStyle?
 
     var selectedStyle: WaveformStyle {
         get {
-            let rawValue = UserDefaults.standard.string(forKey: styleKey)
-            return WaveformStyle(rawValue: rawValue ?? "") ?? .fluid
+            // Return cached value if available
+            if let cached = cachedStyle {
+                return cached
+            }
+            // Read from UserDefaults and cache
+            let rawValue = defaults.string(forKey: styleKey)
+            let style = WaveformStyle(rawValue: rawValue ?? "") ?? .fluid
+            cachedStyle = style
+            return style
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: styleKey)
+            // Update cache and UserDefaults atomically
+            cachedStyle = newValue
+            defaults.set(newValue.rawValue, forKey: styleKey)
         }
     }
 
     init() {}
+
+    /// Clear cache (useful for testing)
+    func clearCache() {
+        cachedStyle = nil
+    }
 }
 ```
 
 ## Key Implementation Notes
 
 - **CRITICAL**: NO `didSet` - use computed property with get/set
+- **CRITICAL**: Cache the style value in memory to avoid repeated UserDefaults reads
 - `@Observable` automatically notifies views of changes
-- UserDefaults access is in get/set, not didSet
+- UserDefaults access is thread-safe but synchronous - caching improves performance
+- Cache invalidation is handled by `selectedStyle` setter
 
 ## Depends On
 
