@@ -4,55 +4,58 @@ import AVFoundation
 /// Uses AsyncStream for safe cross-actor communication
 actor AudioLevelMonitor: AudioLevelProviding {
     private let audioEngine = AVAudioEngine()
-    // nonisolated(unsafe) is safe here because continuation is only accessed from actor-isolated methods
-    // or from the nonisolated calculateLevels which creates a Task to call actor-isolated emit
-    nonisolated(unsafe) private var continuation: AsyncStream<[Double]>.Continuation?
+    private var continuation: AsyncStream<[Double]>.Continuation?
 
     /// Current audio levels as normalized values (0.0...1.0)
     /// For real-time updates, prefer `levelsStream`
     nonisolated var levels: [Double] {
-        // Return empty array for synchronous access
-        // Real-time updates come through levelsStream
         []
     }
 
     /// AsyncStream that emits audio levels - safe for SwiftUI observation
-    /// This is nonisolated so it can be accessed from outside the actor
+    /// Creates a new stream each time - consumer must call this before startMonitoring
     nonisolated var levelsStream: AsyncStream<[Double]> {
         AsyncStream { continuation in
-            self.continuation = continuation
+            // Store continuation for audio tap to use
+            Task {
+                await self.setContinuation(continuation)
+            }
         }
     }
 
+    private func setContinuation(_ cont: AsyncStream<[Double]>.Continuation) {
+        self.continuation = cont
+    }
+
     /// Start monitoring audio levels
-    /// Must be called from outside actor (nonisolated) since AVAudioEngine callbacks are on background thread
     nonisolated func startMonitoring() throws {
+        // Stop any existing monitoring first
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.stop()
+
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             let levels = self.calculateLevels(from: buffer)
-
-            // Send to actor-isolated continuation
-            Task { await self.emit(levels: levels) }
+            Task {
+                await self.yieldLevels(levels)
+            }
         }
 
         try audioEngine.start()
     }
 
+    private func yieldLevels(_ levels: [Double]) {
+        continuation?.yield(levels)
+    }
+
     /// Stop monitoring audio levels
-    /// Actor-isolated because it modifies actor state
     func stopMonitoring() {
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
-        continuation?.finish()
-        continuation = nil
-    }
-
-    /// Emit levels to the AsyncStream
-    private func emit(levels: [Double]) {
-        continuation?.yield(levels)
+        // Don't finish continuation - let the consumer control the stream lifecycle
     }
 
     /// Calculate normalized audio levels from PCM buffer

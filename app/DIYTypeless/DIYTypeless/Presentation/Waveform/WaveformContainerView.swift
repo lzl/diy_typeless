@@ -7,7 +7,7 @@ struct WaveformContainerView: View {
     private let style: WaveformStyle
 
     @State private var renderer: WaveformRendering?
-    @State private var levels: [Double] = []
+    @State private var levels: [Double] = Array(repeating: 0.0, count: 20)  // Initial flat line
 
     init(
         audioMonitor: some AudioLevelProviding,
@@ -20,7 +20,12 @@ struct WaveformContainerView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { timeline in
             Canvas { context, size in
-                renderer?.render(
+                // Ensure renderer exists
+                let r = renderer ?? WaveformRendererFactory.makeRenderer(for: style)
+                if renderer == nil {
+                    renderer = r
+                }
+                r?.render(
                     context: context,
                     size: size,
                     levels: levels,
@@ -29,7 +34,10 @@ struct WaveformContainerView: View {
             }
         }
         .onAppear {
-            initializeRenderer()
+            // Initialize renderer on main thread
+            if renderer == nil {
+                renderer = WaveformRendererFactory.makeRenderer(for: style)
+            }
         }
         .onChange(of: style) { _, newStyle in
             // Recreate renderer when style changes
@@ -41,16 +49,12 @@ struct WaveformContainerView: View {
         }
     }
 
-    private func initializeRenderer() {
-        if renderer == nil {
-            renderer = WaveformRendererFactory.makeRenderer(for: style)
-        }
-    }
-
     private func subscribeToAudioLevels() async {
-        let stream = audioMonitor.levelsStream
+        let stream = await audioMonitor.levelsStream
         for await newLevels in stream {
-            levels = newLevels
+            await MainActor.run {
+                levels = newLevels
+            }
         }
     }
 }

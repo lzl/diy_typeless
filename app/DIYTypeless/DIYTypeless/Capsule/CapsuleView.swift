@@ -4,6 +4,7 @@ struct CapsuleView: View {
     let state: RecordingState
     private let audioMonitor: AudioLevelMonitor
     @State private var progress: CGFloat = 0
+    @State private var previousState: CapsuleState?
 
     /// Creates a capsule view with a recording state and optional audio level monitor
     /// - Parameters:
@@ -56,7 +57,15 @@ struct CapsuleView: View {
             content
         }
         .frame(width: capsuleWidth, height: capsuleHeight)
+        .onAppear {
+            // Handle initial state
+            previousState = state.capsuleState
+            handleStateChange(state.capsuleState)
+        }
         .onChange(of: state.capsuleState) { _, newState in
+            // Only handle if state actually changed
+            guard previousState != newState else { return }
+            previousState = newState
             handleStateChange(newState)
         }
     }
