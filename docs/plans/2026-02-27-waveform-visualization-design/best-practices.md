@@ -376,37 +376,38 @@ final class AudioLevelMonitor: AudioLevelProviding {
 Audio engines may provide updates at much higher rates than needed for visualization:
 
 ```swift
-actor ThrottledAudioProvider: AudioLevelProviding {
+/// Throttled wrapper that limits update frequency
+/// NOTE: This wraps rather than conforms to AudioLevelProviding to avoid protocol mismatch
+actor ThrottledAudioProvider {
     private let source: AudioLevelProviding
     private let updateInterval: TimeInterval
     private var lastUpdate: Date = .distantPast
-    private var latestLevel: Double = 0
+    private(set) var throttledLevels: [Double] = []
 
-    var levels: [Double] {
-        get async {
-            await source.levels
-        }
+    init(source: AudioLevelProviding, updateInterval: TimeInterval = 1.0/60.0) {
+        self.source = source
+        self.updateInterval = updateInterval
     }
 
     func startMonitoring() async throws {
-        try await source.start()
+        source.start()
 
         // Throttle to 60fps using Task.sleep (Sendable-compliant)
-        Task {
-            while await source.isMonitoring {
-                let level = await source.currentLevel
-                await updateIfNeeded(level: level)
-                try? await Task.sleep(nanoseconds: 16_666_667) // ~60fps
-            }
+        while true {
+            // Access levels synchronously through the provider's property
+            let currentLevels = source.levels
+            await updateIfNeeded(levels: currentLevels)
+            try? await Task.sleep(nanoseconds: 16_666_667) // ~60fps
         }
     }
 
-    private func updateIfNeeded(level: Double) {
+    @MainActor
+    private func updateIfNeeded(levels: [Double]) {
         let now = Date()
         guard now.timeIntervalSince(lastUpdate) >= updateInterval else { return }
         lastUpdate = now
-        latestLevel = level
-        // Notify view model...
+        throttledLevels = levels
+        // Notify view model via Observable or continuation...
     }
 }
 ```

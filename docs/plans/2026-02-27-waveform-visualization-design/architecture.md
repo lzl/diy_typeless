@@ -434,11 +434,19 @@ struct WaveformContainerView: View {
 
 // MARK: - Mock Provider
 
+/// Mock provider for previews and testing
+/// Exported from PreviewSupport module for reuse across tests
 @MainActor
-private final class MockAudioProvider: AudioLevelProviding {
+final class MockAudioLevelProvider: AudioLevelProviding {
     var levels: [Double] = Array(repeating: 0.5, count: 20)
+
     func start() {}
     func stop() {}
+
+    /// Simulate dynamic audio levels for animated previews
+    func simulateLevels(_ newLevels: [Double]) {
+        self.levels = newLevels
+    }
 }
 ```
 
