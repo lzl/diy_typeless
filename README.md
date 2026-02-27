@@ -86,10 +86,10 @@ uniffi-bindgen generate \
  
 ## Fast Debug Loop (CLI + xcodebuild)
 
-Use one command to rebuild Rust core, build the app with `xcodebuild`, install to a stable path, reset permissions, and relaunch.
+Use one command to rebuild Rust core, build the app with `xcodebuild`, install to a stable path, and relaunch.
 
 ```bash
-./scripts/dev-loop.sh
+./scripts/dev-loop-build.sh
 ```
 
 By default it:
@@ -97,20 +97,19 @@ By default it:
 1. Builds `diy_typeless_core` with a profile inferred from `--configuration` (`Debug -> debug`, `Release -> release`).
 2. Builds the app in Debug with `xcodebuild`.
 3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
-4. Resets Accessibility and Microphone permissions.
-5. Launches the copied app.
+4. Launches the copied app.
 
 Useful flags:
 
 ```bash
-# Build only (no permission reset, no launch) - for CI/testing
-./scripts/dev-loop.sh --testing
+# Build only (no launch)
+./scripts/dev-loop-build.sh --testing
 
 # Install somewhere else
-./scripts/dev-loop.sh --destination-dir ./.context/apps
+./scripts/dev-loop-build.sh --destination-dir ./.context/apps
 
 # Build Release app + release Rust dylib
-./scripts/dev-loop.sh --configuration Release --testing
+./scripts/dev-loop-build.sh --configuration Release
 ```
 
 Reset permissions manually (if needed):
@@ -126,10 +125,10 @@ Recommended day-to-day debug flow:
 cargo run -p diy_typeless_cli -- full --duration-seconds 4
 
 # 2) Rebuild + reinstall + relaunch macOS app
-./scripts/dev-loop.sh
+./scripts/dev-loop-build.sh
 
 # 3) Build verification (CI/testing)
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ## macOS App
@@ -178,7 +177,7 @@ If the app doesn't appear in the Accessibility list:
    # Also reset microphone if needed
    ./scripts/reset-permissions.sh --include-microphone
    ```
-   Then run `./scripts/dev-loop.sh` and request permissions again.
+   Then run `./scripts/dev-loop-build.sh` and request permissions again.
  
  ## Usage
  
