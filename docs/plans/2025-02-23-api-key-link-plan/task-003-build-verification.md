@@ -53,7 +53,7 @@ Scenario: Invalid URL
 
 1. Run build verification:
    ```bash
-   ./scripts/dev-loop.sh --testing
+   ./scripts/dev-loop-build.sh --testing
    ```
 
 2. Verify build succeeds with no errors

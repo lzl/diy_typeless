@@ -64,6 +64,6 @@ The codebase is already well-structured for AI collaboration. Most improvements 
 ## Implementation Notes
 
 - All changes must maintain **backward compatibility**
-- Test changes should be verified via `./scripts/dev-loop.sh --testing`
+- Test changes should be verified via `./scripts/dev-loop-build.sh --testing`
 - Follow commit conventions: `refactor(ai-ready): ...`
 - No new dependencies or runtime behavior changes

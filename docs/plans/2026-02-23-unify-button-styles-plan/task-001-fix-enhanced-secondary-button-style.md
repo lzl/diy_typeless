@@ -56,7 +56,7 @@ Replace hardcoded `.white` with semantic colors that automatically adapt:
 
 1. Build the project:
    ```bash
-   ./scripts/dev-loop.sh --testing
+   ./scripts/dev-loop-build.sh --testing
    ```
 
 2. Visual verification checklist:

@@ -36,7 +36,7 @@ Refer to [Design Document](../2025-02-22-code-review-fixes-design/bdd-specs.md) 
 Run after each task:
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 After all tasks complete:

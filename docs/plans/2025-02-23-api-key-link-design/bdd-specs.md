@@ -125,4 +125,4 @@ Feature: Edge Case Handling
 ### Automated Testing
 
 - Since this involves `NSWorkspace.shared.open()` system calls, this feature is suitable for manual testing
-- Ensure build passes: `./scripts/dev-loop.sh --testing`
+- Ensure build passes: `./scripts/dev-loop-build.sh --testing`

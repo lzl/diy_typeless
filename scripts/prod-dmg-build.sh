@@ -19,7 +19,7 @@ echo ""
 # Step 1: Build Rust core library (universal binary)
 echo "[1/5] Building Rust core library (universal binary)..."
 cd "$PROJECT_ROOT"
-"$SCRIPT_DIR/build-rust-universal.sh"
+"$SCRIPT_DIR/prod-rust-build.sh"
 echo "      Rust universal library built successfully."
 echo ""
 

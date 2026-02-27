@@ -1,5 +1,25 @@
 #!/bin/bash
 # Build/install/launch loop for fast DIYTypeless local debugging.
+#
+# Usage: ./scripts/dev-loop-build.sh [options]
+#
+# Options:
+#   --xcode-root <path>          Xcode project root containing DIYTypeless.xcodeproj.
+#                                Default: app/DIYTypeless
+#   --configuration <name>       Xcode build configuration.
+#                                Default: Debug
+#   --derived-data <path>        Xcode derived data path.
+#                                Default: .context/DerivedData
+#   --destination-dir <path>     Install directory for copied app bundle.
+#                                Default: ~/Applications
+#   --app-name <name>            Installed app bundle name.
+#                                Default: DIYTypeless Dev.app
+#   --rust-profile <profile>     Rust profile for diy_typeless_core (debug|release).
+#                                Default: inferred from --configuration
+#                                (Debug->debug, Release->release)
+#   --skip-rust-build            Skip cargo build step.
+#   --testing                    Build only; skip app launch.
+#   -h, --help                   Show this help message.
 
 set -euo pipefail
 
@@ -12,41 +32,13 @@ CONFIGURATION="Debug"
 DERIVED_DATA_PATH="$PROJECT_ROOT/.context/DerivedData"
 DESTINATION_DIR="$HOME/Applications"
 APP_NAME="DIYTypeless Dev.app"
-BUNDLE_ID="com.lizunlong.DIYTypeless.dev"
 RUST_PROFILE=""
 
 SKIP_RUST_BUILD=0
 TESTING=0
 
 usage() {
-    cat <<'USAGE'
-Usage: ./scripts/dev-loop.sh [options]
-
-Options:
-  --xcode-root <path>          Xcode project root containing DIYTypeless.xcodeproj.
-                               Default: app/DIYTypeless
-  --configuration <name>       Xcode build configuration.
-                               Default: Debug
-  --derived-data <path>        Xcode derived data path.
-                               Default: .context/DerivedData
-  --destination-dir <path>     Install directory for copied app bundle.
-                               Default: ~/Applications
-  --app-name <name>            Installed app bundle name.
-                               Default: DIYTypeless Dev.app
-  --bundle-id <id>             Bundle ID used when resetting permissions.
-                               Default: com.lizunlong.DIYTypeless
-  --rust-profile <profile>     Rust profile for diy_typeless_core (debug|release).
-                               Default: inferred from --configuration
-                               (Debug->debug, Release->release)
-  --skip-rust-build            Skip cargo build step.
-  --testing                    Build only; skip permissions reset and app launch.
-  -h, --help                   Show this help message.
-
-Examples:
-  ./scripts/dev-loop.sh              # Build, reset permissions, and launch
-  ./scripts/dev-loop.sh --testing    # Build only (for CI/testing)
-  ./scripts/dev-loop.sh --destination-dir "$HOME/Applications" --app-name "DIYTypeless.app"
-USAGE
+    head -n 22 "$0" | tail -n 20
 }
 
 while [[ $# -gt 0 ]]; do
@@ -74,11 +66,6 @@ while [[ $# -gt 0 ]]; do
         --app-name)
             [[ $# -ge 2 ]] || { echo "Error: --app-name requires a value." >&2; exit 1; }
             APP_NAME="$2"
-            shift 2
-            ;;
-        --bundle-id)
-            [[ $# -ge 2 ]] || { echo "Error: --bundle-id requires a value." >&2; exit 1; }
-            BUNDLE_ID="$2"
             shift 2
             ;;
         --rust-profile)
@@ -140,14 +127,14 @@ fi
 RUST_LIB_PATH="$PROJECT_ROOT/target/$RUST_PROFILE/libdiy_typeless_core.dylib"
 
 if [[ "$SKIP_RUST_BUILD" -eq 0 ]]; then
-    echo "=== [1/4] Building Rust core ($RUST_PROFILE) ==="
+    echo "=== [1/3] Building Rust core ($RUST_PROFILE) ==="
     if [[ "$RUST_PROFILE" == "release" ]]; then
         cargo build -p diy_typeless_core --release
     else
         cargo build -p diy_typeless_core
     fi
 else
-    echo "=== [1/4] Skipping Rust build ==="
+    echo "=== [1/3] Skipping Rust build ==="
     if [[ ! -f "$RUST_LIB_PATH" ]]; then
         echo "Error: expected Rust dylib not found at $RUST_LIB_PATH" >&2
         echo "Run without --skip-rust-build or choose a matching --rust-profile." >&2
@@ -155,7 +142,7 @@ else
     fi
 fi
 
-echo "=== [2/4] Building macOS app ($CONFIGURATION) ==="
+echo "=== [2/3] Building macOS app ($CONFIGURATION) ==="
 (
     cd "$XCODE_ROOT"
     xcodebuild \
@@ -174,7 +161,7 @@ fi
 
 TARGET_APP_PATH="$DESTINATION_DIR/$APP_NAME"
 
-echo "=== [3/4] Installing app to $TARGET_APP_PATH ==="
+echo "=== [3/3] Installing app to $TARGET_APP_PATH ==="
 if pgrep -x DIYTypeless >/dev/null 2>&1; then
     echo "- Stopping running DIYTypeless process"
     pkill -x DIYTypeless || true
@@ -183,14 +170,6 @@ fi
 
 rm -rf "$TARGET_APP_PATH"
 cp -R "$BUILT_APP_PATH" "$TARGET_APP_PATH"
-
-if [[ "$TESTING" -eq 0 ]]; then
-    echo "=== [4/4] Resetting permissions ==="
-    reset_cmd=("$SCRIPT_DIR/reset-permissions.sh" "--bundle-id" "$BUNDLE_ID" "--include-microphone")
-    "${reset_cmd[@]}"
-else
-    echo "=== [4/4] Skipping permission reset (testing mode) ==="
-fi
 
 if [[ "$TESTING" -eq 0 ]]; then
     echo "Launching: $TARGET_APP_PATH"

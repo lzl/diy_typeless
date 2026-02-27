@@ -48,7 +48,7 @@ final class GeminiLLMRepository: LLMRepository {
 
 ### Build Test
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ### Prerequisites

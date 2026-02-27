@@ -45,6 +45,6 @@
 ## Scenario 7: Xcode build passes
 
 **Given** I build the macOS app
-**When** I run `./scripts/dev-loop.sh --testing`
+**When** I run `./scripts/dev-loop-build.sh --testing`
 **Then** it should build without errors
 **And** all Swift files should reference `AudioData` (not `WavData`)

@@ -68,7 +68,7 @@ private func handleTranscriptionMode(...) async throws { ... }
 
 ### Build Test
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 ### Unit Test

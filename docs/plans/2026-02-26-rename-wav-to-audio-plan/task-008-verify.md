@@ -37,7 +37,7 @@ Expected: Exit code 0
 
 ### 4. Xcode Build
 ```bash
-./scripts/dev-loop.sh --testing 2>&1 | tail -20
+./scripts/dev-loop-build.sh --testing 2>&1 | tail -20
 ```
 Expected: ** BUILD SUCCEEDED **
 

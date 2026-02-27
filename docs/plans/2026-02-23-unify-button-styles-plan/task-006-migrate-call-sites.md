@@ -59,7 +59,7 @@ If any file uses the style structs directly:
 
 1. Build the project with strict warnings:
    ```bash
-   ./scripts/dev-loop.sh --testing
+   ./scripts/dev-loop-build.sh --testing
    ```
 
 2. Verify zero deprecation warnings related to button styles

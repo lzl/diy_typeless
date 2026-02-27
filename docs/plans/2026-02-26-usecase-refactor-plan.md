@@ -877,7 +877,7 @@ Phase 4: 测试编写
 
 **Step 6**: 运行构建验证
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 **Step 7**: 编写测试

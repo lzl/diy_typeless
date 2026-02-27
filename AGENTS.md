@@ -306,14 +306,14 @@ When working with the macOS app, use `xcodebuild` command line tool instead of o
 To verify the app builds successfully without launching it or modifying permissions:
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 This is the **only** way to validate macOS app builds during development. Do not use direct `xcodebuild` commands.
 
 ### Error Handling Workflow
 
-1. Run `./scripts/dev-loop.sh --testing`
+1. Run `./scripts/dev-loop-build.sh --testing`
 2. If build fails, parse the error output (look for `error:` lines)
 3. Common issues:
    - **Architecture mismatch**: Rust library only supports arm64
@@ -325,7 +325,7 @@ This is the **only** way to validate macOS app builds during development. Do not
 
 Use the provided script:
 ```bash
-./scripts/build-dmg.sh
+./scripts/prod-dmg-build.sh
 ```
 
 This builds the app, creates a DMG, and outputs to `~/Downloads/DIYTypeless.dmg`.

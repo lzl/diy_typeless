@@ -24,7 +24,7 @@ Extract MockAudioLevelProvider from WaveformView.swift into a separate PreviewSu
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass. Preview canvas should show mock waveform correctly.

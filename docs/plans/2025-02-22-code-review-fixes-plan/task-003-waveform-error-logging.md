@@ -21,7 +21,7 @@ Add proper error logging to WaveformView when audio engine fails to start.
 ## Verification
 
 ```bash
-./scripts/dev-loop.sh --testing
+./scripts/dev-loop-build.sh --testing
 ```
 
 Build should pass. Errors will be visible in Console.app when they occur.
