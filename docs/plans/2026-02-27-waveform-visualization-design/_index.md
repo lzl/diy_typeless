@@ -1,7 +1,7 @@
 # Waveform Visualization Design
 
 **Date:** 2026-02-27
-**Status:** Draft
+**Status:** Draft - Architecture Review Fixes Applied
 **Author:** Claude Code
 
 ---
@@ -39,12 +39,19 @@ HStack(spacing: 4) {
    - No clean path for user customization via Settings
    - Style changes require view hierarchy modifications
 
+4. **Architecture Issues** (from code review)
+   - `GraphicsContext` (SwiftUI) incorrectly placed in Domain layer
+   - `AudioLevelMonitor` (using AVAudioEngine) mixed with Domain protocols
+   - Renderers implemented as structs lose state between frames
+   - TimelineView creates new renderer each frame
+
 ### Goals
 
 | Priority | Goal |
 |----------|------|
 | P0 | Fluid, organic waveform animation at 60fps |
 | P0 | Canvas-based rendering for GPU acceleration |
+| P0 | **Clean Architecture compliance** (fixed layering) |
 | P1 | Architecture supporting multiple renderer styles |
 | P1 | Clean integration point for future Settings UI |
 | P2 | Apple-like elegance matching system aesthetics |
@@ -55,20 +62,43 @@ HStack(spacing: 4) {
 
 ### High-Level Architecture
 
-Replace the state-driven HStack with a **TimelineView-driven Canvas system** that separates data acquisition from rendering through a protocol-based abstraction layer.
+Replace the state-driven HStack with a **TimelineView-driven Canvas system** that properly separates concerns across architectural layers.
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ AudioLevelMonitor│────▶│ WaveformRenderer │────▶│      Canvas     │
-│  (Data Source)   │     │   (Protocol)     │     │  (GPU Rendering)│
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                ▲
-                        ┌───────┴───────┐
-                        ▼               ▼
-                ┌──────────────┐ ┌──────────────┐
-                │ FluidRenderer│ │ BarsRenderer │
-                │ (Siri-like)  │ │ (Legacy)     │
-                └──────────────┘ └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Presentation Layer                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  WaveformRendering Protocol (uses GraphicsContext)   │   │
+│  │  ┌──────────────────┐      ┌──────────────────┐     │   │
+│  │  │FluidWaveformRenderer│   │BarWaveformRenderer│    │   │
+│  │  │ (@MainActor class)  │   │ (@MainActor class)│    │   │
+│  │  └──────────────────┘      └──────────────────┘     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                         ▲                                   │
+│                         │                                   │
+│  ┌──────────────────────┴─────────────────────────────┐    │
+│  │       WaveformContainerView (caches renderer)      │    │
+│  │         TimelineView + Canvas (GPU rendering)      │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       Domain Layer                           │
+│  ┌─────────────────────┐      ┌──────────────────────────┐  │
+│  │ AudioLevelProviding │      │ WaveformStyle            │  │
+│  │ Protocol (pure)     │      │ Enum (Sendable)          │  │
+│  └─────────────────────┘      └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Infrastructure Layer                       │
+│  ┌──────────────────────────┐      ┌──────────────────────┐ │
+│  │    AudioLevelMonitor     │─────▶│    AVAudioEngine     │ │
+│  │  (Concrete Implementation)│     │   (System Framework)  │ │
+│  └──────────────────────────┘      └──────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Technologies
@@ -77,8 +107,10 @@ Replace the state-driven HStack with a **TimelineView-driven Canvas system** tha
 |------------|---------|
 | `TimelineView` | V-synced animation scheduling without state updates |
 | `Canvas` | Direct GPU-accelerated drawing |
-| `WaveformRenderer` protocol | Abstraction enabling style swapping |
-| `AudioLevelMonitor` | Real-time audio level sampling |
+| `WaveformRendering` protocol | Presentation-layer abstraction |
+| `@MainActor class` renderers | State preservation across frames |
+| `@State` renderer caching | Prevent per-frame allocation |
+| `AudioLevelMonitor` | Real-time audio level sampling (Infrastructure) |
 
 ### Fluid Waveform Approach
 
@@ -103,82 +135,168 @@ let y = sin(x * frequency1 + phase1) * amplitude1 +
 
 ```
 Presentation Layer
-├── WaveformView (TimelineView container)
+├── WaveformContainerView (TimelineView container)
 │   └── Canvas (rendering surface)
-│       └── currentRenderer.draw(context: bounds: audioLevels:)
+│       └── renderer.render(context:size:levels:time:) [cached in @State]
 │
-├── Renderer Protocols
-│   ├── WaveformRenderer (base protocol)
-│   ├── FluidWaveformRenderer (Siri-like)
+├── Renderers (all @MainActor classes)
+│   ├── FluidWaveformRenderer (Siri-like, maintains smoothedLevels)
 │   └── BarWaveformRenderer (legacy compatibility)
 │
-└── Settings Integration Point
-    └── WaveformStyle (enum, UserDefaults-backed)
+├── Protocols
+│   └── WaveformRendering (uses GraphicsContext - Presentation layer only)
+│
+└── Factory
+    └── WaveformRendererFactory (creates renderers from WaveformStyle)
 
 Domain Layer
-└── AudioLevelMonitor
-    ├── AVAudioEngine tap
-    ├── Ring buffer (last 60 samples)
-    └── Publishers for real-time updates
+├── AudioLevelProviding (protocol, no implementation)
+└── WaveformStyle (enum, Sendable, UserDefaults-compatible)
+
+Infrastructure Layer
+└── AudioLevelMonitor (implements AudioLevelProviding, uses AVAudioEngine)
 ```
 
 ### Data Flow
 
 ```
-Audio Tap Callback
+Audio Tap Callback (Infrastructure)
         │
         ▼
 ┌─────────────────┐
-│ Level Calculator│─── Convert PCM buffer to dB
+│ Level Calculator│─── Convert PCM buffer to normalized Double (0...1)
 └─────────────────┘
         │
         ▼
 ┌─────────────────┐
-│  Ring Buffer    │─── Store last 60 samples (1 second @ 60fps)
-│  (fixed size)   │
+│ AudioLevelProviding
+│  levels: [Double]  ◀── Domain protocol, Infrastructure implementation
 └─────────────────┘
         │
         ▼
 ┌─────────────────┐
-│ TimelineView    │─── V-sync display update
+│ TimelineView    │─── V-sync display update (60fps, no body re-eval)
 │   DisplayLink   │
 └─────────────────┘
         │
         ▼
 ┌─────────────────┐
-│ Canvas.onChange │─── Read buffer, no copy
+│ Canvas          │─── Cached renderer.render() call
 └─────────────────┘
         │
         ▼
 ┌─────────────────┐
-│   Renderer      │─── Draw wave/path/shape
-│   .draw()       │
+│ FluidRenderer   │─── Draw with preserved smoothing state
+│ (class + @State)│
 └─────────────────┘
 ```
 
 ### Style Selection Architecture
 
-For future Settings integration, the architecture supports runtime renderer switching:
+For future Settings integration:
 
 ```swift
 // Domain/Entities/WaveformStyle.swift
 enum WaveformStyle: String, CaseIterable, Sendable {
     case fluid = "fluid"
     case bars = "bars"
-    case particles = "particles" // Future
-    case circular = "circular"   // Future
+    case disabled = "disabled"
 }
 
-// Factory for renderer creation
-struct WaveformRendererFactory {
-    static func makeRenderer(for style: WaveformStyle) -> WaveformRenderer {
+// Presentation/Waveform/WaveformRendererFactory.swift
+@MainActor
+enum WaveformRendererFactory {
+    static func makeRenderer(for style: WaveformStyle) -> WaveformRendering? {
         switch style {
         case .fluid: return FluidWaveformRenderer()
         case .bars: return BarWaveformRenderer()
-        default: return FluidWaveformRenderer()
+        case .disabled: return nil
         }
     }
 }
+```
+
+### Critical Implementation Fixes (from Architecture Review)
+
+**1. Layer Placement (FIXED)**
+- `WaveformRendering` → **Presentation layer** (uses GraphicsContext)
+- `AudioLevelMonitor` → **Infrastructure layer** (uses AVAudioEngine)
+- Domain layer → Only `AudioLevelProviding` protocol and `WaveformStyle` enum
+
+**2. Renderer State Management (FIXED)**
+```swift
+// BEFORE (reviewer flagged as broken)
+struct FluidWaveformRenderer: WaveformRendering {
+    private var smoothedLevels: [CGFloat] = []  // Lost every frame!
+}
+
+// AFTER (fixed)
+@MainActor
+final class FluidWaveformRenderer: WaveformRendering {
+    private var smoothedLevels: [Double] = []   // Persists across frames
+}
+```
+
+**3. Renderer Caching (FIXED)**
+```swift
+// BEFORE (reviewer flagged as broken)
+var body: some View {
+    TimelineView(...) { timeline in
+        Canvas { context, size in
+            let renderer = style.makeRenderer()  // NEW INSTANCE EVERY FRAME!
+            renderer?.render(...)
+        }
+    }
+}
+
+// AFTER (fixed)
+struct WaveformContainerView: View {
+    @State private var renderer: WaveformRendering?  // Cached!
+
+    var body: some View {
+        TimelineView(...) { timeline in
+            Canvas { context, size in
+                renderer?.render(...)  // Reuses cached instance
+            }
+        }
+        .onAppear {
+            if renderer == nil {
+                renderer = WaveformRendererFactory.makeRenderer(for: style)
+            }
+        }
+    }
+}
+```
+
+**4. @Observable without didSet (FIXED)**
+```swift
+// BEFORE (reviewer flagged as broken)
+@Observable
+final class WaveformSettings {
+    var selectedStyle: WaveformStyle {
+        didSet {  // ❌ didSet doesn't work with @Observable!
+            UserDefaults.standard.set(selectedStyle.rawValue, forKey: "waveformStyle")
+        }
+    }
+}
+
+// AFTER (fixed)
+@Observable
+final class WaveformSettings {
+    var selectedStyle: WaveformStyle {
+        get { /* read from UserDefaults */ }
+        set { /* write to UserDefaults */ }
+    }
+}
+```
+
+**5. Type Safety (FIXED)**
+```swift
+// BEFORE
+var levels: [CGFloat]  // CGFloat is platform-dependent
+
+// AFTER
+var levels: [Double]   // Double is standard, converted to CGFloat only in Canvas
 ```
 
 ---
@@ -206,7 +324,8 @@ struct WaveformRendererFactory {
 
 | Criterion | Target |
 |-----------|--------|
-| New Renderer LOC | < 100 lines for basic implementation |
+| Architecture Compliance | All layers properly separated |
+| Renderer LOC | < 100 lines for basic implementation |
 | Test Coverage | > 90% for new components |
 | Backward Compatibility | All existing tests pass |
 | Build Time Impact | < 5% increase |
@@ -258,9 +377,26 @@ struct WaveformSettingsView: View {
 
 ---
 
+## Changelog
+
+### 2026-02-27 - Architecture Review Fixes
+
+1. **Moved `WaveformRendering` to Presentation layer** - Uses GraphicsContext, not Domain-appropriate
+2. **Moved `AudioLevelMonitor` to Infrastructure layer** - Uses AVAudioEngine, concrete implementation
+3. **Changed renderers from struct to @MainActor class** - Fixes state loss between frames
+4. **Added @State caching for renderer** - Prevents per-frame allocation
+5. **Fixed @Observable didSet anti-pattern** - Use computed property with explicit get/set
+6. **Replaced CGFloat with Double** - Standard types in Domain, platform types only in Presentation
+7. **Fixed Sendable compliance** - Remove Timer from actor, use Task.sleep
+8. **Added semantic color usage** - Color.primary instead of .white
+9. **Fixed test strategy** - Mockable approaches, no GraphicsContext instantiation in unit tests
+
+---
+
 ## References
 
 - [SwiftUI Canvas Documentation](https://developer.apple.com/documentation/swiftui/canvas)
 - [CADisplayLink Best Practices](https://developer.apple.com/documentation/quartzcore/cadisplaylink)
 - [Core Audio AudioTap](https://developer.apple.com/documentation/avfaudio/avaudioengine)
-- [Siri Waveform Analysis](https://www.reddit.com/r/iOSProgramming/comments/sirilike_waveform/)
+- [Clean Architecture for SwiftUI](https://nalexn.github.io/clean-architecture-swiftui/)
+- [SwiftUI @Observable Deep Dive](https://developer.apple.com/documentation/swiftui/managing-model-data-in-your-app)

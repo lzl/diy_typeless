@@ -63,27 +63,60 @@ TimelineView(.animation(minimumInterval: 1/60, paused: !isRecording)) { timeline
 }
 ```
 
+### Renderer Class Design (Critical)
+
+**ALWAYS use classes (not structs) for renderers:**
+
+```swift
+// CORRECT: Class maintains state across frames
+@MainActor
+final class FluidWaveformRenderer: WaveformRendering {
+    private var smoothedLevels: [Double] = []
+
+    func render(context: inout GraphicsContext, size: CGSize, levels: [Double], time: Date) {
+        // State persists across calls
+        if smoothedLevels.count != levels.count {
+            smoothedLevels = levels
+        }
+        // Smooth in place
+        for i in levels.indices {
+            smoothedLevels[i] = smoothedLevels[i] * 0.7 + levels[i] * 0.3
+        }
+    }
+}
+
+// WRONG: Struct loses state every frame
+struct FluidWaveformRenderer: WaveformRendering {
+    private var smoothedLevels: [Double] = []
+    // Each call gets a COPY - state is lost!
+}
+```
+
 ### Avoiding View Invalidation During Animation
 
 The golden rule: **Minimize state changes that trigger view body re-evaluation.**
 
-**Strategy 1: Use @StateObject for mutable state**
+**Strategy 1: Cache renderer in @State**
 ```swift
-@MainActor
-@Observable
-final class WaveformState {
-    private(set) var audioLevels: [Float] = []
+struct WaveformContainerView: View {
+    @State private var renderer: WaveformRendering?
 
-    func updateLevel(_ level: Float) {
-        audioLevels.append(level)
-        if audioLevels.count > maxBars {
-            audioLevels.removeFirst()
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                renderer?.render(...)  // Renderer persists
+            }
+        }
+        .onAppear {
+            if renderer == nil {
+                renderer = makeRenderer()  // Create once
+            }
         }
     }
 }
 ```
 
-**Strategy 2: Pass data through Canvas closure capture**
+**Strategy 2: Pass data through closure capture**
 ```swift
 Canvas { [audioLevels] context, size in
     // Captured values don't trigger re-renders
@@ -94,10 +127,11 @@ Canvas { [audioLevels] context, size in
 **Strategy 3: Separate animation concerns**
 ```swift
 struct WaveformView: View {
-    @State private var canvasSize: CGSize = .zero
-
     var body: some View {
         GeometryReader { geometry in
+            // Size determined once
+            let _ = print("GeometryReader evaluated once")
+
             TimelineView(.animation) { timeline in
                 Canvas { context, size in
                     // Only this closure re-executes at 60fps
@@ -118,18 +152,18 @@ Long-running recordings require careful memory management:
 @Observable
 final class AudioLevelBuffer {
     private let maxSamples: Int
-    private var samples: CircularBuffer<Float>
+    private var samples: CircularBuffer<Double>
 
     init(duration: TimeInterval, sampleRate: Double) {
         maxSamples = Int(duration * sampleRate)
         samples = CircularBuffer(capacity: maxSamples)
     }
 
-    func append(_ level: Float) {
+    func append(_ level: Double) {
         samples.append(level) // O(1) operation
     }
 
-    var currentSnapshot: [Float] {
+    var currentSnapshot: [Double] {
         Array(samples) // Copy for rendering
     }
 }
@@ -192,11 +226,11 @@ Canvas { context, size in
 
 **Efficient coordinate calculations:**
 ```swift
-private func barRect(at index: Int, level: Float, size: CGSize) -> CGRect {
-    let barWidth = (size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount)
-    let x = CGFloat(index) * (barWidth + spacing)
-    let height = CGFloat(level) * size.height
-    let y = (size.height - height) / 2  // Center vertically
+private func barRect(at index: Int, level: Double, size: CGSize) -> CGRect {
+    let barWidth = (Double(size.width) - spacing * Double(barCount - 1)) / Double(barCount)
+    let x = Double(index) * (barWidth + spacing)
+    let height = level * Double(size.height)
+    let y = (Double(size.height) - height) / 2  // Center vertically
 
     return CGRect(x: x, y: y, width: barWidth, height: height)
 }
@@ -208,16 +242,18 @@ private func barRect(at index: Int, level: Float, size: CGSize) -> CGRect {
 ```swift
 @MainActor
 @Observable
-final class WaveformRenderer {
-    private var barPathCache: [CGRect: Path] = [:]
+final class WaveformPathCache {
+    private var barPathCache: [String: Path] = [:]
 
-    func path(for rect: CGRect) -> Path {
-        if let cached = barPathCache[rect] {
+    func path(for rect: CGRect, cornerRadius: Double) -> Path {
+        let key = "\(rect.width)-\(rect.height)-\(cornerRadius)"
+
+        if let cached = barPathCache[key] {
             return cached
         }
 
-        let path = Path(rect)
-        barPathCache[rect] = path
+        let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
+        barPathCache[key] = path
         return path
     }
 
@@ -230,10 +266,10 @@ final class WaveformRenderer {
 **For rounded rectangles, use predefined radii:**
 ```swift
 extension Path {
-    static let roundedBarCache = NSCache<NSValue, Path>()
+    private static let roundedBarCache = NSCache<NSString, Path>()
 
-    static func roundedBar(width: CGFloat, height: CGFloat, radius: CGFloat) -> Path {
-        let key = NSValue(cgSize: CGSize(width: width, height: height))
+    static func roundedBar(width: Double, height: Double, radius: Double) -> Path {
+        let key = "\(width)-\(height)-\(radius)" as NSString
 
         if let cached = roundedBarCache.object(forKey: key) {
             return cached
@@ -265,6 +301,15 @@ context.fill(path, with: .linearGradient(
 context.fill(path, with: .radialGradient(...))
 ```
 
+**Use semantic colors for accessibility:**
+```swift
+// CORRECT: Adapts to light/dark mode
+context.fill(path, with: .color(Color.primary.opacity(0.8)))
+
+// WRONG: Hardcoded color doesn't adapt
+context.fill(path, with: .color(.white.opacity(0.8)))
+```
+
 **Reuse gradients:**
 ```swift
 struct WaveformStyle {
@@ -287,26 +332,41 @@ struct WaveformStyle {
 Define a clean protocol for audio level providers:
 
 ```swift
+// Domain/Protocols/AudioLevelProviding.swift
 protocol AudioLevelProviding: Sendable {
-    /// Current audio level in dB (typically -60...0)
-    var currentLevel: Float { get }
+    /// Current audio levels (normalized 0.0...1.0)
+    var levels: [Double] { get }
 
-    /// Subscribe to level updates
-    func startMonitoring() async throws
-    func stopMonitoring()
+    /// Start monitoring audio levels
+    func start()
+
+    /// Stop monitoring audio levels
+    func stop()
 }
+```
 
-actor AudioLevelProvider: AudioLevelProviding {
+**Implementation in Infrastructure layer:**
+```swift
+// Infrastructure/Audio/AudioLevelMonitor.swift
+import AVFoundation
+
+@MainActor
+final class AudioLevelMonitor: AudioLevelProviding {
+    private(set) var levels: [Double] = Array(repeating: 0.1, count: 20)
     private var audioEngine: AVAudioEngine?
-    private var timer: Timer?
-    private(set) var currentLevel: Float = -60.0
+    private var isMonitoring = false
 
-    func startMonitoring() async throws {
-        // Setup audio tap...
+    func start() {
+        guard !isMonitoring else { return }
+        isMonitoring = true
+        // Setup AVAudioEngine tap...
     }
 
-    func stopMonitoring() {
-        // Cleanup...
+    func stop() {
+        guard isMonitoring else { return }
+        isMonitoring = false
+        audioEngine?.stop()
+        audioEngine = nil
     }
 }
 ```
@@ -320,30 +380,41 @@ actor ThrottledAudioProvider: AudioLevelProviding {
     private let source: AudioLevelProviding
     private let updateInterval: TimeInterval
     private var lastUpdate: Date = .distantPast
+    private var latestLevel: Double = 0
 
-    var currentLevel: Float {
+    var levels: [Double] {
         get async {
-            await source.currentLevel
+            await source.levels
         }
     }
 
     func startMonitoring() async throws {
-        try await source.startMonitoring()
+        try await source.start()
 
-        // Throttle to 30fps for UI updates
-        Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { _ in
-            Task {
-                await self.updateLevel()
+        // Throttle to 60fps using Task.sleep (Sendable-compliant)
+        Task {
+            while await source.isMonitoring {
+                let level = await source.currentLevel
+                await updateIfNeeded(level: level)
+                try? await Task.sleep(nanoseconds: 16_666_667) // ~60fps
             }
         }
     }
 
-    private func updateLevel() async {
-        let level = await source.currentLevel
+    private func updateIfNeeded(level: Double) {
+        let now = Date()
+        guard now.timeIntervalSince(lastUpdate) >= updateInterval else { return }
+        lastUpdate = now
+        latestLevel = level
         // Notify view model...
     }
 }
 ```
+
+**Why Task.sleep instead of Timer:**
+- `Task.sleep` is `Sendable`-compliant (works with Swift concurrency)
+- `Timer` is not `Sendable` and causes actor isolation issues
+- `Task.sleep` integrates better with cancellation
 
 ### Smoothing Algorithms for Waveform
 
@@ -352,10 +423,10 @@ Raw audio levels are too jittery for pleasant visualization. Apply smoothing:
 **Exponential Moving Average (EMA):**
 ```swift
 struct SmoothedAudioLevel {
-    private var smoothedValue: Float = 0
-    private let alpha: Float  // Smoothing factor (0...1)
+    private var smoothedValue: Double = 0
+    private let alpha: Double  // Smoothing factor (0...1)
 
-    mutating func update(with newValue: Float) -> Float {
+    mutating func update(with newValue: Double) -> Double {
         smoothedValue = alpha * newValue + (1 - alpha) * smoothedValue
         return smoothedValue
     }
@@ -365,11 +436,11 @@ struct SmoothedAudioLevel {
 **Attack/Release envelope (more natural):**
 ```swift
 struct EnvelopeFollower {
-    private var envelope: Float = 0
-    private let attackCoefficient: Float   // Fast response to increase
-    private let releaseCoefficient: Float  // Slow decay
+    private var envelope: Double = 0
+    private let attackCoefficient: Double   // Fast response to increase
+    private let releaseCoefficient: Double  // Slow decay
 
-    mutating func process(_ input: Float) -> Float {
+    mutating func process(_ input: Double) -> Double {
         let absInput = abs(input)
 
         if absInput > envelope {
@@ -390,40 +461,35 @@ struct EnvelopeFollower {
 Separate rendering logic from data:
 
 ```swift
-// MARK: - Protocols
+// MARK: - Protocols (Presentation Layer)
 
-protocol WaveformRendering {
-    func render(levels: [Float], in context: inout GraphicsContext, size: CGSize)
+protocol WaveformRendering: AnyObject {
+    func render(
+        context: inout GraphicsContext,
+        size: CGSize,
+        levels: [Double],
+        time: Date
+    )
 }
 
 protocol WaveformStyling {
     var barColor: Color { get }
-    var barSpacing: CGFloat { get }
-    var barCornerRadius: CGFloat { get }
+    var barSpacing: Double { get }
+    var barCornerRadius: Double { get }
 }
 
 // MARK: - Implementations
 
-struct BarWaveformRenderer: WaveformRendering {
+@MainActor
+final class BarWaveformRenderer: WaveformRendering {
     let style: WaveformStyling
 
-    func render(levels: [Float], in context: inout GraphicsContext, size: CGSize) {
-        let barWidth = calculateBarWidth(count: levels.count, spacing: style.barSpacing, totalWidth: size.width)
-
-        for (index, level) in levels.enumerated() {
-            let rect = barRect(at: index, level: level, barWidth: barWidth, size: size)
-            let path = Path(roundedRect: rect, cornerRadius: style.barCornerRadius)
-            context.fill(path, with: .color(style.barColor))
-        }
+    init(style: WaveformStyling) {
+        self.style = style
     }
-}
 
-struct GradientBarWaveformRenderer: WaveformRendering {
-    let style: WaveformStyling
-    let gradient: Gradient
-
-    func render(levels: [Float], in context: inout GraphicsContext, size: CGSize) {
-        // Implementation with gradient fill...
+    func render(context: inout GraphicsContext, size: CGSize, levels: [Double], time: Date) {
+        // Implementation...
     }
 }
 ```
@@ -433,26 +499,38 @@ struct GradientBarWaveformRenderer: WaveformRendering {
 Create mock providers for testing:
 
 ```swift
-actor MockAudioProvider: AudioLevelProviding {
-    private(set) var currentLevel: Float = -60.0
-    private var timer: Timer?
+@MainActor
+final class MockAudioProvider: AudioLevelProviding {
+    private(set) var levels: [Double] = []
+    private var task: Task<Void, Never>?
 
-    func simulateRecording(pattern: WaveformPattern) async {
-        for level in pattern.levels {
-            currentLevel = level
-            try? await Task.sleep(nanoseconds: 33_333_333) // ~30fps
+    func simulateRecording(pattern: WaveformPattern) {
+        task = Task {
+            for level in pattern.levels {
+                levels.append(level)
+                if levels.count > 60 {
+                    levels.removeFirst()
+                }
+                try? await Task.sleep(nanoseconds: 16_666_667) // ~60fps
+            }
         }
+    }
+
+    func start() {}
+    func stop() {
+        task?.cancel()
     }
 }
 
 enum WaveformPattern {
     case silence(duration: TimeInterval)
-    case sineWave(frequency: Double, amplitude: Float)
+    case sineWave(frequency: Double, amplitude: Double)
     case randomNoise(seed: Int)
-    case recordedSamples([Float])
+    case recordedSamples([Double])
 
-    var levels: [Float] {
+    var levels: [Double] {
         // Generate appropriate samples...
+        []
     }
 }
 ```
@@ -472,16 +550,19 @@ Make previews useful with mock data:
 
 #Preview("Animated Waveform") {
     struct AnimatedPreview: View {
-        @State private var levels: [Float] = []
-        private let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+        @State private var levels: [Double] = []
 
         var body: some View {
             WaveformView(levels: levels, style: .default)
                 .frame(width: 400, height: 80)
-                .onReceive(timer) { _ in
-                    levels.append(Float.random(in: 0.1...0.9))
-                    if levels.count > 50 {
-                        levels.removeFirst()
+                .task {
+                    // Use Task.sleep instead of Timer
+                    while !Task.isCancelled {
+                        levels.append(Double.random(in: 0.1...0.9))
+                        if levels.count > 50 {
+                            levels.removeFirst()
+                        }
+                        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                     }
                 }
         }
@@ -503,34 +584,6 @@ While SwiftUI Canvas is preferred, be aware of AppKit alternatives:
 | Complex waveform editing | AppKit with CALayer |
 | Need Metal shaders | MTKView wrapper |
 | Accessibility requirements | SwiftUI with fallback |
-
-**Hybrid approach for complex cases:**
-```swift
-struct WaveformNSViewRepresentable: NSViewRepresentable {
-    var levels: [Float]
-
-    func makeNSView(context: Context) -> WaveformView {
-        WaveformView()
-    }
-
-    func updateNSView(_ nsView: WaveformView, context: Context) {
-        nsView.levels = levels
-    }
-}
-
-class WaveformView: NSView {
-    var levels: [Float] = [] {
-        didSet {
-            needsDisplay = true
-        }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let context = NSGraphicsContext.current?.cgContext else { return }
-        // Custom drawing with Core Graphics...
-    }
-}
-```
 
 ### Window Management with Waveform
 
@@ -559,20 +612,14 @@ Reduce power consumption when not actively recording:
 @MainActor
 @Observable
 final class WaveformViewModel {
-    var isRecording = false {
-        didSet {
-            updateDisplayLink()
-        }
-    }
+    var isRecording = false
 
-    private func updateDisplayLink() {
-        if isRecording {
-            // Full 60fps animation
-            displayLink.preferredFramesPerSecond = 60
-        } else {
-            // Pause animation entirely
-            displayLink.isPaused = true
-        }
+    // Use TimelineView's paused parameter instead of didSet
+    var timelinePaused: Bool { !isRecording }
+
+    func updateDisplayLink() {
+        // TimelineView handles pausing automatically
+        // Just update the paused binding
     }
 }
 ```
@@ -613,12 +660,101 @@ do {
 Sanitize all logging:
 ```swift
 extension AudioLevelProvider {
-    private func logLevelChange(_ level: Float) {
+    private func logLevelChange(_ level: Double) {
         // Log only statistical information
         logger.debug("Audio level updated", metadata: [
-            "range": .string(level > -20 ? "high" : level > -40 ? "medium" : "low"),
+            "range": .string(level > 0.5 ? "high" : level > 0.2 ? "medium" : "low"),
             "timestamp": .string(Date().iso8601)
         ])
+    }
+}
+```
+
+## 7. Common Pitfalls
+
+### Pitfall 1: Using CGFloat in Domain Layer
+
+**WRONG:**
+```swift
+// Domain/Entities/WaveformData.swift
+struct WaveformData {
+    let levels: [CGFloat]  // ❌ CoreGraphics type in Domain
+}
+```
+
+**CORRECT:**
+```swift
+// Domain/Entities/WaveformData.swift
+struct WaveformData {
+    let levels: [Double]  // ✅ Standard library type
+}
+
+// Presentation layer conversion
+let cgLevels = domainData.levels.map(CGFloat.init)
+```
+
+### Pitfall 2: Mixing @Observable with didSet
+
+**WRONG:**
+```swift
+@MainActor
+@Observable
+final class Settings {
+    var style: WaveformStyle = .fluid {
+        didSet {  // ❌ @Observable doesn't work well with didSet
+            UserDefaults.standard.set(style.rawValue, forKey: "style")
+        }
+    }
+}
+```
+
+**CORRECT:**
+```swift
+@MainActor
+@Observable
+final class Settings {
+    var style: WaveformStyle {
+        get {
+            let saved = UserDefaults.standard.string(forKey: "style") ?? ""
+            return WaveformStyle(rawValue: saved) ?? .fluid
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "style")
+        }
+    }
+}
+```
+
+### Pitfall 3: Creating Renderer in Body
+
+**WRONG:**
+```swift
+var body: some View {
+    TimelineView(.animation) { timeline in
+        Canvas { context, size in
+            let renderer = style.makeRenderer()  // ❌ New instance every frame!
+            renderer?.render(...)
+        }
+    }
+}
+```
+
+**CORRECT:**
+```swift
+struct WaveformView: View {
+    @State private var renderer: WaveformRendering?
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                renderer?.render(...)  // ✅ Reuse cached instance
+            }
+        }
+        .onAppear {
+            if renderer == nil {
+                renderer = style.makeRenderer()  // ✅ Create once
+            }
+        }
     }
 }
 ```

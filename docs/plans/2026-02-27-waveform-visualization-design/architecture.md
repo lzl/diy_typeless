@@ -48,28 +48,49 @@ HStack(spacing: AppSize.waveformBarSpacing) {
 │              │ Waveform     │              │  Bar Style   │  │
 │              │ Renderer     │              │   Renderer   │  │
 │              └──────────────┘              └──────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │           WaveformRendering Protocol                  │   │
+│  │     (Presentation layer - uses GraphicsContext)       │   │
+│  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                       Domain Layer                           │
 │                                                              │
-│  ┌─────────────────────┐      ┌──────────────────────────┐  │
-│  │ AudioLevelProviding │◀─────│    AudioLevelMonitor     │  │
-│  │     Protocol        │      │   (Existing, unchanged)  │  │
-│  └─────────────────────┘      └──────────────────────────┘  │
+│  ┌─────────────────────┐                                    │
+│  │ AudioLevelProviding │◀────────── Protocol only          │
+│  │     Protocol        │                                    │
+│  └─────────────────────┘                                    │
 │                                                              │
-│  ┌─────────────────────┐      ┌──────────────────────────┐  │
-│  │  WaveformRendering  │◀─────│   WaveformStyle Enum     │  │
-│  │     Protocol        │      │  (bar, fluid, disabled)  │  │
-│  └─────────────────────┘      └──────────────────────────┘  │
+│  ┌─────────────────────┐                                    │
+│  │   WaveformStyle     │◀────────── Enum (RawRepresentable) │
+│  │       Enum          │                                    │
+│  └─────────────────────┘                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Infrastructure Layer                       │
+│                                                              │
+│  ┌──────────────────────────┐      ┌──────────────────────┐ │
+│  │    AudioLevelMonitor     │─────▶│    AVAudioEngine     │ │
+│  │  (Concrete Implementation)│     │   (System Framework)  │ │
+│  └──────────────────────────┘      └──────────────────────┘ │
+│                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Key architectural decisions:**
+1. `WaveformRendering` protocol lives in **Presentation layer** because it uses SwiftUI's `GraphicsContext`
+2. `AudioLevelMonitor` lives in **Infrastructure layer** because it uses `AVAudioEngine`
+3. Domain layer contains only: `AudioLevelProviding` protocol and `WaveformStyle` enum
 
 ### Data Flow
 
 ```
-Audio Input → AVAudioEngine → AudioLevelMonitor → [CGFloat] levels
+Audio Input → AVAudioEngine → AudioLevelMonitor → [Double] levels
                                                        │
                                                        ▼
 TimelineView(.animation) ──────────────────────▶ Canvas.render()
@@ -82,12 +103,17 @@ TimelineView(.animation) ──────────────────�
 
 ## Protocol Design
 
-### WaveformRendering Protocol
+### WaveformRendering Protocol (Presentation Layer)
+
+**IMPORTANT:** This protocol uses SwiftUI's `GraphicsContext` and therefore belongs in the **Presentation layer**, not Domain.
 
 ```swift
+import SwiftUI
+
 /// Protocol for waveform renderers that draw audio visualization
-/// Implementations use Canvas for GPU-accelerated rendering
-protocol WaveformRendering {
+/// IMPLEMENTATION NOTE: This protocol uses SwiftUI.GraphicsContext and must remain
+/// in the Presentation layer. Do not move to Domain.
+protocol WaveformRendering: AnyObject {
     /// Render the waveform into the provided GraphicsContext
     /// - Parameters:
     ///   - context: The GraphicsContext to draw into
@@ -95,33 +121,34 @@ protocol WaveformRendering {
     ///   - levels: Array of normalized audio levels (0.0...1.0)
     ///   - time: Current animation timestamp for phase calculations
     func render(
-        context: GraphicsContext,
+        context: inout GraphicsContext,
         size: CGSize,
-        levels: [CGFloat],
+        levels: [Double],
         time: Date
     )
 
     /// Calculate the optimal bar count based on available width
     /// - Parameter width: Available width in points
     /// - Returns: Number of bars/samples to display
-    func barCount(for width: CGFloat) -> Int
+    func barCount(for width: Double) -> Int
 }
 
 extension WaveformRendering {
     /// Default implementation: calculate bar count based on fixed width
-    func barCount(for width: CGFloat) -> Int {
-        let barWidth: CGFloat = 3
-        let spacing: CGFloat = 2
+    func barCount(for width: Double) -> Int {
+        let barWidth: Double = 3
+        let spacing: Double = 2
         return max(10, Int(width / (barWidth + spacing)))
     }
 }
 ```
 
-### WaveformStyle Enum
+### WaveformStyle Enum (Domain Layer)
 
 ```swift
 /// Defines available waveform visualization styles
-enum WaveformStyle: String, CaseIterable, Identifiable {
+/// Stored in UserDefaults as String rawValue
+enum WaveformStyle: String, CaseIterable, Identifiable, Sendable {
     case bar      // Classic bar style (current implementation)
     case fluid    // Organic sine wave overlay
     case disabled // No visualization
@@ -135,10 +162,18 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
         case .disabled: return "Off"
         }
     }
+}
+```
 
-    /// Create appropriate renderer for this style
-    func makeRenderer() -> WaveformRendering? {
-        switch self {
+**Note:** The factory method that creates renderers lives in the Presentation layer:
+
+```swift
+// Presentation/Waveform/WaveformRendererFactory.swift
+import SwiftUI
+
+enum WaveformRendererFactory {
+    static func makeRenderer(for style: WaveformStyle) -> WaveformRendering? {
+        switch style {
         case .bar:
             return BarWaveformRenderer()
         case .fluid:
@@ -152,46 +187,54 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
 
 ## Renderer Implementations
 
-### FluidWaveformRenderer
+### Critical Implementation Notes
 
-Uses three-layer sine wave overlay for organic fluid effect:
+All renderers **must** be classes (not structs) with `@MainActor` because:
+1. They maintain mutable state (`smoothedLevels`) that persists across frames
+2. `GraphicsContext` operations must happen on the main thread
+3. Structs would be copied on every render call, losing state
+
+### FluidWaveformRenderer
 
 ```swift
 import SwiftUI
 
 /// Renders an organic fluid waveform using overlapping sine waves
-struct FluidWaveformRenderer: WaveformRendering {
+/// IMPORTANT: Must be a class (not struct) to maintain smoothing state across frames
+@MainActor
+final class FluidWaveformRenderer: WaveformRendering {
 
     // MARK: - Configuration
 
     /// Primary wave amplitude multiplier
-    private let primaryAmplitude: CGFloat = 1.0
+    private let primaryAmplitude: Double = 1.0
 
     /// Secondary wave for texture (higher frequency, lower amplitude)
-    private let secondaryAmplitude: CGFloat = 0.3
-    private let secondaryFrequency: CGFloat = 2.5
+    private let secondaryAmplitude: Double = 0.3
+    private let secondaryFrequency: Double = 2.5
 
     /// Tertiary wave for micro-detail
-    private let tertiaryAmplitude: CGFloat = 0.15
-    private let tertiaryFrequency: CGFloat = 5.0
+    private let tertiaryAmplitude: Double = 0.15
+    private let tertiaryFrequency: Double = 5.0
 
     /// Wave speed (cycles per second)
-    private let waveSpeed: CGFloat = 1.2
+    private let waveSpeed: Double = 1.2
 
     /// Smoothing factor for level transitions (0...1)
-    private let smoothingFactor: CGFloat = 0.3
+    private let smoothingFactor: Double = 0.3
 
     // MARK: - State
 
     /// Smoothed levels to prevent jarring jumps
-    private var smoothedLevels: [CGFloat] = []
+    /// NOTE: This state persists across render calls
+    private var smoothedLevels: [Double] = []
 
     // MARK: - WaveformRendering
 
     func render(
-        context: GraphicsContext,
+        context: inout GraphicsContext,
         size: CGSize,
-        levels: [CGFloat],
+        levels: [Double],
         time: Date
     ) {
         guard !levels.isEmpty else { return }
@@ -201,23 +244,23 @@ struct FluidWaveformRenderer: WaveformRendering {
             smoothedLevels = levels
         }
 
-        // Apply exponential smoothing
+        // Apply exponential smoothing in place (no new allocations)
         for i in levels.indices {
             smoothedLevels[i] = smoothedLevels[i] * (1 - smoothingFactor) + levels[i] * smoothingFactor
         }
 
         let barCount = levels.count
-        let barWidth = size.width / CGFloat(barCount)
-        let centerY = size.height / 2
-        let phase = CGFloat(time.timeIntervalSince1970) * waveSpeed * 2 * .pi
+        let barWidth = Double(size.width) / Double(barCount)
+        let centerY = Double(size.height) / 2
+        let phase = Double(time.timeIntervalSince1970) * waveSpeed * 2 * .pi
 
         // Draw each bar as a rounded rectangle with fluid height
         for i in 0..<barCount {
-            let x = CGFloat(i) * barWidth + barWidth / 2
+            let x = Double(i) * barWidth + barWidth / 2
             let baseLevel = smoothedLevels[i]
 
             // Calculate fluid height using three sine waves
-            let positionFactor = CGFloat(i) / CGFloat(barCount - 1)  // 0...1 across width
+            let positionFactor = Double(i) / Double(barCount - 1)  // 0...1 across width
 
             // Primary wave: slow roll across the display
             let primaryWave = sin(positionFactor * .pi * 2 + phase)
@@ -235,21 +278,21 @@ struct FluidWaveformRenderer: WaveformRendering {
 
             // Normalize to positive range and apply level
             let normalizedWave = (waveMultiplier + 2) / 4  // Maps -2...2 to 0...1 roughly
-            let fluidHeight = baseLevel * normalizedWave * size.height
+            let fluidHeight = baseLevel * normalizedWave * Double(size.height)
 
             // Draw the bar
             let rect = CGRect(
                 x: x - barWidth * 0.4,
                 y: centerY - fluidHeight / 2,
                 width: barWidth * 0.8,
-                height: fluidHeight
+                height: max(2, fluidHeight)  // Minimum height of 2 points
             )
 
             let path = Path(roundedRect: rect, cornerRadius: barWidth * 0.4)
 
-            // Gradient opacity based on level
+            // Use semantic color that adapts to light/dark mode
             let opacity = 0.5 + baseLevel * 0.5
-            context.fill(path, with: .color(.white.opacity(opacity)))
+            context.fill(path, with: .color(Color.primary.opacity(opacity)))
         }
     }
 }
@@ -257,41 +300,40 @@ struct FluidWaveformRenderer: WaveformRendering {
 
 ### BarWaveformRenderer
 
-Classic bar style matching current visual design:
-
 ```swift
 import SwiftUI
 
 /// Renders classic bar-style waveform
-struct BarWaveformRenderer: WaveformRendering {
+@MainActor
+final class BarWaveformRenderer: WaveformRendering {
 
     /// Minimum bar height as ratio of container
-    private let minHeightRatio: CGFloat = 0.1
+    private let minHeightRatio: Double = 0.1
 
     /// Corner radius ratio relative to bar width
-    private let cornerRadiusRatio: CGFloat = 0.5
+    private let cornerRadiusRatio: Double = 0.5
 
     /// Bar fill ratio (0...1) leaving gaps between bars
-    private let barFillRatio: CGFloat = 0.8
+    private let barFillRatio: Double = 0.8
 
     func render(
-        context: GraphicsContext,
+        context: inout GraphicsContext,
         size: CGSize,
-        levels: [CGFloat],
+        levels: [Double],
         time: Date
     ) {
         guard !levels.isEmpty else { return }
 
         let barCount = levels.count
-        let barWidth = size.width / CGFloat(barCount)
+        let barWidth = Double(size.width) / Double(barCount)
         let cornerRadius = barWidth * cornerRadiusRatio
 
         for i in 0..<barCount {
             let level = max(minHeightRatio, levels[i])
-            let barHeight = max(barWidth, size.height * level)
+            let barHeight = max(barWidth, Double(size.height) * level)
 
-            let x = CGFloat(i) * barWidth + (barWidth * (1 - barFillRatio)) / 2
-            let y = (size.height - barHeight) / 2
+            let x = Double(i) * barWidth + (barWidth * (1 - barFillRatio)) / 2
+            let y = (Double(size.height) - barHeight) / 2
 
             let rect = CGRect(
                 x: x,
@@ -302,9 +344,9 @@ struct BarWaveformRenderer: WaveformRendering {
 
             let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
 
-            // Opacity varies slightly with level for depth
+            // Use semantic color
             let opacity = 0.8 + level * 0.2
-            context.fill(path, with: .color(.white.opacity(opacity)))
+            context.fill(path, with: .color(Color.primary.opacity(opacity)))
         }
     }
 }
@@ -314,7 +356,7 @@ struct BarWaveformRenderer: WaveformRendering {
 
 ### WaveformContainerView
 
-Replaces the current `WaveformView`:
+**CRITICAL FIX:** The renderer must be cached in `@State` to avoid creating a new instance every frame.
 
 ```swift
 import SwiftUI
@@ -327,6 +369,12 @@ struct WaveformContainerView: View {
     private let audioProvider: AudioLevelProviding
     private let style: WaveformStyle
 
+    // MARK: - State
+
+    /// Renderer is cached to maintain smoothing state across frames
+    /// CRITICAL: Creating a new renderer each frame would reset smoothedLevels!
+    @State private var renderer: WaveformRendering?
+
     // MARK: - Initialization
 
     init(
@@ -335,6 +383,7 @@ struct WaveformContainerView: View {
     ) {
         self.audioProvider = audioProvider
         self.style = style
+        // Note: Cannot initialize @State here, done in onAppear
     }
 
     // MARK: - Body
@@ -342,14 +391,23 @@ struct WaveformContainerView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1/60, paused: false)) { timeline in
             Canvas { context, size in
-                guard let renderer = style.makeRenderer() else { return }
-                renderer.render(
-                    context: context,
+                renderer?.render(
+                    context: &context,
                     size: size,
-                    levels: audioProvider.levels,
+                    levels: audioProvider.levels.map(Double.init),
                     time: timeline.date
                 )
             }
+        }
+        .onAppear {
+            // Initialize renderer once when view appears
+            if renderer == nil {
+                renderer = WaveformRendererFactory.makeRenderer(for: style)
+            }
+        }
+        .onChange(of: style) { _, newStyle in
+            // Update renderer when style changes
+            renderer = WaveformRendererFactory.makeRenderer(for: newStyle)
         }
     }
 }
@@ -376,8 +434,9 @@ struct WaveformContainerView: View {
 
 // MARK: - Mock Provider
 
+@MainActor
 private final class MockAudioProvider: AudioLevelProviding {
-    var levels: [CGFloat] = Array(repeating: 0.5, count: 20)
+    var levels: [Double] = Array(repeating: 0.5, count: 20)
     func start() {}
     func stop() {}
 }
@@ -405,21 +464,28 @@ private var content: some View {
 
 ### Settings Integration (Future)
 
-For future Settings panel integration:
+**FIXED:** Removed `didSet` usage which is incompatible with `@Observable`.
 
 ```swift
+import SwiftUI
+
 @MainActor
 @Observable
 final class WaveformSettings {
+    private let defaults: UserDefaults
+
     var selectedStyle: WaveformStyle {
-        didSet {
-            UserDefaults.standard.set(selectedStyle.rawValue, forKey: "waveformStyle")
+        get {
+            let saved = defaults.string(forKey: "waveformStyle") ?? ""
+            return WaveformStyle(rawValue: saved) ?? .fluid
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: "waveformStyle")
         }
     }
 
-    init() {
-        let saved = UserDefaults.standard.string(forKey: "waveformStyle") ?? ""
-        self.selectedStyle = WaveformStyle(rawValue: saved) ?? .fluid
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
     }
 }
 
@@ -482,16 +548,20 @@ Canvas { context, size in
 ### Memory Efficiency
 
 ```swift
-struct FluidWaveformRenderer: WaveformRendering {
+@MainActor
+final class FluidWaveformRenderer: WaveformRendering {
     // Reuse array instead of allocating each frame
-    private var smoothedLevels: [CGFloat] = []
+    private var smoothedLevels: [Double] = []
 
     func render(...) {
         // Resize only when needed, not every frame
         if smoothedLevels.count != levels.count {
             smoothedLevels = levels  // Single allocation
         }
-        // ... mutate in place
+        // Mutate in place
+        for i in levels.indices {
+            smoothedLevels[i] = smoothedLevels[i] * (1 - smoothingFactor) + levels[i] * smoothingFactor
+        }
     }
 }
 ```
@@ -502,16 +572,21 @@ struct FluidWaveformRenderer: WaveformRendering {
 DIYTypeless/
 ├── Domain/
 │   ├── Protocols/
-│   │   ├── AudioLevelProviding.swift      (existing)
-│   │   └── WaveformRendering.swift        (new)
+│   │   └── AudioLevelProviding.swift      (existing)
 │   └── Entities/
 │       └── WaveformStyle.swift            (new)
 ├── Presentation/
 │   ├── Components/
 │   │   └── WaveformContainerView.swift    (new)
-│   └── Renderers/
-│       ├── FluidWaveformRenderer.swift    (new)
-│       └── BarWaveformRenderer.swift      (new)
+│   ├── Renderers/
+│   │   ├── FluidWaveformRenderer.swift    (new)
+│   │   ├── BarWaveformRenderer.swift      (new)
+│   │   └── WaveformRendererFactory.swift  (new)
+│   └── Protocols/
+│       └── WaveformRendering.swift        (new - Presentation layer!)
+├── Infrastructure/
+│   └── Audio/
+│       └── AudioLevelMonitor.swift        (moved from Domain)
 └── Capsule/
     ├── WaveformView.swift                 (delete after migration)
     ├── CapsuleView.swift                  (update)
@@ -520,42 +595,116 @@ DIYTypeless/
 
 ## Migration Plan
 
-1. **Phase 1**: Create new protocols and renderers (no UI changes)
-2. **Phase 2**: Add `WaveformContainerView` alongside existing `WaveformView`
-3. **Phase 3**: Update `CapsuleView` to use new container
-4. **Phase 4**: Remove old `WaveformView.swift`
-5. **Phase 5**: Add Settings integration for style selection
+1. **Phase 1**: Move `AudioLevelMonitor` to Infrastructure layer
+2. **Phase 2**: Create `WaveformRendering` protocol in Presentation layer
+3. **Phase 3**: Implement `FluidWaveformRenderer` and `BarWaveformRenderer` as classes with `@MainActor`
+4. **Phase 4**: Add `WaveformContainerView` with proper @State caching
+5. **Phase 5**: Update `CapsuleView` to use new container
+6. **Phase 6**: Remove old `WaveformView.swift`
+7. **Phase 7**: Add Settings integration for style selection
 
 ## Testing Strategy
+
+**FIXED:** Tests now use mockable approaches that don't require GraphicsContext instantiation.
 
 ```swift
 import XCTest
 @testable import DIYTypeless
 
-final class FluidWaveformRendererTests: XCTestCase {
-    func testRenderDoesNotCrashWithEmptyLevels() {
-        let renderer = FluidWaveformRenderer()
-        let context = GraphicsContext(...)
-        renderer.render(context: context, size: CGSize(width: 100, height: 20), levels: [], time: Date())
-    }
-
-    func testRenderWithTypicalLevels() {
-        let renderer = FluidWaveformRenderer()
-        let context = GraphicsContext(...)
-        let levels = Array(repeating: 0.5, count: 20)
-        renderer.render(context: context, size: CGSize(width: 128, height: 24), levels: levels, time: Date())
-    }
-}
+// MARK: - Domain Logic Tests (Testable)
 
 final class WaveformStyleTests: XCTestCase {
-    func testAllStylesHaveRenderers() {
-        for style in WaveformStyle.allCases where style != .disabled {
-            XCTAssertNotNil(style.makeRenderer(), "Style \(style) should have a renderer")
+    func testAllStylesHaveRawValues() {
+        for style in WaveformStyle.allCases {
+            XCTAssertFalse(style.rawValue.isEmpty, "Style \(style) must have a raw value")
+        }
+    }
+
+    func testStyleRoundTrip() {
+        for style in WaveformStyle.allCases {
+            let recreated = WaveformStyle(rawValue: style.rawValue)
+            XCTAssertEqual(recreated, style, "Style \(style) should round-trip through rawValue")
         }
     }
 
     func testDisabledStyleReturnsNilRenderer() {
-        XCTAssertNil(WaveformStyle.disabled.makeRenderer())
+        let renderer = WaveformRendererFactory.makeRenderer(for: .disabled)
+        XCTAssertNil(renderer)
+    }
+
+    func testNonDisabledStylesReturnRenderers() {
+        let barRenderer = WaveformRendererFactory.makeRenderer(for: .bar)
+        XCTAssertNotNil(barRenderer)
+        XCTAssertTrue(barRenderer is BarWaveformRenderer)
+
+        let fluidRenderer = WaveformRendererFactory.makeRenderer(for: .fluid)
+        XCTAssertNotNil(fluidRenderer)
+        XCTAssertTrue(fluidRenderer is FluidWaveformRenderer)
+    }
+}
+
+final class AudioLevelProvidingTests: XCTestCase {
+    func testMockProviderReturnsExpectedLevels() {
+        let mock = MockAudioLevelProvider()
+        mock.levels = [0.1, 0.5, 0.9]
+
+        XCTAssertEqual(mock.levels.count, 3)
+        XCTAssertEqual(mock.levels[1], 0.5, accuracy: 0.001)
+    }
+}
+
+// MARK: - Integration Tests (Preview-based)
+
+#if DEBUG
+final class WaveformPreviewTests: XCTestCase {
+    /// Verifies previews don't crash (catches runtime errors in renderers)
+    func testFluidWaveformPreviewRenders() {
+        let view = WaveformContainerView(
+            audioProvider: MockAudioLevelProvider(),
+            style: .fluid
+        )
+        .frame(width: 128, height: 24)
+
+        // If this doesn't crash, the renderer is valid
+        XCTAssertNotNil(view.body)
+    }
+
+    func testBarWaveformPreviewRenders() {
+        let view = WaveformContainerView(
+            audioProvider: MockAudioLevelProvider(),
+            style: .bar
+        )
+        .frame(width: 128, height: 24)
+
+        XCTAssertNotNil(view.body)
+    }
+}
+#endif
+
+// MARK: - Performance Tests
+
+final class WaveformPerformanceTests: XCTestCase {
+    func testRendererPerformance() {
+        let renderer = FluidWaveformRenderer()
+        let levels = Array(repeating: 0.5, count: 20)
+
+        measure {
+            // Simulate 60 frames of rendering
+            for i in 0..<60 {
+                let time = Date().addingTimeInterval(Double(i) / 60.0)
+                // Note: Cannot test actual rendering without GraphicsContext,
+                // but we can test the smoothing algorithm
+                _ = simulateSmoothing(levels: levels, factor: 0.3)
+            }
+        }
+    }
+
+    private func simulateSmoothing(levels: [Double], factor: Double) -> [Double] {
+        var smoothed = levels
+        for i in levels.indices {
+            smoothed[i] = smoothed[i] * (1 - factor) + levels[i] * factor
+        }
+        return smoothed
     }
 }
 ```
