@@ -8,13 +8,16 @@ final class BarWaveformRenderer: WaveformRendering {
     // MARK: - Configuration
 
     /// Spacing between bars in points
-    private let spacing: Double = 4.0
+    private let spacing: Double = 3.0
 
     /// Minimum bar height in points (ensures visibility during silence)
-    private let minBarHeight: Double = 4.0
+    private let minBarHeight: Double = 2.0
 
     /// Corner radius for rounded bar corners
-    private let cornerRadius: Double = 2.0
+    private let cornerRadius: Double = 1.5
+
+    /// Bar color - white like the old WaveformView
+    private let barColor: Color = .white.opacity(0.9)
 
     // MARK: - WaveformRendering
 
@@ -44,7 +47,7 @@ final class BarWaveformRenderer: WaveformRendering {
             )
             let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
 
-            context.fill(path, with: .color(.accentColor))
+            context.fill(path, with: .color(barColor))
         }
     }
 }

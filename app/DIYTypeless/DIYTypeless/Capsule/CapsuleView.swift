@@ -76,7 +76,7 @@ struct CapsuleView: View {
         case .recording:
             WaveformContainerView(
                 audioMonitor: audioMonitor,
-                style: .fluid
+                style: .bars
             )
             .frame(width: capsuleWidth - 32, height: 32)
             .transition(.opacity.animation(.easeOut(duration: 0.2)))
