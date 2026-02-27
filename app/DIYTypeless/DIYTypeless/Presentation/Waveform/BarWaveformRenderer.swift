@@ -1,32 +1,31 @@
 import SwiftUI
 
-/// Renders an elegant, smooth bar-style waveform visualization
-/// Provides fluid animation with exponential smoothing for a premium feel
+/// Renders a discrete bar-style waveform visualization
+/// Matches the original WaveformView implementation exactly
 @MainActor
 final class BarWaveformRenderer: WaveformRendering {
 
     // MARK: - State
 
-    /// Smoothed levels for fluid animation between frames
+    /// Smoothed levels for fluid animation
     private var smoothedLevels: [Double] = []
 
-    // MARK: - Configuration
+    // MARK: - Configuration (matches original WaveformView)
 
-    /// Spacing between bars
+    /// Bar width - matches AppSize.waveformBarWidth
+    private let barWidth: Double = 3.0
+
+    /// Spacing between bars - matches AppSize.waveformBarSpacing
     private let spacing: Double = 2.0
 
-    /// Minimum bar height for visibility during silence
-    private let minBarHeight: Double = 2.0
+    /// Maximum bar height - matches AppSize.waveformMaxHeight
+    private let maxBarHeight: Double = 24.0
 
-    /// Corner radius for bar ends
-    private let cornerRadius: Double = 1.0
+    /// Corner radius - matches original (barWidth / 2)
+    private var cornerRadius: Double { barWidth / 2 }
 
-    /// Exponential smoothing factor (0.0 = no movement, 1.0 = instant)
-    /// Lower = smoother/slower, Higher = more responsive
-    private let smoothingAlpha: Double = 0.25
-
-    /// Bar color - subtle white
-    private let barColor: Color = .white.opacity(0.85)
+    /// Animation smoothing factor tuned to match 0.05s linear animation
+    private let smoothingAlpha: Double = 0.35
 
     // MARK: - WaveformRendering
 
@@ -38,55 +37,55 @@ final class BarWaveformRenderer: WaveformRendering {
     ) {
         guard size.width > 0, size.height > 0 else { return }
 
-        // Update smoothed levels for fluid animation
+        // Apply smoothing for fluid animation
         updateSmoothedLevels(with: levels)
-
         let displayLevels = smoothedLevels.isEmpty ? levels : smoothedLevels
         guard !displayLevels.isEmpty else { return }
 
-        let barCount = displayLevels.count
-        let totalSpacing = spacing * Double(barCount - 1)
-        let availableWidth = Double(size.width) - totalSpacing
-        let barWidth = availableWidth / Double(barCount)
-        let maxBarHeight = Double(size.height)
-        let centerY = maxBarHeight / 2.0
+        // Calculate how many bars fit in the given width
+        let totalBarSpace = barWidth + spacing
+        let maxBars = Int((Double(size.width) + spacing) / totalBarSpace)
+        let barCount = min(displayLevels.count, maxBars)
 
-        for (index, level) in displayLevels.enumerated() {
-            let x = Double(index) * (barWidth + spacing)
+        // Calculate starting x to center the bars
+        let totalWidth = Double(barCount) * barWidth + Double(barCount - 1) * spacing
+        let startX = (Double(size.width) - totalWidth) / 2
+        let centerY = Double(size.height) / 2
 
-            // Calculate bar height with minimum for visibility
-            let barHeight = max(minBarHeight, level * maxBarHeight)
+        for index in 0..<barCount {
+            let level = displayLevels[index]
+            let x = startX + Double(index) * totalBarSpace
+
+            // Height calculation matches original: max(barWidth, maxHeight * level)
+            let barHeight = max(barWidth, maxBarHeight * level)
 
             // Center vertically
-            let y = centerY - (barHeight / 2.0)
+            let y = centerY - (barHeight / 2)
 
-            // Create rounded bar
             let rect = CGRect(
                 x: x,
                 y: y,
-                width: max(0.5, barWidth),
+                width: barWidth,
                 height: barHeight
             )
 
-            let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
+            let path = Path(roundedRect: rect, cornerRadius: cornerRadius, style: .continuous)
 
-            // Subtle opacity variation based on level
-            let opacity = 0.6 + (level * 0.4)
+            // Color matches original: white.opacity(0.8 + level * 0.2)
+            let opacity = 0.8 + (level * 0.2)
             context.fill(path, with: .color(.white.opacity(opacity)))
         }
     }
 
     // MARK: - Private Methods
 
-    /// Updates smoothed levels using exponential smoothing for fluid animation
+    /// Exponential smoothing for fluid animation matching SwiftUI's .linear(duration: 0.05)
     private func updateSmoothedLevels(with newLevels: [Double]) {
-        // Initialize if count changed
         if smoothedLevels.count != newLevels.count {
             smoothedLevels = newLevels
             return
         }
 
-        // Apply exponential smoothing: smoothed = alpha * new + (1 - alpha) * old
         for index in 0..<newLevels.count {
             let newValue = newLevels[index]
             let oldValue = smoothedLevels[index]
