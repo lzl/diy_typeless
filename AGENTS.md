@@ -368,12 +368,14 @@ Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory).
 
 Run unit tests with:
 ```bash
-xcodebuild test \
+SKIP_KEYCHAIN_PRELOAD=1 xcodebuild test \
     -project app/DIYTypeless/DIYTypeless.xcodeproj \
     -scheme DIYTypeless \
     -only-testing DIYTypelessTests \
     -destination 'platform=macOS'
 ```
+
+The `SKIP_KEYCHAIN_PRELOAD` environment variable prevents the Keychain authorization prompt during testing.
 
 Unit Tests use mocked dependencies (`MockApiKeyRepository`, `MockPermissionRepository`) to avoid:
 - Keychain access prompts
