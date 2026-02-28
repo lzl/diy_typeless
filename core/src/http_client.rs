@@ -62,7 +62,7 @@ pub fn warmup_gemini_connection() -> Result<(), CoreError> {
 /// Generic warmup for any URL
 ///
 /// Used internally or for testing connection to custom endpoints.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "Used internally or for testing connection to custom endpoints")]
 pub fn warmup_connection(url: &str) -> Result<(), CoreError> {
     let client = get_http_client();
 

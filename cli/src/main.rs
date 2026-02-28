@@ -234,7 +234,7 @@ fn cmd_full(
 }
 
 fn run_groq_full(
-    output_dir: &PathBuf,
+    output_dir: &std::path::Path,
     duration_seconds: Option<u64>,
     groq_key: Option<String>,
     language: Option<String>,

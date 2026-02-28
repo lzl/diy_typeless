@@ -17,23 +17,10 @@ pub fn format_duration(duration: Duration) -> String {
 
 /// Mask a secret string, showing only first and last 4 characters
 pub fn mask_secret(secret: &str) -> String {
-    let chars: Vec<char> = secret.chars().collect();
-    if chars.len() <= 8 {
+    if secret.len() <= 8 {
         return "***".to_string();
     }
-
-    let head: String = chars.iter().take(4).collect();
-    let tail: String = chars
-        .iter()
-        .rev()
-        .take(4)
-        .copied()
-        .collect::<Vec<char>>()
-        .into_iter()
-        .rev()
-        .collect();
-
-    format!("{head}...{tail}")
+    format!("{}...{}", &secret[..4], &secret[secret.len() - 4..])
 }
 
 /// Find a binary in the system PATH

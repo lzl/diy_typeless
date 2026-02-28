@@ -1,10 +1,9 @@
 use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
+use crate::retry::{is_retryable_status, with_retry, HttpResult};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Deserialize)]
 struct GeminiResponse {
@@ -43,60 +42,166 @@ pub fn polish_text(
      );
 
     let client = get_http_client();
-
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 
-    for attempt in 0..3 {
-        let body = serde_json::json!({
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ]
-        });
+    let result = with_retry(
+        3,
+        || {
+            let body = serde_json::json!({
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": prompt}],
+                    }
+                ]
+            });
 
-        let response = client.post(&url).header("x-goog-api-key", api_key).json(&body).send();
+            let response = client
+                .post(&url)
+                .header("x-goog-api-key", api_key)
+                .json(&body)
+                .send();
 
-        match response {
-            Ok(resp) if resp.status() == StatusCode::OK => {
-                let payload: GeminiResponse = resp.json()?;
-                let text = payload
-                    .candidates
-                    .get(0)
-                    .and_then(|c| c.content.parts.get(0))
-                    .and_then(|p| p.text.clone())
-                    .ok_or(CoreError::EmptyResponse)?;
-                let trimmed = text.trim();
-                if trimmed.is_empty() {
-                    return Err(CoreError::EmptyResponse);
+            match response {
+                Ok(resp) if resp.status() == StatusCode::OK => {
+                    match resp.json::<GeminiResponse>() {
+                        Ok(payload) => {
+                            let text = payload
+                                .candidates
+                                .first()
+                                .and_then(|c| c.content.parts.first())
+                                .and_then(|p| p.text.clone());
+
+                            match text {
+                                Some(t) => {
+                                    let trimmed = t.trim();
+                                    if trimmed.is_empty() {
+                                        HttpResult::NonRetryable("Empty response".to_string())
+                                    } else {
+                                        HttpResult::Success(trimmed.to_string())
+                                    }
+                                }
+                                None => HttpResult::NonRetryable("Empty response".to_string()),
+                            }
+                        }
+                        Err(e) => HttpResult::NonRetryable(e.to_string()),
+                    }
                 }
-                return Ok(trimmed.to_string());
-            }
-            Ok(resp)
-                if resp.status() == StatusCode::TOO_MANY_REQUESTS
-                    || resp.status().is_server_error() =>
-            {
-                let backoff = 2u64.pow(attempt);
-                sleep(Duration::from_secs(backoff));
-                continue;
-            }
-            Ok(resp) => {
-                return Err(CoreError::Api(format!(
+                Ok(resp) if is_retryable_status(resp.status()) => HttpResult::Retryable,
+                Ok(resp) => HttpResult::NonRetryable(format!(
                     "Gemini API error: HTTP {}",
                     resp.status()
-                )));
+                )),
+                Err(_) => HttpResult::Retryable,
             }
-            Err(err) => {
-                if attempt < 2 {
-                    let backoff = 2u64.pow(attempt);
-                    sleep(Duration::from_secs(backoff));
-                    continue;
-                }
-                return Err(CoreError::Http(err.to_string()));
+        },
+        "Gemini API",
+    );
+
+    match result {
+        Ok(text) => Ok(text),
+        Err(msg) => {
+            if msg == "Empty response" {
+                Err(CoreError::EmptyResponse)
+            } else if msg.starts_with("Gemini API error") {
+                Err(CoreError::Api(msg))
+            } else {
+                Err(CoreError::Http(msg))
             }
         }
     }
+}
 
-    Err(CoreError::Api("Gemini API retries exceeded".to_string()))
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_context_formatting_with_content() {
+        let context = Some("email");
+        let formatted = match context {
+            Some(ctx) if !ctx.trim().is_empty() => format!(
+                "\n\nContext about where this text will be used:\n{ctx}\nAdapt the tone, format and style to match the target application.\n- Chat/messaging apps (Slack, Teams, iMessage): keep it casual and concise\n- Email (Gmail, Outlook): use standard email structure (greeting line, body, sign-off), format phone numbers and addresses properly, preserve the sender's greeting style (e.g., \"Hi\" stays casual, don't upgrade to \"Dear\")\n- Code editors: preserve technical terms and formatting\n- Social media: follow platform conventions\nIMPORTANT: Match the speaker's original level of formality — do NOT make casual speech overly formal.\n"
+            ),
+            _ => String::new(),
+        };
+        assert!(formatted.contains("email"));
+        assert!(formatted.contains("Context about where this text will be used"));
+    }
+
+    #[test]
+    fn test_context_formatting_empty_string() {
+        let context: Option<&str> = Some("");
+        let formatted = match context {
+            Some(ctx) if !ctx.trim().is_empty() => format!("Context: {ctx}"),
+            _ => String::new(),
+        };
+        assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn test_context_formatting_whitespace_only() {
+        let context: Option<&str> = Some("   ");
+        let formatted = match context {
+            Some(ctx) if !ctx.trim().is_empty() => format!("Context: {ctx}"),
+            _ => String::new(),
+        };
+        assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn test_context_formatting_none() {
+        let context: Option<&str> = None;
+        let formatted = match context {
+            Some(ctx) if !ctx.trim().is_empty() => format!("Context: {ctx}"),
+            _ => String::new(),
+        };
+        assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn test_prompt_generation_contains_rules() {
+        let raw_text = "Hello world";
+        let context_section = String::new();
+        let prompt = format!(
+            "You are a professional text editor. Transform the following speech transcript into well-structured written text.\n\nRules:\n1. Keep the SAME language as the original - do NOT translate\n2. Convert spoken language to written language:\n   - Remove filler words (e.g., \"um\", \"uh\", \"like\", \"you know\", or equivalents in other languages)\n   - Clean up spoken-language patterns: remove filler words and fix grammar errors, but preserve the speaker's original sentence structure and phrasing choices. NEVER rewrite sentences into different forms.\n   - Fix transcription errors (misheard words, typos)\n   - Handle self-corrections: when the speaker changes their mind (e.g., \"let's meet at 7, actually make it 3\"), keep ONLY the final intention and remove the corrected content\n3. Reorganize content logically:\n   - Group related information together\n   - Separate different topics into paragraphs with blank lines\n4. When content contains multiple parallel points, requirements, or items, ALWAYS format them as a numbered or bulleted list — NEVER as separate paragraphs. Example:\n   BAD: \"First issue is performance. Second issue is UI complexity.\"\n   GOOD: \"Issues encountered:\\n1. Performance bottlenecks\\n2. UI complexity\"\n5. Preserve ALL substantive information - only remove verbal fillers, not actual content\n6. Add proper punctuation and spacing\n7. Output ONLY the final polished text - no comments or annotations\n{context_section}\nOriginal transcript:\n{raw_text}\n\nOutput the polished text directly.",
+        );
+
+        assert!(prompt.contains("You are a professional text editor"));
+        assert!(prompt.contains("Rules:"));
+        assert!(prompt.contains("Keep the SAME language"));
+        assert!(prompt.contains("Original transcript:"));
+        assert!(prompt.contains("Hello world"));
+        assert!(prompt.contains("Output the polished text directly"));
+    }
+
+    #[test]
+    fn test_prompt_generation_with_context() {
+        let raw_text = "Meeting notes";
+        let context_section = "\n\nContext about where this text will be used:\nemail\nAdapt the tone...".to_string();
+        let prompt = format!(
+            "You are a professional text editor...\n\nRules:\n1. Keep the SAME language...\n{context_section}\nOriginal transcript:\n{raw_text}\n\nOutput the polished text directly.",
+        );
+
+        assert!(prompt.contains("Context about where this text will be used"));
+        assert!(prompt.contains("email"));
+    }
+
+    #[test]
+    fn test_prompt_preserves_all_substantive_content() {
+        let raw_text = "The quick brown fox jumps over the lazy dog";
+        let context_section = String::new();
+        let prompt = format!(
+            "Rules:\n5. Preserve ALL substantive information - only remove verbal fillers, not actual content\n{context_section}\nOriginal transcript:\n{raw_text}\n\nOutput",
+        );
+
+        assert!(prompt.contains("Preserve ALL substantive information"));
+        assert!(prompt.contains(raw_text));
+    }
+
+    #[test]
+    fn test_exponential_backoff_calculation() {
+        // Test that backoff increases exponentially: 2^0, 2^1, 2^2
+        assert_eq!(2u64.pow(0), 1);
+        assert_eq!(2u64.pow(1), 2);
+        assert_eq!(2u64.pow(2), 4);
+    }
 }

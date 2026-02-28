@@ -5,6 +5,7 @@ mod http_client;
 mod llm_processor;
 mod pipeline;
 mod polish;
+mod retry;
 mod transcribe;
 
 pub use audio::AudioData;
