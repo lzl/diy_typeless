@@ -3,9 +3,10 @@ use crate::error::CoreError;
 use crate::http_client::get_http_client;
 use crate::retry::{is_retryable_status, with_retry, HttpResult};
 use reqwest::StatusCode;
+use secrecy::{ExposeSecret, SecretString};
 
 pub fn transcribe_audio_bytes(
-    api_key: &str,
+    api_key: &SecretString,
     audio_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
@@ -37,7 +38,7 @@ pub fn transcribe_audio_bytes(
 
             let response = client
                 .post(GROQ_TRANSCRIBE_URL)
-                .bearer_auth(api_key)
+                .bearer_auth(api_key.expose_secret())
                 .multipart(form)
                 .send();
 

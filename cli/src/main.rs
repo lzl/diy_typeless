@@ -183,7 +183,12 @@ fn cmd_record(output_dir: Option<PathBuf>, duration_seconds: Option<u64>) -> Res
 fn cmd_transcribe(file: PathBuf, groq_key: Option<String>, language: Option<String>) -> Result<()> {
     let api_key = resolve_groq_key(groq_key)?;
     let wav_bytes = fs::read(&file).context("Failed to read WAV file")?;
-    let text = diy_typeless_core::transcribe_audio_bytes(api_key, wav_bytes, language)?;
+    use secrecy::ExposeSecret;
+    let text = diy_typeless_core::transcribe_audio_bytes(
+        api_key.expose_secret().to_string(),
+        wav_bytes,
+        language,
+    )?;
     println!("{text}");
     Ok(())
 }
@@ -198,7 +203,12 @@ fn cmd_polish(
         Some(text) => text,
         None => read_stdin()?,
     };
-    let polished = diy_typeless_core::polish_text(api_key, raw_text, context)?;
+    use secrecy::ExposeSecret;
+    let polished = diy_typeless_core::polish_text(
+        api_key.expose_secret().to_string(),
+        raw_text,
+        context,
+    )?;
     println!("{polished}");
     copy_to_clipboard(&polished);
     Ok(())
@@ -220,7 +230,12 @@ fn cmd_full(
     let raw_text = run_groq_full(&output_dir, duration_seconds, groq_key, language.clone())?;
 
     println!("Polishing...");
-    let polished_text = diy_typeless_core::polish_text(gemini_key, raw_text, context)?;
+    use secrecy::ExposeSecret;
+    let polished_text = diy_typeless_core::polish_text(
+        gemini_key.expose_secret().to_string(),
+        raw_text,
+        context,
+    )?;
 
     let polished_path = output_dir.join(format!("recording_{}_polished.txt", timestamp()));
     fs::write(&polished_path, &polished_text)?;
@@ -259,8 +274,12 @@ fn run_groq_full(
     fs::write(&wav_path, &wav_data.bytes)?;
 
     println!("Transcribing with Groq API...");
-    let text =
-        diy_typeless_core::transcribe_audio_bytes(groq_key, wav_data.bytes, language)?;
+    use secrecy::ExposeSecret;
+    let text = diy_typeless_core::transcribe_audio_bytes(
+        groq_key.expose_secret().to_string(),
+        wav_data.bytes,
+        language,
+    )?;
     let raw_path = output_dir.join(format!("{base}_raw.txt"));
     fs::write(&raw_path, &text)?;
 

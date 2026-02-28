@@ -3,6 +3,7 @@ use crate::error::CoreError;
 use crate::http_client::get_http_client;
 use crate::retry::{is_retryable_status, with_retry, HttpResult};
 use reqwest::StatusCode;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -43,7 +44,7 @@ struct GeminiPart {
 /// - HTTP 5xx (Server Errors)
 /// - Network errors
 pub fn process_text_with_llm(
-    api_key: &str,
+    api_key: &SecretString,
     prompt: &str,
     system_instruction: Option<&str>,
     temperature: Option<f32>,
@@ -81,7 +82,7 @@ pub fn process_text_with_llm(
         || {
             let response = client
                 .post(&url)
-                .header("x-goog-api-key", api_key)
+                .header("x-goog-api-key", api_key.expose_secret())
                 .json(&body)
                 .send();
 

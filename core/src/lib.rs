@@ -11,6 +11,8 @@ mod transcribe;
 pub use audio::AudioData;
 pub use error::CoreError;
 
+use secrecy::SecretString;
+
 #[uniffi::export]
 pub fn start_recording() -> Result<(), CoreError> {
     audio::start_recording()
@@ -33,7 +35,7 @@ pub fn transcribe_audio_bytes(
     audio_bytes: Vec<u8>,
     language: Option<String>,
 ) -> Result<String, CoreError> {
-    transcribe::transcribe_audio_bytes(&api_key, &audio_bytes, language.as_deref())
+    transcribe::transcribe_audio_bytes(&SecretString::from(api_key), &audio_bytes, language.as_deref())
 }
 
 #[uniffi::export]
@@ -42,7 +44,7 @@ pub fn polish_text(
     raw_text: String,
     context: Option<String>,
 ) -> Result<String, CoreError> {
-    polish::polish_text(&api_key, &raw_text, context.as_deref())
+    polish::polish_text(&SecretString::from(api_key), &raw_text, context.as_deref())
 }
 
 /// Warm up TLS connection to Groq API
@@ -83,7 +85,7 @@ pub fn process_text_with_llm(
     temperature: Option<f32>,
 ) -> Result<String, CoreError> {
     llm_processor::process_text_with_llm(
-        &api_key,
+        &SecretString::from(api_key),
         &prompt,
         system_instruction.as_deref(),
         temperature,
