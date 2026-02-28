@@ -21,6 +21,9 @@ final class MockAudioLevelMonitor: AudioLevelProviding, @unchecked Sendable {
         self.levels = levels
     }
 
+    func startMonitoring() throws {}
+    func stopMonitoring() async {}
+
     /// Simulate audio level updates
     func simulateLevels(_ newLevels: [Double]) {
         lock.lock()

@@ -72,7 +72,9 @@ final class AppState {
 
     func start() {
         uniffiEnsureDiyTypelessCoreInitialized()
-        if let repository = apiKeyRepository as? KeychainApiKeyRepository {
+        // Skip Keychain preload in test environment to avoid auth prompts
+        if ProcessInfo.processInfo.environment["SKIP_KEYCHAIN_PRELOAD"] == nil,
+           let repository = apiKeyRepository as? KeychainApiKeyRepository {
             repository.preloadKeys()
         }
         configureWindows()

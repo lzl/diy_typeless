@@ -29,6 +29,12 @@ final class KeychainApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
 
         guard !cacheLoaded else { return }
 
+        // Skip Keychain access in test environment to avoid auth prompts
+        if ProcessInfo.processInfo.environment["SKIP_KEYCHAIN_PRELOAD"] != nil {
+            cacheLoaded = true
+            return
+        }
+
         // Try loading from combined storage (current service) first
         if let data = loadDataFromKeychain(account: combinedAccount),
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {

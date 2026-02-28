@@ -359,42 +359,70 @@ Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory).
 
 ## Testing Strategy
 
-### Unit Tests (Domain Layer)
+### Unit Tests Only (DIYTypelessTests)
 
-Test UseCases and Entities in isolation with mocked dependencies:
+**MANDATORY:** Only run Unit Tests (`DIYTypelessTests` target). DO NOT run UI Tests (`DIYTypelessUITests`) as they:
+- Launch the full App, triggering Keychain password prompts
+- Require macOS UI automation permissions (Touch ID dialog)
+- Cannot run unattended
 
+Run unit tests with:
+```bash
+SKIP_KEYCHAIN_PRELOAD=1 xcodebuild test \
+    -project app/DIYTypeless/DIYTypeless.xcodeproj \
+    -scheme DIYTypeless \
+    -only-testing DIYTypelessTests \
+    -destination 'platform=macOS'
+```
+
+The `SKIP_KEYCHAIN_PRELOAD` environment variable prevents the Keychain authorization prompt during testing.
+
+Unit Tests use mocked dependencies (`MockApiKeyRepository`, `MockPermissionRepository`) to avoid:
+- Keychain access prompts
+- Accessibility/Microphone permission checks
+- Real network calls
+
+Example test with mocks:
 ```swift
-final class TranscriptionUseCaseTests: XCTestCase {
-    func testTranscriptionSuccess() async throws {
-        let mockRepository = MockTranscriptionRepository()
-        mockRepository.expectedResult = "Hello world"
-
-        let useCase = TranscriptionUseCase(repository: mockRepository)
-        let result = try await useCase.transcribe(audio: testData)
-
-        XCTAssertEqual(result, "Hello world")
+@MainActor
+@Suite("RecordingState Tests")
+struct RecordingStateTests {
+    @Test("Parallel execution reduces total delay")
+    func testParallelExecution() async throws {
+        let mockGetSelectedText = MockGetSelectedTextUseCase()
+        let mockStopRecording = MockStopRecordingUseCase()
+        let state = RecordingStateTestFactory.makeRecordingState(
+            stopRecordingUseCase: mockStopRecording,
+            getSelectedTextUseCase: mockGetSelectedText
+        )
+        // Test logic without real permissions/keychain
     }
 }
 ```
 
-### Integration Tests
+### Crash Recovery Protocol
 
-Test Repository implementations with real dependencies (Keychain, Network):
+If tests crash during execution, follow this protocol:
 
-```swift
-final class KeychainApiKeyRepositoryTests: XCTestCase {
-    func testSaveAndLoadKey() throws {
-        let repository = KeychainApiKeyRepository()
-        try repository.saveKey("test-key", for: .groq)
-        let loaded = repository.loadKey(for: .groq)
-        XCTAssertEqual(loaded, "test-key")
-    }
-}
-```
+1. **Locate crash logs:**
+   ```bash
+   ls -la ~/Library/Logs/DiagnosticReports/DIYTypeless*.ips
+   ```
 
-### UI Tests
+2. **Analyze the crash:**
+   - Look for `Exception Type`, `Crashed Thread`, and `Thread 0` backtrace
+   - Identify if it's a Rust FFI issue, Swift code issue, or resource issue
 
-Minimal UI tests focusing on user flows, not implementation details.
+3. **Common fixes:**
+   - **Rust dylib mismatch:** Run `cargo build -p diy_typeless_core` (or `--release`)
+   - **DerivedData corruption:** `rm -rf .context/DerivedData`
+   - **Architecture mismatch:** Ensure Rust and Xcode both build for arm64
+
+4. **Re-run tests:**
+   - Apply fixes and re-run unit tests
+   - Repeat until tests pass without crashes
+
+5. **DO NOT** ignore crashes or skip failing tests. Fix the root cause.
 
 ## File Naming Conventions
 
