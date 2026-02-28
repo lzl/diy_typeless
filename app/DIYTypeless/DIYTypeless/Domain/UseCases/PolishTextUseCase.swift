@@ -14,6 +14,6 @@ protocol PolishTextUseCaseProtocol: Sendable {
 
 enum PolishingError: Error, Equatable {
     case emptyInput
-    case apiError(String)
+    case apiError(UserFacingError)
     case invalidResponse
 }

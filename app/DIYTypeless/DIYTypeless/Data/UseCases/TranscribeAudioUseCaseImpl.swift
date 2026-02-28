@@ -15,10 +15,15 @@ final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
                         language: language
                     )
                     continuation.resume(returning: text)
+                } catch let coreError as CoreError {
+                    let userError = CoreErrorMapper.toUserFacingError(coreError)
+                    continuation.resume(throwing: TranscriptionError.apiError(userError))
                 } catch {
-                    continuation.resume(throwing: TranscriptionError.apiError(error.localizedDescription))
+                    let userError = UserFacingError.unknown(error.localizedDescription)
+                    continuation.resume(throwing: TranscriptionError.apiError(userError))
                 }
             }
         }
     }
+
 }

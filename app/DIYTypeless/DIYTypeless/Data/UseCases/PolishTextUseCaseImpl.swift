@@ -15,10 +15,15 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
                         context: context
                     )
                     continuation.resume(returning: polished)
+                } catch let coreError as CoreError {
+                    let userError = CoreErrorMapper.toUserFacingError(coreError)
+                    continuation.resume(throwing: PolishingError.apiError(userError))
                 } catch {
-                    continuation.resume(throwing: PolishingError.apiError(error.localizedDescription))
+                    let userError = UserFacingError.unknown(error.localizedDescription)
+                    continuation.resume(throwing: PolishingError.apiError(userError))
                 }
             }
         }
     }
+
 }

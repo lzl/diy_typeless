@@ -15,8 +15,9 @@ struct CapsuleView: View {
         self.audioMonitor = audioMonitor
     }
 
-    private let capsuleWidth: CGFloat = 160
-    private let capsuleHeight: CGFloat = 36
+    static let minCapsuleWidth: CGFloat = 160
+    static let capsuleHeight: CGFloat = 36
+    static let contentPadding: CGFloat = 20
 
     private var shouldShowProgress: Bool {
         switch state.capsuleState {
@@ -56,7 +57,8 @@ struct CapsuleView: View {
             // Content
             content
         }
-        .frame(width: capsuleWidth, height: capsuleHeight)
+        .frame(minWidth: Self.minCapsuleWidth)
+        .frame(height: Self.capsuleHeight)
         .onAppear {
             // Handle initial state
             previousState = state.capsuleState
@@ -78,7 +80,7 @@ struct CapsuleView: View {
                 audioMonitor: audioMonitor,
                 style: .bars
             )
-            .frame(width: capsuleWidth - 32, height: 32)
+            .frame(width: Self.minCapsuleWidth - 32, height: 32)
             .transition(.opacity.animation(.easeOut(duration: 0.2)))
             .accessibilityLabel("Recording audio")
 
@@ -86,30 +88,47 @@ struct CapsuleView: View {
             Text("Transcribing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, Self.contentPadding)
 
         case .polishing:
             Text("Polishing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, Self.contentPadding)
 
         case .processingCommand:
             Text("Processing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, Self.contentPadding)
 
         case .done(let result):
             Text(result == .pasted ? "Pasted" : "Copied")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, Self.contentPadding)
 
-        case .error(let message):
-            Text(message)
+        case .error(let error):
+            Text(error.message)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.orange)
+                .foregroundColor(errorColor(for: error))
                 .lineLimit(1)
+                .padding(.horizontal, Self.contentPadding)
+                .shadow(color: .black.opacity(0.5), radius: 0.5, x: 0, y: 0.5)
 
         case .hidden:
             EmptyView()
+        }
+    }
+
+    /// Returns the display color for a UserFacingError based on its severity.
+    /// Warning errors (user-fixable) use orange, critical errors use red.
+    private func errorColor(for error: UserFacingError) -> Color {
+        switch error.severity {
+        case .warning:
+            return .orange
+        case .critical:
+            return .red.opacity(0.85)
         }
     }
 

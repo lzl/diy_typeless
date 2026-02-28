@@ -8,7 +8,7 @@ enum CapsuleState: Equatable {
     case polishing(progress: Double)
     case processingCommand(String, progress: Double)  // Shows voice command being processed
     case done(OutputResult)
-    case error(String)
+    case error(UserFacingError)
 }
 
 @MainActor
@@ -156,7 +156,7 @@ final class RecordingState {
 
         let status = permissionRepository.currentStatus
         guard status.allGranted else {
-            showError("Permissions required")
+            showError(.invalidAPIKey)
             onRequireOnboarding?()
             return
         }
@@ -166,13 +166,13 @@ final class RecordingState {
         refreshKeys()
 
         if groqKey.isEmpty {
-            showError("Groq API key required")
+            showError(.invalidAPIKey)
             onRequireOnboarding?()
             return
         }
 
         if geminiKey.isEmpty {
-            showError("Gemini API key required")
+            showError(.invalidAPIKey)
             onRequireOnboarding?()
             return
         }
@@ -195,7 +195,7 @@ final class RecordingState {
                 self.preselectedContext = context
             }
         } catch {
-            showError(error.localizedDescription)
+            showError(.unknown(error.localizedDescription))
         }
     }
 
@@ -250,10 +250,42 @@ final class RecordingState {
                 )
             }
 
+        } catch let error as TranscriptionError {
+            guard currentGeneration == gen else { return }
+            handleTranscriptionError(error)
+            isProcessing = false
+        } catch let error as PolishingError {
+            guard currentGeneration == gen else { return }
+            handlePolishingError(error)
+            isProcessing = false
+        } catch let error as UserFacingError {
+            guard currentGeneration == gen else { return }
+            showError(error)
+            isProcessing = false
         } catch {
             guard currentGeneration == gen else { return }
-            showError(error.localizedDescription)
+            showError(.unknown(error.localizedDescription))
             isProcessing = false
+        }
+    }
+
+    // MARK: - Error Handling
+
+    private func handleTranscriptionError(_ error: TranscriptionError) {
+        switch error {
+        case .apiError(let userError):
+            showError(userError)
+        case .emptyAudio, .decodingFailed:
+            showError(.unknown("Transcription failed"))
+        }
+    }
+
+    private func handlePolishingError(_ error: PolishingError) {
+        switch error {
+        case .apiError(let userError):
+            showError(userError)
+        case .emptyInput, .invalidResponse:
+            showError(.unknown("Polishing failed"))
         }
     }
 
@@ -320,11 +352,11 @@ final class RecordingState {
         scheduleHide(after: 1.2, expectedState: .done(outputResult))
     }
 
-    private func showError(_ message: String) {
-        capsuleState = .error(message)
+    private func showError(_ error: UserFacingError) {
+        capsuleState = .error(error)
         isRecording = false
         isProcessing = false
-        scheduleHide(after: 2.0, expectedState: .error(message))
+        scheduleHide(after: 2.0, expectedState: .error(error))
     }
 
     private func scheduleHide(after delay: TimeInterval, expectedState: CapsuleState) {
