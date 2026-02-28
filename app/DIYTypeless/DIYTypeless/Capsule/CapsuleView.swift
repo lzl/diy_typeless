@@ -114,6 +114,7 @@ struct CapsuleView: View {
                 .foregroundColor(errorColor(for: error))
                 .lineLimit(1)
                 .padding(.horizontal, Self.contentPadding)
+                .shadow(color: .black.opacity(0.5), radius: 0.5, x: 0, y: 0.5)
 
         case .hidden:
             EmptyView()
