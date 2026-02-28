@@ -858,7 +858,14 @@ public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: Str
 }
 /**
  * Warm up TLS connection to Gemini API
- * Call this at the start of recording to eliminate TLS handshake latency
+ *
+ * Call this at the start of recording to eliminate TLS handshake latency.
+ * See [`http_client::warmup_gemini_connection`] for detailed timing considerations.
+ *
+ * # Important
+ * - The connection pool has a 300-second idle timeout
+ * - For long recording sessions, consider re-warming before polish
+ * - This should be called immediately before or at the start of recording
  */
 public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_warmup_gemini_connection($0
@@ -867,7 +874,14 @@ public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverter
 }
 /**
  * Warm up TLS connection to Groq API
- * Call this at the start of recording to eliminate TLS handshake latency
+ *
+ * Call this at the start of recording to eliminate TLS handshake latency.
+ * See [`http_client::warmup_groq_connection`] for detailed timing considerations.
+ *
+ * # Important
+ * - The connection pool has a 300-second idle timeout
+ * - For recordings longer than ~4 minutes, the connection may need re-warming
+ * - This should be called immediately before or at the start of recording
  */
 public func warmupGroqConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_warmup_groq_connection($0
@@ -908,10 +922,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 53312) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 52706) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 49104) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 9423) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 15722) {
         return InitializationResult.apiChecksumMismatch
     }
 

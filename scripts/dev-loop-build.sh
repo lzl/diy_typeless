@@ -18,6 +18,7 @@
 #                                Default: inferred from --configuration
 #                                (Debug->debug, Release->release)
 #   --skip-rust-build            Skip cargo build step.
+#   --skip-uniffi-regen          Skip UniFFI binding regeneration check.
 #   --testing                    Build only; skip app launch.
 #   -h, --help                   Show this help message.
 
@@ -35,10 +36,11 @@ APP_NAME="DIYTypeless Dev.app"
 RUST_PROFILE=""
 
 SKIP_RUST_BUILD=0
+SKIP_UNIFFI_REGEN=0
 TESTING=0
 
 usage() {
-    head -n 22 "$0" | tail -n 20
+    head -n 23 "$0" | tail -n 21
 }
 
 while [[ $# -gt 0 ]]; do
@@ -75,6 +77,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-rust-build)
             SKIP_RUST_BUILD=1
+            shift
+            ;;
+        --skip-uniffi-regen)
+            SKIP_UNIFFI_REGEN=1
             shift
             ;;
         --testing)
@@ -125,6 +131,31 @@ if [[ ! -d "$XCODE_PROJECT_PATH" ]]; then
 fi
 
 RUST_LIB_PATH="$PROJECT_ROOT/target/$RUST_PROFILE/libdiy_typeless_core.dylib"
+UNIFFI_SWIFT_PATH="$XCODE_ROOT/DIYTypeless/DIYTypelessCore.swift"
+
+# Check if UniFFI bindings need regeneration
+needs_uniffi_regen() {
+    [[ "$SKIP_UNIFFI_REGEN" -eq 1 ]] && return 1
+    [[ ! -f "$UNIFFI_SWIFT_PATH" ]] && return 0
+    [[ ! -f "$RUST_LIB_PATH" ]] && return 1
+
+    # Compare timestamps: regenerate if Rust lib is newer than Swift bindings
+    if [[ "$RUST_LIB_PATH" -nt "$UNIFFI_SWIFT_PATH" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+regenerate_uniffi() {
+    echo "=== Regenerating UniFFI Swift bindings ==="
+    echo "- Swift output: $UNIFFI_SWIFT_PATH"
+
+    cargo run -p diy_typeless_core --bin uniffi-bindgen -- \
+        generate --library "$RUST_LIB_PATH" \
+        --language swift \
+        --out-dir "$(dirname "$UNIFFI_SWIFT_PATH")"
+}
 
 if [[ "$SKIP_RUST_BUILD" -eq 0 ]]; then
     echo "=== [1/3] Building Rust core ($RUST_PROFILE) ==="
@@ -140,6 +171,11 @@ else
         echo "Run without --skip-rust-build or choose a matching --rust-profile." >&2
         exit 1
     fi
+fi
+
+# Auto-regenerate UniFFI bindings if needed
+if needs_uniffi_regen; then
+    regenerate_uniffi
 fi
 
 echo "=== [2/3] Building macOS app ($CONFIGURATION) ==="
