@@ -64,7 +64,7 @@ final class RecordingState {
         polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl(),
         // Voice command
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCase(),
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCaseImpl(),
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
         prefetchDelay: Duration = .milliseconds(300)

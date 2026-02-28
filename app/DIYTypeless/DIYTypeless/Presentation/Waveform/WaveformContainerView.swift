@@ -85,6 +85,10 @@ private final class PreviewAudioMonitor: AudioLevelProviding, @unchecked Sendabl
             }
         }
     }
+
+    func startMonitoring() throws {}
+
+    func stopMonitoring() async {}
 }
 
 #Preview {

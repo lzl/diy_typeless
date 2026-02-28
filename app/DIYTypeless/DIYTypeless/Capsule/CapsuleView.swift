@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CapsuleView: View {
     let state: RecordingState
-    private let audioMonitor: AudioLevelMonitor
+    private let audioMonitor: any AudioLevelProviding
     @State private var progress: CGFloat = 0
     @State private var previousState: CapsuleState?
 
@@ -10,7 +10,7 @@ struct CapsuleView: View {
     /// - Parameters:
     ///   - state: The recording state to display
     ///   - audioMonitor: Monitor for audio level data (defaults to AudioLevelMonitor)
-    init(state: RecordingState, audioMonitor: AudioLevelMonitor = AudioLevelMonitor()) {
+    init(state: RecordingState, audioMonitor: any AudioLevelProviding = AudioLevelMonitor()) {
         self.state = state
         self.audioMonitor = audioMonitor
     }

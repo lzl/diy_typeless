@@ -8,4 +8,10 @@ protocol AudioLevelProviding: AnyObject, Sendable {
 
     /// AsyncStream for real-time audio level updates
     var levelsStream: AsyncStream<[Double]> { get }
+
+    /// Start monitoring audio levels
+    func startMonitoring() throws
+
+    /// Stop monitoring audio levels
+    func stopMonitoring() async
 }

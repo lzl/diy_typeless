@@ -85,7 +85,7 @@ final class FluidWaveformRenderer: WaveformRendering {
         // Stroke with semantic color
         context.stroke(
             strokePath,
-            with: .color(Color.primary),
+            with: .color(.textPrimary),
             lineWidth: 2
         )
     }

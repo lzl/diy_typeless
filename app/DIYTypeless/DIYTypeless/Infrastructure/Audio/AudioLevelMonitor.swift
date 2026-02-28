@@ -52,7 +52,7 @@ actor AudioLevelMonitor: AudioLevelProviding {
     }
 
     /// Stop monitoring audio levels
-    func stopMonitoring() {
+    nonisolated func stopMonitoring() {
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         // Don't finish continuation - let the consumer control the stream lifecycle

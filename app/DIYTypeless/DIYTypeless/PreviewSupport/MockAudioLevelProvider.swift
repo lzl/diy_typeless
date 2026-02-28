@@ -50,6 +50,16 @@ final class MockAudioLevelProvider: AudioLevelProviding, @unchecked Sendable {
         levels = Array(repeating: 0.1, count: 20)
     }
 
+    // MARK: AudioLevelProviding protocol conformance
+
+    func startMonitoring() throws {
+        start()
+    }
+
+    func stopMonitoring() async {
+        stop()
+    }
+
     private func generateNextLevel() {
         let newLevel: Double
         let time = Date().timeIntervalSince1970
