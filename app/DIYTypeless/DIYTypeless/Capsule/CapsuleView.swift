@@ -57,7 +57,6 @@ struct CapsuleView: View {
             // Content
             content
         }
-        .fixedSize(horizontal: true, vertical: false)
         .frame(minWidth: minCapsuleWidth)
         .frame(height: capsuleHeight)
         .onAppear {

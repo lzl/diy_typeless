@@ -82,7 +82,10 @@ final class CapsuleWindowController {
             return
         }
 
-        positionWindow()
+        // Defer positioning to next run loop to allow SwiftUI layout to complete
+        DispatchQueue.main.async { [weak self] in
+            self?.positionWindow()
+        }
         panel.alphaValue = 1.0
 
         switch state {
