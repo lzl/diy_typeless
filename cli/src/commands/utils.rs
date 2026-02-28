@@ -1,6 +1,7 @@
 //! Utility functions for CLI
 
 use anyhow::{Context, Result};
+use secrecy::SecretString;
 use std::io::{self, Read};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -45,19 +46,23 @@ pub fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf> {
 }
 
 /// Resolve Groq API key from argument or environment
-pub fn resolve_groq_key(provided: Option<String>) -> Result<String> {
-    if let Some(key) = provided {
-        return Ok(key);
-    }
-    std::env::var("GROQ_API_KEY").context("GROQ_API_KEY not set")
+pub fn resolve_groq_key(provided: Option<String>) -> Result<SecretString> {
+    let key = if let Some(key) = provided {
+        key
+    } else {
+        std::env::var("GROQ_API_KEY").context("GROQ_API_KEY not set")?
+    };
+    Ok(SecretString::from(key))
 }
 
 /// Resolve Gemini API key from argument or environment
-pub fn resolve_gemini_key(provided: Option<String>) -> Result<String> {
-    if let Some(key) = provided {
-        return Ok(key);
-    }
-    std::env::var("GEMINI_API_KEY").context("GEMINI_API_KEY not set")
+pub fn resolve_gemini_key(provided: Option<String>) -> Result<SecretString> {
+    let key = if let Some(key) = provided {
+        key
+    } else {
+        std::env::var("GEMINI_API_KEY").context("GEMINI_API_KEY not set")?
+    };
+    Ok(SecretString::from(key))
 }
 
 /// Wait for user to press Enter
@@ -98,6 +103,18 @@ pub fn print_key_status(key_name: &str) {
             println!("- {key_name}: set ({})", mask_secret(&value));
         }
         _ => println!("- {key_name}: not set"),
+    }
+}
+
+/// Print status of a SecretString (set/masked or not set)
+pub fn print_secret_status(key_name: &str, secret: Option<&SecretString>) {
+    match secret {
+        Some(s) => {
+            // Use expose_secret to access the inner value for masking
+            use secrecy::ExposeSecret;
+            println!("- {key_name}: set ({})", mask_secret(s.expose_secret()));
+        }
+        None => println!("- {key_name}: not set"),
     }
 }
 

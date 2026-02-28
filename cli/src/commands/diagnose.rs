@@ -115,7 +115,13 @@ pub fn run_diagnose_pipeline(
 
     let groq_key = resolve_groq_key(groq_key)?;
     let transcribe_start = Instant::now();
-    let raw_text = diy_typeless_core::transcribe_audio_bytes(groq_key, wav_bytes, language)
+    // SecretString is passed by reference to core functions
+    use secrecy::ExposeSecret;
+    let raw_text = diy_typeless_core::transcribe_audio_bytes(
+        groq_key.expose_secret().to_string(),
+        wav_bytes,
+        language
+    )
         .context("Transcribe step failed")?;
     let transcribe_elapsed = transcribe_start.elapsed();
     let raw_path = output_dir.join(format!("{}_raw.txt", base));
@@ -135,7 +141,8 @@ pub fn run_diagnose_pipeline(
     let gemini_key = resolve_gemini_key(gemini_key)?;
     let polish_start = Instant::now();
     let polished_text =
-        diy_typeless_core::polish_text(gemini_key, raw_text, context).context("Polish step failed")?;
+        diy_typeless_core::polish_text(gemini_key.expose_secret().to_string(), raw_text, context)
+            .context("Polish step failed")?;
     let polish_elapsed = polish_start.elapsed();
     let polished_path = output_dir.join(format!("{}_polished.txt", base));
     fs::write(&polished_path, &polished_text)?;
