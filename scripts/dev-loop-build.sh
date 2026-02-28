@@ -173,7 +173,9 @@ cp -R "$BUILT_APP_PATH" "$TARGET_APP_PATH"
 
 if [[ "$TESTING" -eq 0 ]]; then
     echo "Launching: $TARGET_APP_PATH"
-    open -n "$TARGET_APP_PATH"
+    # Launch by executing binary directly to preserve TCC permission context.
+    # Using 'open -n' creates a new process that loses Accessibility/Microphone permissions.
+    "$TARGET_APP_PATH/Contents/MacOS/DIYTypeless" &
 else
     echo "Launch skipped (testing mode)."
 fi
