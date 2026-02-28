@@ -5,6 +5,7 @@ mod http_client;
 mod llm_processor;
 mod pipeline;
 mod polish;
+mod retry;
 mod transcribe;
 
 pub use audio::AudioData;
@@ -45,14 +46,28 @@ pub fn polish_text(
 }
 
 /// Warm up TLS connection to Groq API
-/// Call this at the start of recording to eliminate TLS handshake latency
+///
+/// Call this at the start of recording to eliminate TLS handshake latency.
+/// See [`http_client::warmup_groq_connection`] for detailed timing considerations.
+///
+/// # Important
+/// - The connection pool has a 300-second idle timeout
+/// - For recordings longer than ~4 minutes, the connection may need re-warming
+/// - This should be called immediately before or at the start of recording
 #[uniffi::export]
 pub fn warmup_groq_connection() -> Result<(), CoreError> {
     http_client::warmup_groq_connection()
 }
 
 /// Warm up TLS connection to Gemini API
-/// Call this at the start of recording to eliminate TLS handshake latency
+///
+/// Call this at the start of recording to eliminate TLS handshake latency.
+/// See [`http_client::warmup_gemini_connection`] for detailed timing considerations.
+///
+/// # Important
+/// - The connection pool has a 300-second idle timeout
+/// - For long recording sessions, consider re-warming before polish
+/// - This should be called immediately before or at the start of recording
 #[uniffi::export]
 pub fn warmup_gemini_connection() -> Result<(), CoreError> {
     http_client::warmup_gemini_connection()

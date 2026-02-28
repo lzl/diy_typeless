@@ -2,10 +2,10 @@ use crate::config::{HIGHPASS_FREQ_HZ, TARGET_RMS_DB, WHISPER_CHANNELS, WHISPER_S
 use crate::error::CoreError;
 use biquad::{Biquad, Coefficients, DirectForm1, ToHertz, Type, Q_BUTTERWORTH_F32};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use once_cell::sync::Lazy;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 #[derive(Debug, uniffi::Record)]
+#[must_use]
 pub struct AudioData {
     pub bytes: Vec<u8>,
     pub duration_seconds: f32,
@@ -31,8 +31,8 @@ impl RecordingState {
     }
 }
 
-static RECORDING_STATE: Lazy<Mutex<RecordingState>> =
-    Lazy::new(|| Mutex::new(RecordingState::new()));
+static RECORDING_STATE: LazyLock<Mutex<RecordingState>> =
+    LazyLock::new(|| Mutex::new(RecordingState::new()));
 
 pub fn start_recording() -> Result<(), CoreError> {
     let mut state = RECORDING_STATE
@@ -377,4 +377,113 @@ fn flac_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
         .map_err(|e| CoreError::AudioProcessing(format!("FLAC write error: {}", e)))?;
 
     Ok(sink.as_slice().to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[test]
+    fn resample_linear_empty_input_returns_empty() {
+        let input: Vec<f32> = vec![];
+        let result = resample_linear(&input, 16000, 16000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn resample_linear_same_sample_rate_returns_clone() {
+        let input = vec![0.5, -0.5, 0.25, -0.25];
+        let result = resample_linear(&input, 16000, 16000);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn resample_linear_downsample_reduces_length() {
+        // 10 samples at 48000 Hz -> 16000 Hz should produce ~3 samples
+        let input = vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+        let result = resample_linear(&input, 48000, 16000);
+        // 48000/16000 = 3.0 ratio, so 10/3 = ~3 samples
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn resample_linear_upsample_increases_length() {
+        // 3 samples at 16000 Hz -> 48000 Hz should produce ~9 samples
+        let input = vec![0.0, 0.5, 1.0];
+        let result = resample_linear(&input, 16000, 48000);
+        // 16000/48000 = 0.333 ratio, so 3/0.333 = ~9 samples
+        assert_eq!(result.len(), 9);
+    }
+
+    #[test]
+    fn resample_linear_interpolation_is_linear() {
+        // Linear ramp from 0.0 to 1.0 at 48000 Hz -> 24000 Hz
+        // Should produce interpolated values
+        let input = vec![0.0, 0.5, 1.0];
+        let result = resample_linear(&input, 48000, 24000);
+        // At 2:1 ratio, we get ~1.5 samples -> 1 sample after floor
+        assert!(!result.is_empty());
+        // The first sample should be close to 0.0 (start of interpolation)
+        assert!((result[0] - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn enhance_audio_empty_input_returns_empty() {
+        let input: Vec<f32> = vec![];
+        let result = enhance_audio(&input, 16000).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn enhance_audio_preserves_sample_count() {
+        let input = vec![0.1, -0.1, 0.2, -0.2, 0.3];
+        let result = enhance_audio(&input, 16000).unwrap();
+        assert_eq!(result.len(), input.len());
+    }
+
+    #[test]
+    fn enhance_audio_applies_rms_normalization() {
+        // Very quiet signal should be amplified
+        let input = vec![0.001, -0.001, 0.001, -0.001];
+        let result = enhance_audio(&input, 16000).unwrap();
+        // The RMS should be higher in the output
+        let input_rms: f32 = (input.iter().map(|s| s * s).sum::<f32>() / input.len() as f32).sqrt();
+        let output_rms: f32 =
+            (result.iter().map(|s| s * s).sum::<f32>() / result.len() as f32).sqrt();
+        assert!(output_rms > input_rms);
+    }
+
+    #[test]
+    fn capture_f32_mono_copies_directly() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let data = vec![0.5, -0.5, 0.25, -0.25];
+        capture_f32(&data, 1, &samples);
+        let locked = samples.lock().unwrap();
+        assert_eq!(*locked, data);
+    }
+
+    #[test]
+    fn capture_f32_stereo_averages_channels() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        // Stereo interleaved: [L0, R0, L1, R1, L2, R2]
+        let data = vec![0.0, 1.0, 0.5, 0.5, 1.0, 0.0];
+        capture_f32(&data, 2, &samples);
+        let locked = samples.lock().unwrap();
+        // Should average to [0.5, 0.5, 0.5]
+        assert_eq!(*locked, vec![0.5, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn capture_f32_quad_averages_four_channels() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        // Quad interleaved: [C0, C1, C2, C3, C0, C1, C2, C3]
+        let data = vec![0.0, 0.4, 0.8, 1.2, 0.2, 0.6, 1.0, 1.4];
+        capture_f32(&data, 4, &samples);
+        let locked = samples.lock().unwrap();
+        // Should average: [(0.0+0.4+0.8+1.2)/4=0.6, (0.2+0.6+1.0+1.4)/4=0.8]
+        assert_eq!(locked.len(), 2);
+        assert!((locked[0] - 0.6).abs() < f32::EPSILON);
+        assert!((locked[1] - 0.8).abs() < 0.0001);
+    }
 }

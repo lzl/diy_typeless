@@ -1,10 +1,9 @@
 use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
+use crate::retry::{is_retryable_status, with_retry, HttpResult};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Deserialize)]
 struct GeminiResponse {
@@ -77,55 +76,62 @@ pub fn process_text_with_llm(
     generation_config.insert("maxOutputTokens".to_string(), serde_json::json!(4096));
     body["generationConfig"] = serde_json::Value::Object(generation_config);
 
-    // Retry logic with exponential backoff
-    for attempt in 0..3 {
-        let response = client
-            .post(&url)
-            .header("x-goog-api-key", api_key)
-            .json(&body)
-            .send();
+    let result = with_retry(
+        3,
+        || {
+            let response = client
+                .post(&url)
+                .header("x-goog-api-key", api_key)
+                .json(&body)
+                .send();
 
-        match response {
-            Ok(resp) if resp.status() == StatusCode::OK => {
-                let payload: GeminiResponse = resp.json()?;
-                let text = payload
-                    .candidates
-                    .get(0)
-                    .and_then(|c| c.content.parts.get(0))
-                    .and_then(|p| p.text.clone())
-                    .ok_or(CoreError::EmptyResponse)?;
-                return Ok(text.trim().to_string());
-            }
-            Ok(resp) if resp.status() == StatusCode::TOO_MANY_REQUESTS
-                || resp.status().is_server_error() => {
-                let backoff = 2u64.pow(attempt);
-                sleep(Duration::from_secs(backoff));
-                continue;
-            }
-            Ok(resp) => {
-                return Err(CoreError::Api(format!(
+            match response {
+                Ok(resp) if resp.status() == StatusCode::OK => {
+                    match resp.json::<GeminiResponse>() {
+                        Ok(payload) => {
+                            let text = payload
+                                .candidates
+                                .first()
+                                .and_then(|c| c.content.parts.first())
+                                .and_then(|p| p.text.clone());
+
+                            match text {
+                                Some(t) => HttpResult::Success(t.trim().to_string()),
+                                None => {
+                                    HttpResult::NonRetryable("Empty response".to_string())
+                                }
+                            }
+                        }
+                        Err(e) => HttpResult::NonRetryable(e.to_string()),
+                    }
+                }
+                Ok(resp) if is_retryable_status(resp.status()) => HttpResult::Retryable,
+                Ok(resp) => HttpResult::NonRetryable(format!(
                     "Gemini API error: HTTP {}",
                     resp.status()
-                )));
+                )),
+                Err(_) => HttpResult::Retryable,
             }
-            Err(err) => {
-                if attempt < 2 {
-                    let backoff = 2u64.pow(attempt);
-                    sleep(Duration::from_secs(backoff));
-                    continue;
-                }
-                return Err(CoreError::Http(err.to_string()));
+        },
+        "Gemini API",
+    );
+
+    match result {
+        Ok(text) => Ok(text),
+        Err(msg) => {
+            if msg == "Empty response" {
+                Err(CoreError::EmptyResponse)
+            } else if msg.starts_with("Gemini API error") {
+                Err(CoreError::Api(msg))
+            } else {
+                Err(CoreError::Http(msg))
             }
         }
     }
-
-    Err(CoreError::Api("Gemini API retries exceeded".to_string()))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_exponential_backoff_calculation() {
         // Test that backoff increases exponentially

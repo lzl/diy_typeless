@@ -30,6 +30,34 @@ pub fn get_http_client() -> &'static Client {
 /// This should be called at the start of recording to ensure
 /// the TLS handshake is done before the actual transcription request.
 /// Returns immediately on success, or error if connection fails.
+///
+/// # Timing Considerations
+///
+/// The HTTP client maintains a connection pool with a 300-second idle timeout.
+/// If the time between warmup and the actual API call exceeds this limit,
+/// the connection may be closed and a new TLS handshake will be required.
+///
+/// # Recommended Usage Pattern
+///
+/// ```ignore
+/// // 1. User starts recording (presses button)
+/// warmup_groq_connection()?; // Establish TLS connection
+/// start_recording()?;
+///
+/// // 2. User stops recording
+/// let audio = stop_recording()?;
+///
+/// // 3. Immediately transcribe (reuses warmed-up connection)
+/// // If recording was < 5 minutes, the connection is still valid
+/// transcribe_audio_bytes(api_key, audio.bytes, None)?;
+/// ```
+///
+/// # When to Re-warm
+///
+/// Re-call this function if:
+/// - More than ~4 minutes have passed since the last warmup
+/// - A previous API call failed with a connection error
+/// - The app has been backgrounded and resumed
 pub fn warmup_groq_connection() -> Result<(), CoreError> {
     let client = get_http_client();
 
@@ -46,6 +74,37 @@ pub fn warmup_groq_connection() -> Result<(), CoreError> {
 /// Warm up the TLS connection to Gemini API
 ///
 /// Similar to Groq warmup, establishes TLS connection ahead of time.
+///
+/// # Timing Considerations
+///
+/// The HTTP client maintains a connection pool with a 300-second idle timeout.
+/// If the time between warmup and the actual API call exceeds this limit,
+/// the connection may be closed and a new TLS handshake will be required.
+///
+/// # Recommended Usage Pattern
+///
+/// ```ignore
+/// // 1. Start recording
+/// warmup_gemini_connection()?; // Pre-establish TLS connection
+/// start_recording()?;
+///
+/// // 2. Recording in progress...
+/// // (keep the connection alive with periodic activity or accept re-handshake)
+///
+/// // 3. Stop recording and polish immediately
+/// let audio = stop_recording()?;
+/// let text = transcribe_audio_bytes(api_key, audio.bytes, None)?;
+///
+/// // 4. Polish with Gemini (reuses connection if still valid)
+/// polish_text(gemini_key, text, None)?;
+/// ```
+///
+/// # When to Re-warm
+///
+/// Re-call this function if:
+/// - More than ~4 minutes have passed since the last warmup
+/// - A previous API call failed with a connection error
+/// - You want to ensure minimal latency for a critical operation
 pub fn warmup_gemini_connection() -> Result<(), CoreError> {
     let client = get_http_client();
 
@@ -62,7 +121,7 @@ pub fn warmup_gemini_connection() -> Result<(), CoreError> {
 /// Generic warmup for any URL
 ///
 /// Used internally or for testing connection to custom endpoints.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "Used internally or for testing connection to custom endpoints")]
 pub fn warmup_connection(url: &str) -> Result<(), CoreError> {
     let client = get_http_client();
 

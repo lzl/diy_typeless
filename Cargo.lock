@@ -588,7 +588,6 @@ dependencies = [
  "flacenc",
  "hound",
  "log",
- "once_cell",
  "reqwest",
  "serde",
  "serde_json",
