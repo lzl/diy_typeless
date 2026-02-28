@@ -40,7 +40,7 @@ final class GeminiLLMRepository: LLMRepository {
             let lowercased = message.lowercased()
             if lowercased.contains("401") {
                 return .invalidAPIKey
-            } else if lowercased.contains("403") {
+            } else if lowercased.contains("400") || lowercased.contains("403") {
                 return .regionBlocked
             } else if lowercased.contains("429") {
                 return .rateLimited
