@@ -102,14 +102,25 @@ struct CapsuleView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
 
-        case .error(let message):
-            Text(message)
+        case .error(let error):
+            Text(error.message)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.orange)
+                .foregroundColor(errorColor(for: error))
                 .lineLimit(1)
 
         case .hidden:
             EmptyView()
+        }
+    }
+
+    /// Returns the display color for a UserFacingError based on its severity.
+    /// Warning errors (user-fixable) use orange, critical errors use red.
+    private func errorColor(for error: UserFacingError) -> Color {
+        switch error.severity {
+        case .warning:
+            return .orange
+        case .critical:
+            return .red.opacity(0.85)
         }
     }
 

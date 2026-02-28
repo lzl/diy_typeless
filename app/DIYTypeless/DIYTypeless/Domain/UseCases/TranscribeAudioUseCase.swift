@@ -14,6 +14,6 @@ protocol TranscribeAudioUseCaseProtocol: Sendable {
 
 enum TranscriptionError: Error, Equatable {
     case emptyAudio
-    case apiError(String)
+    case apiError(UserFacingError)
     case decodingFailed
 }
