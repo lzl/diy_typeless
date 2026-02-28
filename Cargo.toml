@@ -1,4 +1,20 @@
- [workspace]
- members = ["core", "cli"]
- resolver = "2"
- 
+[workspace]
+members = ["core", "cli"]
+resolver = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+perf = "warn"
+correctness = "warn"
+suspicious = "warn"
+complexity = "warn"
+style = "warn"
+cast_lossless = "warn"
+manual_let_else = "warn"
+redundant_clone = "warn"
+needless_collect = "warn"
+unnecessary_wraps = "warn"

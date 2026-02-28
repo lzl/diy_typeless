@@ -22,3 +22,6 @@ uniffi = { version = "0.31.0", features = ["cli"] }
 
 [dev-dependencies]
 uniffi = { version = "0.31.0", features = ["cli"] }
+
+[lints]
+workspace = true
