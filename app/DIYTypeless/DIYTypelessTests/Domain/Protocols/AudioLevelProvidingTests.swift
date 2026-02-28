@@ -29,6 +29,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [0.1, 0.5, 0.9])
@@ -50,6 +52,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [0.5])
@@ -74,6 +78,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [0.5])
@@ -101,6 +107,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = SendableProvider(levels: [0.1, 0.2, 0.3])
@@ -150,6 +158,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [0.5])
@@ -172,6 +182,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [])
@@ -187,6 +199,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let largeArray = Array(repeating: 0.5, count: 1000)
@@ -203,6 +217,8 @@ final class AudioLevelProvidingTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [-1.0, 0.0, 1.0])

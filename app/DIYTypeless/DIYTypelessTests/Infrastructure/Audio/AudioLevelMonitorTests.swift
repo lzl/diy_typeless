@@ -113,6 +113,8 @@ final class AudioLevelMonitorTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         // Test that our implementation concept produces normalized values
@@ -135,6 +137,8 @@ final class AudioLevelMonitorTests: XCTestCase {
             init(levels: [Double]) {
                 self.levels = levels
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let provider = MockProvider(levels: [0.1, 0.5, 0.9])
@@ -271,6 +275,8 @@ final class AudioLevelMonitorTests: XCTestCase {
                 continuation?.yield(newLevels)
                 lock.unlock()
             }
+            func startMonitoring() throws {}
+            func stopMonitoring() async {}
         }
 
         let mock = MockAudioLevelMonitor()
