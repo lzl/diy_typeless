@@ -8,7 +8,6 @@ All code, documentation, comments, commit messages, and technical writing in thi
 - CLI output and error messages
 - Documentation files (README, AGENTS.md, etc.)
 - Git commit messages
-- Test case descriptions and evolution logs
 - Skill documentation
 
 The only exception is user-facing content that is intentionally localized (e.g., test cases for Chinese language processing).
@@ -357,73 +356,6 @@ This is because:
 
 Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory). That path is not referenced by the Xcode project and creates confusing duplicates.
 
-## Testing Strategy
-
-### Unit Tests Only (DIYTypelessTests)
-
-**MANDATORY:** Only run Unit Tests (`DIYTypelessTests` target). DO NOT run UI Tests (`DIYTypelessUITests`) as they:
-- Launch the full App, triggering Keychain password prompts
-- Require macOS UI automation permissions (Touch ID dialog)
-- Cannot run unattended
-
-Run unit tests with:
-```bash
-SKIP_KEYCHAIN_PRELOAD=1 xcodebuild test \
-    -project app/DIYTypeless/DIYTypeless.xcodeproj \
-    -scheme DIYTypeless \
-    -only-testing DIYTypelessTests \
-    -destination 'platform=macOS'
-```
-
-The `SKIP_KEYCHAIN_PRELOAD` environment variable prevents the Keychain authorization prompt during testing.
-
-Unit Tests use mocked dependencies (`MockApiKeyRepository`, `MockPermissionRepository`) to avoid:
-- Keychain access prompts
-- Accessibility/Microphone permission checks
-- Real network calls
-
-Example test with mocks:
-```swift
-@MainActor
-@Suite("RecordingState Tests")
-struct RecordingStateTests {
-    @Test("Parallel execution reduces total delay")
-    func testParallelExecution() async throws {
-        let mockGetSelectedText = MockGetSelectedTextUseCase()
-        let mockStopRecording = MockStopRecordingUseCase()
-        let state = RecordingStateTestFactory.makeRecordingState(
-            stopRecordingUseCase: mockStopRecording,
-            getSelectedTextUseCase: mockGetSelectedText
-        )
-        // Test logic without real permissions/keychain
-    }
-}
-```
-
-### Crash Recovery Protocol
-
-If tests crash during execution, follow this protocol:
-
-1. **Locate crash logs:**
-   ```bash
-   ls -la ~/Library/Logs/DiagnosticReports/DIYTypeless*.ips
-   ```
-
-2. **Analyze the crash:**
-   - Look for `Exception Type`, `Crashed Thread`, and `Thread 0` backtrace
-   - Identify if it's a Rust FFI issue, Swift code issue, or resource issue
-
-3. **Common fixes:**
-   - **Rust dylib mismatch:** Run `cargo build -p diy_typeless_core` (or `--release`)
-   - **DerivedData corruption:** `rm -rf .context/DerivedData`
-   - **Architecture mismatch:** Ensure Rust and Xcode both build for arm64
-
-4. **Re-run tests:**
-   - Apply fixes and re-run unit tests
-   - Repeat until tests pass without crashes
-
-5. **DO NOT** ignore crashes or skip failing tests. Fix the root cause.
-
 ## File Naming Conventions
 
 Use these patterns when creating new files:
@@ -437,14 +369,6 @@ Use these patterns when creating new files:
 | `XXXState.swift` | State | `RecordingState.swift` |
 | `XXXEntities.swift` | Domain/Entities | `TranscriptionEntities.swift` |
 | `XXXError.swift` | Domain/Errors | `ValidationError.swift` |
-
-## Test File Naming
-
-| Pattern | Example |
-|---------|---------|
-| `XXXTests.swift` | `RecordingStateTests.swift` |
-| `XXXTestFactory.swift` | `RecordingStateTestFactory.swift` |
-| `MockXXX.swift` | `MockGetSelectedTextUseCase.swift` |
 
 ## Directory Structure
 
