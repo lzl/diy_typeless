@@ -5,11 +5,20 @@ import SwiftUI
 /// Mock implementation of AudioLevelProviding for previews and testing
 @MainActor
 @Observable
-final class MockAudioLevelProvider: AudioLevelProviding {
-    var levels: [CGFloat] = Array(repeating: 0.1, count: 20)
+final class MockAudioLevelProvider: AudioLevelProviding, @unchecked Sendable {
+    var levels: [Double] = Array(repeating: 0.1, count: 20)
 
     private var timer: Timer?
     private let pattern: WaveformPattern
+    private var continuation: AsyncStream<[Double]>.Continuation?
+
+    nonisolated var levelsStream: AsyncStream<[Double]> {
+        AsyncStream { continuation in
+            Task { @MainActor in
+                self.continuation = continuation
+            }
+        }
+    }
 
     enum WaveformPattern: Sendable {
         case sine
@@ -41,8 +50,18 @@ final class MockAudioLevelProvider: AudioLevelProviding {
         levels = Array(repeating: 0.1, count: 20)
     }
 
+    // MARK: AudioLevelProviding protocol conformance
+
+    func startMonitoring() throws {
+        start()
+    }
+
+    func stopMonitoring() async {
+        stop()
+    }
+
     private func generateNextLevel() {
-        let newLevel: CGFloat
+        let newLevel: Double
         let time = Date().timeIntervalSince1970
 
         switch pattern {
@@ -51,7 +70,7 @@ final class MockAudioLevelProvider: AudioLevelProviding {
             newLevel = 0.5 + 0.4 * sin(time * 10)
         case .random:
             // Random pattern with smoothing
-            newLevel = CGFloat.random(in: 0.1 ... 1.0)
+            newLevel = Double.random(in: 0.1 ... 1.0)
         case .pulse:
             // Periodic pulse
             let pulse = sin(time * 5)
@@ -65,6 +84,9 @@ final class MockAudioLevelProvider: AudioLevelProviding {
         newLevels.removeFirst()
         newLevels.append(max(0.1, newLevel))
         levels = newLevels
+
+        // Emit to AsyncStream
+        continuation?.yield(levels)
     }
 }
 #endif

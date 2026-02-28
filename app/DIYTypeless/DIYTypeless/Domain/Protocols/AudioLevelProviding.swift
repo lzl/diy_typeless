@@ -1,14 +1,17 @@
 import Foundation
 
-/// Protocol for providing audio level data to waveform visualization
-/// Enables testability by allowing mock implementations
-protocol AudioLevelProviding: AnyObject {
-    /// Current audio levels array (typically 20 values between 0.0 and 1.0)
-    var levels: [CGFloat] { get }
-    
+/// Protocol for providing audio level data to waveform visualizations
+/// Uses Double (not CGFloat) to maintain Domain layer purity
+protocol AudioLevelProviding: AnyObject, Sendable {
+    /// Current audio levels as normalized values (0.0...1.0)
+    var levels: [Double] { get }
+
+    /// AsyncStream for real-time audio level updates
+    var levelsStream: AsyncStream<[Double]> { get }
+
     /// Start monitoring audio levels
-    func start()
-    
+    func startMonitoring() throws
+
     /// Stop monitoring audio levels
-    func stop()
+    func stopMonitoring() async
 }
