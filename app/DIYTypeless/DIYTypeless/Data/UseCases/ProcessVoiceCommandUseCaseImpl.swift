@@ -18,18 +18,24 @@ final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
         // Build prompt combining command and selected text
         let prompt = buildPrompt(command: transcription, selectedText: selectedText)
 
-        // Call LLM
-        let response = try await llmRepository.generate(
-            apiKey: geminiKey,
-            prompt: prompt,
-            temperature: 0.3
-        )
+        do {
+            // Call LLM
+            let response = try await llmRepository.generate(
+                apiKey: geminiKey,
+                prompt: prompt,
+                temperature: 0.3
+            )
 
-        // Return result with recommended action
-        return VoiceCommandResult(
-            processedText: response,
-            action: .replaceSelection
-        )
+            // Return result with recommended action
+            return VoiceCommandResult(
+                processedText: response,
+                action: .replaceSelection
+            )
+        } catch let coreError as CoreError {
+            throw CoreErrorMapper.toUserFacingError(coreError)
+        } catch {
+            throw UserFacingError.unknown(error.localizedDescription)
+        }
     }
 
     private func buildPrompt(command: String, selectedText: String) -> String {

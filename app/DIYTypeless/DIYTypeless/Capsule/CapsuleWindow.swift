@@ -30,7 +30,7 @@ final class CapsuleWindowController {
 
         // Let SwiftUI determine the actual size; we provide a reasonable initial size
         panel = CapsulePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: 50),
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: CapsuleView.capsuleHeight + 14),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -104,9 +104,9 @@ final class CapsuleWindowController {
         let frame = screen.visibleFrame
 
         // Let the content view determine its size
-        let contentSize = panel.contentView?.fittingSize ?? CGSize(width: 200, height: 50)
-        let width = max(contentSize.width, 160)
-        let height: CGFloat = 50
+        let contentSize = panel.contentView?.fittingSize ?? CGSize(width: 200, height: CapsuleView.capsuleHeight)
+        let width = max(contentSize.width, CapsuleView.minCapsuleWidth)
+        let height: CGFloat = CapsuleView.capsuleHeight + 14 // padding for window chrome
 
         let x = frame.midX - width / 2
         let y = frame.minY + 24
