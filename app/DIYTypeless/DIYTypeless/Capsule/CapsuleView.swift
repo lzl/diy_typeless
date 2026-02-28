@@ -15,8 +15,9 @@ struct CapsuleView: View {
         self.audioMonitor = audioMonitor
     }
 
-    private let capsuleWidth: CGFloat = 160
+    private let minCapsuleWidth: CGFloat = 160
     private let capsuleHeight: CGFloat = 36
+    private let contentPadding: CGFloat = 20
 
     private var shouldShowProgress: Bool {
         switch state.capsuleState {
@@ -56,7 +57,9 @@ struct CapsuleView: View {
             // Content
             content
         }
-        .frame(width: capsuleWidth, height: capsuleHeight)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: minCapsuleWidth)
+        .frame(height: capsuleHeight)
         .onAppear {
             // Handle initial state
             previousState = state.capsuleState
@@ -78,7 +81,7 @@ struct CapsuleView: View {
                 audioMonitor: audioMonitor,
                 style: .bars
             )
-            .frame(width: capsuleWidth - 32, height: 32)
+            .frame(width: minCapsuleWidth - 32, height: 32)
             .transition(.opacity.animation(.easeOut(duration: 0.2)))
             .accessibilityLabel("Recording audio")
 
@@ -86,27 +89,32 @@ struct CapsuleView: View {
             Text("Transcribing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, contentPadding)
 
         case .polishing:
             Text("Polishing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, contentPadding)
 
         case .processingCommand:
             Text("Processing")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, contentPadding)
 
         case .done(let result):
             Text(result == .pasted ? "Pasted" : "Copied")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, contentPadding)
 
         case .error(let error):
             Text(error.message)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(errorColor(for: error))
                 .lineLimit(1)
+                .padding(.horizontal, contentPadding)
 
         case .hidden:
             EmptyView()

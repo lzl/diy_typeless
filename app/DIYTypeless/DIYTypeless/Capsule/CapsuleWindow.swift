@@ -28,12 +28,15 @@ final class CapsuleWindowController {
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear
 
+        // Let SwiftUI determine the actual size; we provide a reasonable initial size
         panel = CapsulePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 180, height: 50),
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 50),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+        // Allow the content view to determine its preferred size
+        hosting.view.translatesAutoresizingMaskIntoConstraints = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -96,8 +99,12 @@ final class CapsuleWindowController {
     private func positionWindow() {
         guard let screen = NSScreen.main else { return }
         let frame = screen.visibleFrame
-        let width: CGFloat = 180
+
+        // Let the content view determine its size
+        let contentSize = panel.contentView?.fittingSize ?? CGSize(width: 200, height: 50)
+        let width = max(contentSize.width, 160)
         let height: CGFloat = 50
+
         let x = frame.midX - width / 2
         let y = frame.minY + 24
         panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
