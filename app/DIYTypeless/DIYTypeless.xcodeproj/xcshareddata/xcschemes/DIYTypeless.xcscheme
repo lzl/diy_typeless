@@ -30,28 +30,6 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "0445F12A2F2C8CB900B25EC2"
-               BuildableName = "DIYTypelessTests.xctest"
-               BlueprintName = "DIYTypelessTests"
-               ReferencedContainer = "container:DIYTypeless.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "0445F1342F2C8CB900B25EC2"
-               BuildableName = "DIYTypelessUITests.xctest"
-               BlueprintName = "DIYTypelessUITests"
-               ReferencedContainer = "container:DIYTypeless.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

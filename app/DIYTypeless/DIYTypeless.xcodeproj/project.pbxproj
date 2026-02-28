@@ -12,20 +12,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		0445F12C2F2C8CB900B25EC2 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 0445F1162F2C8CB800B25EC2 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 0445F11D2F2C8CB800B25EC2;
-			remoteInfo = DIYTypeless;
-		};
-		0445F1362F2C8CB900B25EC2 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 0445F1162F2C8CB800B25EC2 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 0445F11D2F2C8CB800B25EC2;
-			remoteInfo = DIYTypeless;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,8 +29,6 @@
 
 /* Begin PBXFileReference section */
 		0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DIYTypeless.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		0445F12B2F2C8CB900B25EC2 /* DIYTypelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DIYTypelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		0445F1352F2C8CB900B25EC2 /* DIYTypelessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DIYTypelessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libdiy_typeless_core.dylib; path = "$(PROJECT_DIR)/../../target/$(RUST_PROFILE)/libdiy_typeless_core.dylib"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -52,16 +36,6 @@
 		0445F1202F2C8CB800B25EC2 /* DIYTypeless */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DIYTypeless;
-			sourceTree = "<group>";
-		};
-		0445F12E2F2C8CB900B25EC2 /* DIYTypelessTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DIYTypelessTests;
-			sourceTree = "<group>";
-		};
-		0445F1382F2C8CB900B25EC2 /* DIYTypelessUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DIYTypelessUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,20 +49,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		0445F1282F2C8CB900B25EC2 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		0445F1322F2C8CB900B25EC2 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -96,8 +56,6 @@
 			isa = PBXGroup;
 			children = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
-				0445F12E2F2C8CB900B25EC2 /* DIYTypelessTests */,
-				0445F1382F2C8CB900B25EC2 /* DIYTypelessUITests */,
 				0445F15E2F2C8DFE00B25EC2 /* Frameworks */,
 				0445F11F2F2C8CB800B25EC2 /* Products */,
 			);
@@ -107,8 +65,6 @@
 			isa = PBXGroup;
 			children = (
 				0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */,
-				0445F12B2F2C8CB900B25EC2 /* DIYTypelessTests.xctest */,
-				0445F1352F2C8CB900B25EC2 /* DIYTypelessUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -147,52 +103,6 @@
 			productReference = 0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */;
 			productType = "com.apple.product-type.application";
 		};
-		0445F12A2F2C8CB900B25EC2 /* DIYTypelessTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 0445F1422F2C8CB900B25EC2 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */;
-			buildPhases = (
-				0445F1272F2C8CB900B25EC2 /* Sources */,
-				0445F1282F2C8CB900B25EC2 /* Frameworks */,
-				0445F1292F2C8CB900B25EC2 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				0445F12D2F2C8CB900B25EC2 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				0445F12E2F2C8CB900B25EC2 /* DIYTypelessTests */,
-			);
-			name = DIYTypelessTests;
-			packageProductDependencies = (
-			);
-			productName = DIYTypelessTests;
-			productReference = 0445F12B2F2C8CB900B25EC2 /* DIYTypelessTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		0445F1342F2C8CB900B25EC2 /* DIYTypelessUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 0445F1452F2C8CB900B25EC2 /* Build configuration list for PBXNativeTarget "DIYTypelessUITests" */;
-			buildPhases = (
-				0445F1312F2C8CB900B25EC2 /* Sources */,
-				0445F1322F2C8CB900B25EC2 /* Frameworks */,
-				0445F1332F2C8CB900B25EC2 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				0445F1372F2C8CB900B25EC2 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				0445F1382F2C8CB900B25EC2 /* DIYTypelessUITests */,
-			);
-			name = DIYTypelessUITests;
-			packageProductDependencies = (
-			);
-			productName = DIYTypelessUITests;
-			productReference = 0445F1352F2C8CB900B25EC2 /* DIYTypelessUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -205,14 +115,6 @@
 				TargetAttributes = {
 					0445F11D2F2C8CB800B25EC2 = {
 						CreatedOnToolsVersion = 26.2;
-					};
-					0445F12A2F2C8CB900B25EC2 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 0445F11D2F2C8CB800B25EC2;
-					};
-					0445F1342F2C8CB900B25EC2 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = 0445F11D2F2C8CB800B25EC2;
 					};
 				};
 			};
@@ -231,28 +133,12 @@
 			projectRoot = "";
 			targets = (
 				0445F11D2F2C8CB800B25EC2 /* DIYTypeless */,
-				0445F12A2F2C8CB900B25EC2 /* DIYTypelessTests */,
-				0445F1342F2C8CB900B25EC2 /* DIYTypelessUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0445F11C2F2C8CB800B25EC2 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		0445F1292F2C8CB900B25EC2 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		0445F1332F2C8CB900B25EC2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -269,33 +155,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		0445F1272F2C8CB900B25EC2 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		0445F1312F2C8CB900B25EC2 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		0445F12D2F2C8CB900B25EC2 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 0445F11D2F2C8CB800B25EC2 /* DIYTypeless */;
-			targetProxy = 0445F12C2F2C8CB900B25EC2 /* PBXContainerItemProxy */;
-		};
-		0445F1372F2C8CB900B25EC2 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 0445F11D2F2C8CB800B25EC2 /* DIYTypeless */;
-			targetProxy = 0445F1362F2C8CB900B25EC2 /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -497,82 +359,6 @@
 			};
 			name = Release;
 		};
-		0445F1432F2C8CB900B25EC2 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DIYTypeless";
-			};
-			name = Debug;
-		};
-		0445F1442F2C8CB900B25EC2 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DIYTypeless";
-			};
-			name = Release;
-		};
-		0445F1462F2C8CB900B25EC2 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = DIYTypeless;
-			};
-			name = Debug;
-		};
-		0445F1472F2C8CB900B25EC2 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = DIYTypeless;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -590,24 +376,6 @@
 			buildConfigurations = (
 				0445F1402F2C8CB900B25EC2 /* Debug */,
 				0445F1412F2C8CB900B25EC2 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		0445F1422F2C8CB900B25EC2 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				0445F1432F2C8CB900B25EC2 /* Debug */,
-				0445F1442F2C8CB900B25EC2 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		0445F1452F2C8CB900B25EC2 /* Build configuration list for PBXNativeTarget "DIYTypelessUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				0445F1462F2C8CB900B25EC2 /* Debug */,
-				0445F1472F2C8CB900B25EC2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
