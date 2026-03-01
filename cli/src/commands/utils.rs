@@ -7,17 +7,17 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Generate a timestamp string for file naming
-pub fn timestamp() -> String {
+pub(crate) fn timestamp() -> String {
     chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
 }
 
 /// Format a duration as a human-readable string
-pub fn format_duration(duration: Duration) -> String {
+pub(crate) fn format_duration(duration: Duration) -> String {
     format!("{:.2}s", duration.as_secs_f64())
 }
 
 /// Mask a secret string, showing only first and last 4 characters
-pub fn mask_secret(secret: &str) -> String {
+pub(crate) fn mask_secret(secret: &str) -> String {
     if secret.len() <= 8 {
         return "***".to_string();
     }
@@ -25,7 +25,7 @@ pub fn mask_secret(secret: &str) -> String {
 }
 
 /// Find a binary in the system PATH
-pub fn find_binary(binary: &str) -> Option<PathBuf> {
+pub(crate) fn find_binary(binary: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(binary);
@@ -37,7 +37,7 @@ pub fn find_binary(binary: &str) -> Option<PathBuf> {
 }
 
 /// Resolve the output directory, defaulting to ~/diy_typeless_recordings
-pub fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf> {
+pub(crate) fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf> {
     if let Some(dir) = output_dir {
         return Ok(dir);
     }
@@ -46,7 +46,7 @@ pub fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf> {
 }
 
 /// Resolve Groq API key from argument or environment
-pub fn resolve_groq_key(provided: Option<String>) -> Result<SecretString> {
+pub(crate) fn resolve_groq_key(provided: Option<String>) -> Result<SecretString> {
     let key = if let Some(key) = provided {
         key
     } else {
@@ -56,7 +56,7 @@ pub fn resolve_groq_key(provided: Option<String>) -> Result<SecretString> {
 }
 
 /// Resolve Gemini API key from argument or environment
-pub fn resolve_gemini_key(provided: Option<String>) -> Result<SecretString> {
+pub(crate) fn resolve_gemini_key(provided: Option<String>) -> Result<SecretString> {
     let key = if let Some(key) = provided {
         key
     } else {
@@ -66,21 +66,21 @@ pub fn resolve_gemini_key(provided: Option<String>) -> Result<SecretString> {
 }
 
 /// Wait for user to press Enter
-pub fn wait_for_enter() -> Result<()> {
+pub(crate) fn wait_for_enter() -> Result<()> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(())
 }
 
 /// Read all text from stdin
-pub fn read_stdin() -> Result<String> {
+pub(crate) fn read_stdin() -> Result<String> {
     let mut buffer = String::new();
     io::stdin().read_to_string(&mut buffer)?;
     Ok(buffer.trim().to_string())
 }
 
 /// Copy text to clipboard (macOS only)
-pub fn copy_to_clipboard(text: &str) {
+pub(crate) fn copy_to_clipboard(text: &str) {
     if cfg!(target_os = "macos") {
         let _ = std::process::Command::new("pbcopy")
             .stdin(std::process::Stdio::piped())
@@ -97,7 +97,7 @@ pub fn copy_to_clipboard(text: &str) {
 }
 
 /// Print status of an environment variable (set/masked or not set)
-pub fn print_key_status(key_name: &str) {
+pub(crate) fn print_key_status(key_name: &str) {
     match std::env::var(key_name) {
         Ok(value) if !value.trim().is_empty() => {
             println!("- {key_name}: set ({})", mask_secret(&value));
@@ -106,20 +106,8 @@ pub fn print_key_status(key_name: &str) {
     }
 }
 
-/// Print status of a SecretString (set/masked or not set)
-pub fn print_secret_status(key_name: &str, secret: Option<&SecretString>) {
-    match secret {
-        Some(s) => {
-            // Use expose_secret to access the inner value for masking
-            use secrecy::ExposeSecret;
-            println!("- {key_name}: set ({})", mask_secret(s.expose_secret()));
-        }
-        None => println!("- {key_name}: not set"),
-    }
-}
-
 /// Print status of a binary in PATH
-pub fn print_binary_status(binary: &str) {
+pub(crate) fn print_binary_status(binary: &str) {
     match find_binary(binary) {
         Some(path) => println!("- {binary}: {}", path.display()),
         None => println!("- {binary}: not found in PATH"),

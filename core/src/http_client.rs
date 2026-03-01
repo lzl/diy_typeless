@@ -14,7 +14,7 @@ static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 /// - pool_idle_timeout: 300s (keep connections alive for 5 minutes)
 /// - pool_max_idle_per_host: 2 (allow 2 idle connections per host)
 /// - timeout: 90s for request timeout
-pub fn get_http_client() -> &'static Client {
+pub(crate) fn get_http_client() -> &'static Client {
     HTTP_CLIENT.get_or_init(|| {
         Client::builder()
             .timeout(Duration::from_secs(90))
@@ -58,7 +58,7 @@ pub fn get_http_client() -> &'static Client {
 /// - More than ~4 minutes have passed since the last warmup
 /// - A previous API call failed with a connection error
 /// - The app has been backgrounded and resumed
-pub fn warmup_groq_connection() -> Result<(), CoreError> {
+pub(crate) fn warmup_groq_connection() -> Result<(), CoreError> {
     let client = get_http_client();
 
     // Send a lightweight HEAD request to establish TLS connection
@@ -105,7 +105,7 @@ pub fn warmup_groq_connection() -> Result<(), CoreError> {
 /// - More than ~4 minutes have passed since the last warmup
 /// - A previous API call failed with a connection error
 /// - You want to ensure minimal latency for a critical operation
-pub fn warmup_gemini_connection() -> Result<(), CoreError> {
+pub(crate) fn warmup_gemini_connection() -> Result<(), CoreError> {
     let client = get_http_client();
 
     // Send a lightweight request to establish TLS connection
@@ -122,7 +122,7 @@ pub fn warmup_gemini_connection() -> Result<(), CoreError> {
 ///
 /// Used internally or for testing connection to custom endpoints.
 #[expect(dead_code, reason = "Used internally or for testing connection to custom endpoints")]
-pub fn warmup_connection(url: &str) -> Result<(), CoreError> {
+pub(crate) fn warmup_connection(url: &str) -> Result<(), CoreError> {
     let client = get_http_client();
 
     let _ = client

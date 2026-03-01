@@ -5,7 +5,7 @@ use std::time::Duration;
 /// The result of an HTTP request that includes the response status information.
 /// This allows the retry logic to distinguish between success, retryable errors,
 /// and non-retryable errors.
-pub enum HttpResult<T> {
+pub(crate) enum HttpResult<T> {
     /// Successful response with the result value
     Success(T),
     /// Retryable error - will retry with exponential backoff
@@ -47,12 +47,14 @@ pub enum HttpResult<T> {
 ///     }
 /// }, "API request failed");
 /// ```
-pub fn with_retry<T>(
+pub(crate) fn with_retry<T>(
     max_attempts: u32,
     mut operation: impl FnMut() -> HttpResult<T>,
     error_message: &str,
 ) -> Result<T, String> {
-    assert!(max_attempts >= 1, "max_attempts must be at least 1");
+    if max_attempts == 0 {
+        return Err("max_attempts must be at least 1".to_string());
+    }
 
     for attempt in 0..max_attempts {
         match operation() {
@@ -76,7 +78,7 @@ pub fn with_retry<T>(
 /// Retryable status codes:
 /// - 429 (Too Many Requests) - Rate limiting
 /// - 5xx (Server Errors) - Temporary server issues
-pub fn is_retryable_status(status: StatusCode) -> bool {
+pub(crate) fn is_retryable_status(status: StatusCode) -> bool {
     status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
 

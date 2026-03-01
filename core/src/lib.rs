@@ -1,3 +1,7 @@
+//! Core Rust library for audio capture, transcription, and text polishing.
+//!
+//! This crate exposes UniFFI-compatible functions used by the macOS app and CLI.
+
 mod audio;
 mod config;
 mod error;
@@ -14,11 +18,17 @@ pub use error::CoreError;
 use secrecy::SecretString;
 
 #[uniffi::export]
+/// Start microphone capture.
+///
+/// Returns an error if input audio device is unavailable or recording is already active.
 pub fn start_recording() -> Result<(), CoreError> {
     audio::start_recording()
 }
 
 #[uniffi::export]
+/// Stop microphone capture and return FLAC-encoded audio.
+///
+/// The returned payload is optimized for transcription upload.
 pub fn stop_recording() -> Result<AudioData, CoreError> {
     audio::stop_recording()
 }
@@ -30,6 +40,7 @@ pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
 }
 
 #[uniffi::export]
+/// Transcribe encoded audio bytes with Groq Whisper API.
 pub fn transcribe_audio_bytes(
     api_key: String,
     audio_bytes: Vec<u8>,
@@ -39,6 +50,7 @@ pub fn transcribe_audio_bytes(
 }
 
 #[uniffi::export]
+/// Polish raw transcript text with Gemini API.
 pub fn polish_text(
     api_key: String,
     raw_text: String,
@@ -57,6 +69,7 @@ pub fn polish_text(
 /// - For recordings longer than ~4 minutes, the connection may need re-warming
 /// - This should be called immediately before or at the start of recording
 #[uniffi::export]
+/// Warm up TLS connection to Groq API.
 pub fn warmup_groq_connection() -> Result<(), CoreError> {
     http_client::warmup_groq_connection()
 }
@@ -71,6 +84,7 @@ pub fn warmup_groq_connection() -> Result<(), CoreError> {
 /// - For long recording sessions, consider re-warming before polish
 /// - This should be called immediately before or at the start of recording
 #[uniffi::export]
+/// Warm up TLS connection to Gemini API.
 pub fn warmup_gemini_connection() -> Result<(), CoreError> {
     http_client::warmup_gemini_connection()
 }
@@ -78,6 +92,7 @@ pub fn warmup_gemini_connection() -> Result<(), CoreError> {
 /// Process text with LLM (Gemini API)
 /// Generic function for processing text with custom prompts
 #[uniffi::export]
+/// Process arbitrary text with Gemini API and optional system instruction.
 pub fn process_text_with_llm(
     api_key: String,
     prompt: String,

@@ -2,6 +2,6 @@
 //!
 //! This module contains implementations for various CLI subcommands.
 
-pub mod diagnose;
-pub mod utils;
-pub mod wav;
+pub(crate) mod diagnose;
+pub(crate) mod utils;
+pub(crate) mod wav;

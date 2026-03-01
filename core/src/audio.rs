@@ -6,8 +6,11 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 #[derive(Debug, uniffi::Record)]
 #[must_use]
+/// Captured audio payload and metadata.
 pub struct AudioData {
+    /// Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
     pub bytes: Vec<u8>,
+    /// Approximate capture duration in seconds before post-processing.
     pub duration_seconds: f32,
 }
 
@@ -34,7 +37,7 @@ impl RecordingState {
 static RECORDING_STATE: LazyLock<Mutex<RecordingState>> =
     LazyLock::new(|| Mutex::new(RecordingState::new()));
 
-pub fn start_recording() -> Result<(), CoreError> {
+pub(crate) fn start_recording() -> Result<(), CoreError> {
     let mut state = RECORDING_STATE
         .lock()
         .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
@@ -98,7 +101,7 @@ pub fn start_recording() -> Result<(), CoreError> {
     Ok(())
 }
 
-pub fn stop_recording() -> Result<AudioData, CoreError> {
+pub(crate) fn stop_recording() -> Result<AudioData, CoreError> {
     let mut state = RECORDING_STATE
         .lock()
         .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
@@ -132,7 +135,7 @@ pub fn stop_recording() -> Result<AudioData, CoreError> {
         captured = resample_linear(&captured, state.sample_rate, WHISPER_SAMPLE_RATE);
     }
 
-    let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE)?;
+    let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE);
     let bytes = flac_bytes_from_samples(&enhanced)?;
 
     Ok(AudioData {
@@ -142,10 +145,7 @@ pub fn stop_recording() -> Result<AudioData, CoreError> {
 }
 
 fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let mut buffer = match samples.lock() {
-        Ok(buffer) => buffer,
-        Err(_) => return,
-    };
+    let Ok(mut buffer) = samples.lock() else { return };
 
     if channels == 1 {
         buffer.extend_from_slice(data);
@@ -163,14 +163,11 @@ fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
 }
 
 fn capture_i16(data: &[i16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let mut buffer = match samples.lock() {
-        Ok(buffer) => buffer,
-        Err(_) => return,
-    };
+    let Ok(mut buffer) = samples.lock() else { return };
 
-    let scale = i16::MAX as f32;
+    let scale = f32::from(i16::MAX);
     if channels == 1 {
-        buffer.extend(data.iter().map(|s| *s as f32 / scale));
+        buffer.extend(data.iter().map(|s| f32::from(*s) / scale));
         return;
     }
 
@@ -178,21 +175,18 @@ fn capture_i16(data: &[i16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
     for frame in data.chunks(channels) {
         let mut sum = 0.0f32;
         for sample in frame {
-            sum += *sample as f32 / scale;
+            sum += f32::from(*sample) / scale;
         }
         buffer.push(sum / channels as f32);
     }
 }
 
 fn capture_u16(data: &[u16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let mut buffer = match samples.lock() {
-        Ok(buffer) => buffer,
-        Err(_) => return,
-    };
+    let Ok(mut buffer) = samples.lock() else { return };
 
-    let scale = u16::MAX as f32;
+    let scale = f32::from(u16::MAX);
     if channels == 1 {
-        buffer.extend(data.iter().map(|s| (*s as f32 / scale) * 2.0 - 1.0));
+        buffer.extend(data.iter().map(|s| (f32::from(*s) / scale) * 2.0 - 1.0));
         return;
     }
 
@@ -200,7 +194,7 @@ fn capture_u16(data: &[u16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
     for frame in data.chunks(channels) {
         let mut sum = 0.0f32;
         for sample in frame {
-            sum += (*sample as f32 / scale) * 2.0 - 1.0;
+            sum += (f32::from(*sample) / scale) * 2.0 - 1.0;
         }
         buffer.push(sum / channels as f32);
     }
@@ -211,7 +205,7 @@ fn resample_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
         return input.to_vec();
     }
 
-    let ratio = src_rate as f64 / dst_rate as f64;
+    let ratio = f64::from(src_rate) / f64::from(dst_rate);
     let output_len = ((input.len() as f64) / ratio).floor() as usize;
 
     let mut output = Vec::with_capacity(output_len.max(1));
@@ -231,9 +225,9 @@ fn resample_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
 ///
 /// Applies minimal processing to improve recognition while avoiding
 /// unnecessary gain staging that amplifies noise.
-fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreError> {
+fn enhance_audio(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     if samples.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
 
     let mut output = samples.to_vec();
@@ -262,14 +256,14 @@ fn enhance_audio(samples: &[f32], sample_rate: u32) -> Result<Vec<f32>, CoreErro
         }
     }
 
-    Ok(output)
+    output
 }
 
 /// Stop recording and return audio encoded as WAV (for CLI testing).
 ///
 /// This preserves the original WAV format for compatibility with
 /// existing diagnostic tools and external audio processing.
-pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
+pub(crate) fn stop_recording_wav() -> Result<AudioData, CoreError> {
     let mut state = RECORDING_STATE
         .lock()
         .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
@@ -300,7 +294,7 @@ pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
         captured = resample_linear(&captured, state.sample_rate, WHISPER_SAMPLE_RATE);
     }
 
-    let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE)?;
+    let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE);
     let bytes = wav_bytes_from_samples(&enhanced)?;
 
     Ok(AudioData {
@@ -324,7 +318,8 @@ fn wav_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
         let mut writer = hound::WavWriter::new(&mut cursor, spec)
             .map_err(|e| CoreError::AudioProcessing(e.to_string()))?;
         for sample in samples {
-            let scaled = (sample * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+            let scaled = (sample * f32::from(i16::MAX))
+                .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
             writer
                 .write_sample(scaled)
                 .map_err(|e| CoreError::AudioProcessing(e.to_string()))?;
@@ -348,7 +343,9 @@ fn flac_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
     // Convert f32 samples to i32 as expected by FLAC
     let i32_samples: Vec<i32> = samples
         .iter()
-        .map(|s| (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i32)
+        .map(|s| {
+            (s * f32::from(i16::MAX)).clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i32
+        })
         .collect();
 
     // Create encoder config (uses default compression level)
@@ -431,14 +428,14 @@ mod tests {
     #[test]
     fn enhance_audio_empty_input_returns_empty() {
         let input: Vec<f32> = vec![];
-        let result = enhance_audio(&input, 16000).unwrap();
+        let result = enhance_audio(&input, 16000);
         assert!(result.is_empty());
     }
 
     #[test]
     fn enhance_audio_preserves_sample_count() {
         let input = vec![0.1, -0.1, 0.2, -0.2, 0.3];
-        let result = enhance_audio(&input, 16000).unwrap();
+        let result = enhance_audio(&input, 16000);
         assert_eq!(result.len(), input.len());
     }
 
@@ -446,7 +443,7 @@ mod tests {
     fn enhance_audio_applies_rms_normalization() {
         // Very quiet signal should be amplified
         let input = vec![0.001, -0.001, 0.001, -0.001];
-        let result = enhance_audio(&input, 16000).unwrap();
+        let result = enhance_audio(&input, 16000);
         // The RMS should be higher in the output
         let input_rms: f32 = (input.iter().map(|s| s * s).sum::<f32>() / input.len() as f32).sqrt();
         let output_rms: f32 =

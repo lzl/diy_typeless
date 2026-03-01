@@ -1,3 +1,5 @@
+//! Command-line interface for local recording, transcription, and polishing.
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use diy_typeless_core::{start_recording, stop_recording};
@@ -227,7 +229,7 @@ fn cmd_full(
     let output_dir = resolve_output_dir(output_dir)?;
     fs::create_dir_all(&output_dir)?;
 
-    let raw_text = run_groq_full(&output_dir, duration_seconds, groq_key, language.clone())?;
+    let raw_text = run_groq_full(&output_dir, duration_seconds, groq_key, language)?;
 
     println!("Polishing...");
     use secrecy::ExposeSecret;

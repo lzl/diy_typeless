@@ -492,13 +492,28 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 }
 
 
+/**
+ * Captured audio payload and metadata.
+ */
 public struct AudioData: Equatable, Hashable {
+    /**
+     * Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
+     */
     public var bytes: Data
+    /**
+     * Approximate capture duration in seconds before post-processing.
+     */
     public var durationSeconds: Float
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(bytes: Data, durationSeconds: Float) {
+    public init(
+        /**
+         * Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
+         */bytes: Data, 
+        /**
+         * Approximate capture duration in seconds before post-processing.
+         */durationSeconds: Float) {
         self.bytes = bytes
         self.durationSeconds = durationSeconds
     }
@@ -600,26 +615,62 @@ public func FfiConverterTypePipelineResult_lower(_ value: PipelineResult) -> Rus
 }
 
 
+/**
+ * Unified error type returned by core operations.
+ */
 public enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
     
+    /**
+     * No default input audio device is available.
+     */
     case AudioDeviceUnavailable
+    /**
+     * Recording was started while another capture session is active.
+     */
     case RecordingAlreadyActive
+    /**
+     * Recording was stopped without an active capture session.
+     */
     case RecordingNotActive
+    /**
+     * Audio capture failed.
+     */
     case AudioCapture(String
     )
+    /**
+     * Audio processing failed.
+     */
     case AudioProcessing(String
     )
+    /**
+     * HTTP transport failed.
+     */
     case Http(String
     )
+    /**
+     * Remote API returned a non-success response.
+     */
     case Api(String
     )
+    /**
+     * Serialization or deserialization failed.
+     */
     case Serialization(String
     )
+    /**
+     * API returned no usable content.
+     */
     case EmptyResponse
+    /**
+     * Transcription operation failed.
+     */
     case Transcription(String
     )
+    /**
+     * Configuration is invalid or missing.
+     */
     case Config(String
     )
 
@@ -804,6 +855,9 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         }
     }
 }
+/**
+ * Polish raw transcript text with Gemini API.
+ */
 public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
@@ -816,6 +870,7 @@ public func polishText(apiKey: String, rawText: String, context: String?)throws 
 /**
  * Process text with LLM (Gemini API)
  * Generic function for processing text with custom prompts
+ * Process arbitrary text with Gemini API and optional system instruction.
  */
 public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
@@ -827,11 +882,21 @@ public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction
     )
 })
 }
+/**
+ * Start microphone capture.
+ *
+ * Returns an error if input audio device is unavailable or recording is already active.
+ */
 public func startRecording()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_start_recording($0
     )
 }
 }
+/**
+ * Stop microphone capture and return FLAC-encoded audio.
+ *
+ * The returned payload is optimized for transcription upload.
+ */
 public func stopRecording()throws  -> AudioData  {
     return try  FfiConverterTypeAudioData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_stop_recording($0
@@ -847,6 +912,9 @@ public func stopRecordingWav()throws  -> AudioData  {
     )
 })
 }
+/**
+ * Transcribe encoded audio bytes with Groq Whisper API.
+ */
 public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes(
@@ -866,6 +934,7 @@ public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: Str
  * - The connection pool has a 300-second idle timeout
  * - For long recording sessions, consider re-warming before polish
  * - This should be called immediately before or at the start of recording
+ * Warm up TLS connection to Gemini API.
  */
 public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_warmup_gemini_connection($0
@@ -882,6 +951,7 @@ public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverter
  * - The connection pool has a 300-second idle timeout
  * - For recordings longer than ~4 minutes, the connection may need re-warming
  * - This should be called immediately before or at the start of recording
+ * Warm up TLS connection to Groq API.
  */
 public func warmupGroqConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_warmup_groq_connection($0
@@ -904,28 +974,28 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 61953) {
+    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 45710) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 4986) {
+    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 56597) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_start_recording() != 26527) {
+    if (uniffi_diy_typeless_core_checksum_func_start_recording() != 20492) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 2506) {
+    if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 22176) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 49562) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 53312) {
+    if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 3876) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 49104) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 13024) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 15722) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 35656) {
         return InitializationResult.apiChecksumMismatch
     }
 
