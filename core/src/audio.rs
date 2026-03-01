@@ -8,7 +8,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 #[must_use]
 /// Captured audio payload and metadata.
 pub struct AudioData {
-    /// Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
+    /// Encoded audio bytes in FLAC format.
     pub bytes: Vec<u8>,
     /// Approximate capture duration in seconds before post-processing.
     pub duration_seconds: f32,
@@ -145,7 +145,9 @@ pub(crate) fn stop_recording() -> Result<AudioData, CoreError> {
 }
 
 fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let Ok(mut buffer) = samples.lock() else { return };
+    let Ok(mut buffer) = samples.lock() else {
+        return;
+    };
 
     if channels == 1 {
         buffer.extend_from_slice(data);
@@ -163,7 +165,9 @@ fn capture_f32(data: &[f32], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
 }
 
 fn capture_i16(data: &[i16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let Ok(mut buffer) = samples.lock() else { return };
+    let Ok(mut buffer) = samples.lock() else {
+        return;
+    };
 
     let scale = f32::from(i16::MAX);
     if channels == 1 {
@@ -182,7 +186,9 @@ fn capture_i16(data: &[i16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
 }
 
 fn capture_u16(data: &[u16], channels: u16, samples: &Arc<Mutex<Vec<f32>>>) {
-    let Ok(mut buffer) = samples.lock() else { return };
+    let Ok(mut buffer) = samples.lock() else {
+        return;
+    };
 
     let scale = f32::from(u16::MAX);
     if channels == 1 {
@@ -259,83 +265,10 @@ fn enhance_audio(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     output
 }
 
-/// Stop recording and return audio encoded as WAV (for CLI testing).
-///
-/// This preserves the original WAV format for compatibility with
-/// existing diagnostic tools and external audio processing.
-pub(crate) fn stop_recording_wav() -> Result<AudioData, CoreError> {
-    let mut state = RECORDING_STATE
-        .lock()
-        .map_err(|_| CoreError::AudioCapture("Recording lock poisoned".to_string()))?;
-
-    if !state.is_recording {
-        return Err(CoreError::RecordingNotActive);
-    }
-
-    state.is_recording = false;
-    if let Some(stream) = state.stream.take() {
-        drop(stream);
-    }
-
-    let samples = state
-        .samples
-        .lock()
-        .map_err(|_| CoreError::AudioCapture("Sample lock poisoned".to_string()))?;
-    if samples.is_empty() {
-        return Err(CoreError::AudioCapture("No audio captured".to_string()));
-    }
-
-    let mut captured = samples.clone();
-    drop(samples);
-
-    let duration_seconds = captured.len() as f32 / state.sample_rate as f32;
-
-    if state.sample_rate != WHISPER_SAMPLE_RATE {
-        captured = resample_linear(&captured, state.sample_rate, WHISPER_SAMPLE_RATE);
-    }
-
-    let enhanced = enhance_audio(&captured, WHISPER_SAMPLE_RATE);
-    let bytes = wav_bytes_from_samples(&enhanced)?;
-
-    Ok(AudioData {
-        bytes,
-        duration_seconds,
-    })
-}
-
-fn wav_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
-    use std::io::Cursor;
-
-    let spec = hound::WavSpec {
-        channels: WHISPER_CHANNELS,
-        sample_rate: WHISPER_SAMPLE_RATE,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-
-    let mut cursor = Cursor::new(Vec::new());
-    {
-        let mut writer = hound::WavWriter::new(&mut cursor, spec)
-            .map_err(|e| CoreError::AudioProcessing(e.to_string()))?;
-        for sample in samples {
-            let scaled = (sample * f32::from(i16::MAX))
-                .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
-            writer
-                .write_sample(scaled)
-                .map_err(|e| CoreError::AudioProcessing(e.to_string()))?;
-        }
-        writer
-            .finalize()
-            .map_err(|e| CoreError::AudioProcessing(e.to_string()))?;
-    }
-
-    Ok(cursor.into_inner())
-}
-
 /// Encode audio samples to FLAC format for efficient upload.
 ///
 /// FLAC provides ~50-70% compression ratio for speech audio,
-/// significantly reducing upload time compared to uncompressed WAV.
+/// significantly reducing upload time for upstream transcription requests.
 fn flac_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
     use flacenc::bitsink::ByteSink;
     use flacenc::component::BitRepr;
@@ -343,9 +276,7 @@ fn flac_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
     // Convert f32 samples to i32 as expected by FLAC
     let i32_samples: Vec<i32> = samples
         .iter()
-        .map(|s| {
-            (s * f32::from(i16::MAX)).clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i32
-        })
+        .map(|s| (s * f32::from(i16::MAX)).clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i32)
         .collect();
 
     // Create encoder config (uses default compression level)
@@ -360,12 +291,8 @@ fn flac_bytes_from_samples(samples: &[f32]) -> Result<Vec<u8>, CoreError> {
     );
 
     // Encode to FLAC
-    let flac_stream = flacenc::encode_with_fixed_block_size(
-        &config,
-        source,
-        config.block_sizes[0],
-    )
-    .map_err(|e| CoreError::AudioProcessing(format!("FLAC encoding error: {:?}", e)))?;
+    let flac_stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_sizes[0])
+        .map_err(|e| CoreError::AudioProcessing(format!("FLAC encoding error: {:?}", e)))?;
 
     // Write to byte sink
     let mut sink = ByteSink::new();

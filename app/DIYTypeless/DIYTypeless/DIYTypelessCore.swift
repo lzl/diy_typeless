@@ -497,7 +497,7 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  */
 public struct AudioData: Equatable, Hashable {
     /**
-     * Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
+     * Encoded audio bytes in FLAC format.
      */
     public var bytes: Data
     /**
@@ -509,7 +509,7 @@ public struct AudioData: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * Encoded audio bytes (FLAC for `stop_recording`, WAV for `stop_recording_wav`).
+         * Encoded audio bytes in FLAC format.
          */bytes: Data, 
         /**
          * Approximate capture duration in seconds before post-processing.
@@ -904,15 +904,6 @@ public func stopRecording()throws  -> AudioData  {
 })
 }
 /**
- * Stop recording and return WAV format (for CLI compatibility)
- */
-public func stopRecordingWav()throws  -> AudioData  {
-    return try  FfiConverterTypeAudioData_lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_stop_recording_wav($0
-    )
-})
-}
-/**
  * Transcribe encoded audio bytes with Groq Whisper API.
  */
 public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: String?)throws  -> String  {
@@ -984,9 +975,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_stop_recording() != 22176) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_diy_typeless_core_checksum_func_stop_recording_wav() != 49562) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 3876) {

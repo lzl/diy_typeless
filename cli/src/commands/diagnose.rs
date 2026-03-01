@@ -1,17 +1,16 @@
 //! Diagnostic commands for CLI
 
 use anyhow::{anyhow, Context, Result};
-use diy_typeless_core::{start_recording, stop_recording_wav};
+use diy_typeless_core::{start_recording, stop_recording};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use crate::commands::utils::{
-    format_duration, print_binary_status, print_key_status, resolve_gemini_key, resolve_groq_key,
-    resolve_output_dir, timestamp,
+    ensure_flac_bytes, format_duration, print_binary_status, print_key_status, resolve_gemini_key,
+    resolve_groq_key, resolve_output_dir, timestamp,
 };
-use crate::commands::wav::inspect_wav_bytes;
 
 /// Run environment diagnostics
 pub(crate) fn run_diagnose_env() -> Result<()> {
@@ -48,7 +47,7 @@ pub(crate) fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>)
         None => {
             let output_dir = resolve_output_dir(None)?;
             fs::create_dir_all(&output_dir)?;
-            output_dir.join(format!("diag_recording_{}.wav", timestamp()))
+            output_dir.join(format!("diag_recording_{}.flac", timestamp()))
         }
     };
 
@@ -62,27 +61,15 @@ pub(crate) fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>)
     let start = Instant::now();
     start_recording().context("Failed to start recording")?;
     sleep(Duration::from_secs(duration_seconds));
-    let wav_data = stop_recording_wav().context("Failed to stop recording")?;
+    let audio_data = stop_recording().context("Failed to stop recording")?;
     let elapsed = start.elapsed();
 
-    fs::write(&output_path, &wav_data.bytes)
+    fs::write(&output_path, &audio_data.bytes)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
-
-    let metrics = inspect_wav_bytes(&wav_data.bytes)?;
     println!("- capture wall time: {}", format_duration(elapsed));
-    println!(
-        "- reported duration: {:.2}s | analyzed duration: {:.2}s",
-        wav_data.duration_seconds, metrics.duration_seconds
-    );
-    println!(
-        "- WAV spec: {} Hz, {} channel(s), {} bit",
-        metrics.sample_rate, metrics.channels, metrics.bits_per_sample
-    );
-    println!(
-        "- levels: RMS {:.1} dBFS, peak {:.1} dBFS",
-        metrics.rms_dbfs, metrics.peak_dbfs
-    );
-    println!("- samples: {}", metrics.sample_count);
+    println!("- reported duration: {:.2}s", audio_data.duration_seconds);
+    println!("- format: FLAC (header verified)");
+    println!("- bytes: {}", audio_data.bytes.len());
     println!("- output: {}", output_path.display());
 
     Ok(())
@@ -99,9 +86,8 @@ pub(crate) fn run_diagnose_pipeline(
     transcribe_only: bool,
     context: Option<String>,
 ) -> Result<()> {
-    let wav_bytes = fs::read(&file).context("Failed to read WAV file")?;
-    let metrics = inspect_wav_bytes(&wav_bytes)
-        .with_context(|| format!("Failed to parse WAV: {}", file.display()))?;
+    let audio_bytes = fs::read(&file).context("Failed to read audio file")?;
+    ensure_flac_bytes(&audio_bytes, &file)?;
 
     let output_dir = resolve_output_dir(output_dir)?;
     fs::create_dir_all(&output_dir)?;
@@ -111,10 +97,8 @@ pub(crate) fn run_diagnose_pipeline(
 
     println!("CLI diagnostics (pipeline)");
     println!("- input: {}", file.display());
-    println!(
-        "- WAV spec: {} Hz, {} channel(s), {} bit, {:.2}s",
-        metrics.sample_rate, metrics.channels, metrics.bits_per_sample, metrics.duration_seconds
-    );
+    println!("- format: FLAC (header verified)");
+    println!("- bytes: {}", audio_bytes.len());
 
     let groq_key = resolve_groq_key(groq_key)?;
     let transcribe_start = Instant::now();
@@ -122,7 +106,7 @@ pub(crate) fn run_diagnose_pipeline(
     use secrecy::ExposeSecret;
     let raw_text = diy_typeless_core::transcribe_audio_bytes(
         groq_key.expose_secret().to_string(),
-        wav_bytes,
+        audio_bytes,
         language,
     )
     .context("Transcribe step failed")?;

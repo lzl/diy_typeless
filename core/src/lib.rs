@@ -33,12 +33,6 @@ pub fn stop_recording() -> Result<AudioData, CoreError> {
     audio::stop_recording()
 }
 
-/// Stop recording and return WAV format (for CLI compatibility)
-#[uniffi::export]
-pub fn stop_recording_wav() -> Result<AudioData, CoreError> {
-    audio::stop_recording_wav()
-}
-
 #[uniffi::export]
 /// Transcribe encoded audio bytes with Groq Whisper API.
 pub fn transcribe_audio_bytes(
@@ -46,7 +40,11 @@ pub fn transcribe_audio_bytes(
     audio_bytes: Vec<u8>,
     language: Option<String>,
 ) -> Result<String, CoreError> {
-    transcribe::transcribe_audio_bytes(&SecretString::from(api_key), &audio_bytes, language.as_deref())
+    transcribe::transcribe_audio_bytes(
+        &SecretString::from(api_key),
+        &audio_bytes,
+        language.as_deref(),
+    )
 }
 
 #[uniffi::export]
