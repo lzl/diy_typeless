@@ -154,7 +154,7 @@ pub(crate) fn print_binary_status(binary: &str) {
 mod tests {
     use super::{
         default_output_dir, ensure_flac_bytes, find_binary_in_path, format_duration, mask_secret,
-        resolve_api_key_value, resolve_output_dir,
+        resolve_api_key_value, resolve_gemini_key, resolve_groq_key, resolve_output_dir,
     };
     use secrecy::ExposeSecret;
     use std::ffi::OsString;
@@ -166,6 +166,7 @@ mod tests {
 
     static PATH_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
     static HOME_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    static API_KEY_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     struct PathEnvGuard {
         original: Option<OsString>,
@@ -216,6 +217,49 @@ mod tests {
         HomeEnvGuard {
             original_home,
             original_user_profile,
+        }
+    }
+
+    struct ApiKeyEnvGuard {
+        original_groq: Option<OsString>,
+        original_gemini: Option<OsString>,
+    }
+
+    impl Drop for ApiKeyEnvGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.original_groq {
+                std::env::set_var("GROQ_API_KEY", value);
+            } else {
+                std::env::remove_var("GROQ_API_KEY");
+            }
+
+            if let Some(value) = &self.original_gemini {
+                std::env::set_var("GEMINI_API_KEY", value);
+            } else {
+                std::env::remove_var("GEMINI_API_KEY");
+            }
+        }
+    }
+
+    fn set_api_keys_for_test(groq: Option<&str>, gemini: Option<&str>) -> ApiKeyEnvGuard {
+        let original_groq = std::env::var_os("GROQ_API_KEY");
+        let original_gemini = std::env::var_os("GEMINI_API_KEY");
+
+        if let Some(value) = groq {
+            std::env::set_var("GROQ_API_KEY", value);
+        } else {
+            std::env::remove_var("GROQ_API_KEY");
+        }
+
+        if let Some(value) = gemini {
+            std::env::set_var("GEMINI_API_KEY", value);
+        } else {
+            std::env::remove_var("GEMINI_API_KEY");
+        }
+
+        ApiKeyEnvGuard {
+            original_groq,
+            original_gemini,
         }
     }
 
@@ -424,5 +468,39 @@ mod tests {
             result.expect_err("empty env key should fail").to_string(),
             "GROQ_API_KEY is set but empty"
         );
+    }
+
+    #[test]
+    fn resolve_groq_key_should_read_groq_env_variable() {
+        let _lock = API_KEY_TEST_LOCK
+            .lock()
+            .expect("api key test lock should be acquired");
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+
+        let key = resolve_groq_key(None).expect("groq env key should resolve");
+        assert_eq!(key.expose_secret(), "groq-env");
+    }
+
+    #[test]
+    fn resolve_gemini_key_should_read_gemini_env_variable() {
+        let _lock = API_KEY_TEST_LOCK
+            .lock()
+            .expect("api key test lock should be acquired");
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+
+        let key = resolve_gemini_key(None).expect("gemini env key should resolve");
+        assert_eq!(key.expose_secret(), "gemini-env");
+    }
+
+    #[test]
+    fn resolve_groq_key_should_prefer_provided_value_over_env() {
+        let _lock = API_KEY_TEST_LOCK
+            .lock()
+            .expect("api key test lock should be acquired");
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+
+        let key = resolve_groq_key(Some("provided-groq".to_string()))
+            .expect("provided groq key should resolve");
+        assert_eq!(key.expose_secret(), "provided-groq");
     }
 }
