@@ -6,6 +6,9 @@ use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
+const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const POLISH_MAX_RETRY_ATTEMPTS: u32 = 3;
+
 #[derive(Deserialize)]
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
@@ -24,6 +27,63 @@ struct GeminiContent {
 #[derive(Deserialize)]
 struct GeminiPart {
     text: Option<String>,
+}
+
+fn build_polish_request_body(prompt: &str) -> serde_json::Value {
+    serde_json::json!({
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ]
+    })
+}
+
+fn extract_gemini_text(payload: GeminiResponse) -> HttpResult<String> {
+    let text = payload
+        .candidates
+        .first()
+        .and_then(|c| c.content.parts.first())
+        .and_then(|p| p.text.clone());
+
+    match text {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string())
+            } else {
+                HttpResult::Success(trimmed.to_string())
+            }
+        }
+        None => HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string()),
+    }
+}
+
+fn classify_gemini_status(status: StatusCode) -> HttpResult<()> {
+    if status == StatusCode::OK {
+        HttpResult::Success(())
+    } else if is_retryable_status(status) {
+        HttpResult::Retryable
+    } else {
+        HttpResult::NonRetryable(format!("Gemini API error: HTTP {status}"))
+    }
+}
+
+fn map_gemini_error(msg: String) -> CoreError {
+    if msg == EMPTY_RESPONSE_MESSAGE {
+        CoreError::EmptyResponse
+    } else if msg.starts_with("Gemini API error") {
+        CoreError::Api(msg)
+    } else {
+        CoreError::Http(msg)
+    }
+}
+
+fn run_polish_with_retry(
+    operation: impl FnMut() -> HttpResult<String>,
+) -> Result<String, CoreError> {
+    with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
 }
 
 /// Build the context section for the polishing prompt.
@@ -65,159 +125,234 @@ pub(crate) fn polish_text(
     let client = get_http_client();
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 
-    let result = with_retry(
-        3,
-        || {
-            let body = serde_json::json!({
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": prompt}],
-                    }
-                ]
-            });
+    run_polish_with_retry(|| {
+        let body = build_polish_request_body(&prompt);
 
-            let response = client
-                .post(&url)
-                .header("x-goog-api-key", api_key.expose_secret())
-                .json(&body)
-                .send();
+        let response = client
+            .post(&url)
+            .header("x-goog-api-key", api_key.expose_secret())
+            .json(&body)
+            .send();
 
-            match response {
-                Ok(resp) if resp.status() == StatusCode::OK => {
-                    match resp.json::<GeminiResponse>() {
-                        Ok(payload) => {
-                            let text = payload
-                                .candidates
-                                .first()
-                                .and_then(|c| c.content.parts.first())
-                                .and_then(|p| p.text.clone());
-
-                            match text {
-                                Some(t) => {
-                                    let trimmed = t.trim();
-                                    if trimmed.is_empty() {
-                                        HttpResult::NonRetryable("Empty response".to_string())
-                                    } else {
-                                        HttpResult::Success(trimmed.to_string())
-                                    }
-                                }
-                                None => HttpResult::NonRetryable("Empty response".to_string()),
-                            }
-                        }
-                        Err(e) => HttpResult::NonRetryable(e.to_string()),
-                    }
-                }
-                Ok(resp) if is_retryable_status(resp.status()) => HttpResult::Retryable,
-                Ok(resp) => HttpResult::NonRetryable(format!(
-                    "Gemini API error: HTTP {}",
-                    resp.status()
-                )),
-                Err(_) => HttpResult::Retryable,
-            }
-        },
-        "Gemini API",
-    );
-
-    match result {
-        Ok(text) => Ok(text),
-        Err(msg) => {
-            if msg == "Empty response" {
-                Err(CoreError::EmptyResponse)
-            } else if msg.starts_with("Gemini API error") {
-                Err(CoreError::Api(msg))
-            } else {
-                Err(CoreError::Http(msg))
-            }
+        match response {
+            Ok(resp) => match classify_gemini_status(resp.status()) {
+                HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
+                    Ok(payload) => extract_gemini_text(payload),
+                    Err(e) => HttpResult::NonRetryable(e.to_string()),
+                },
+                HttpResult::Retryable => HttpResult::Retryable,
+                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+            },
+            Err(_) => HttpResult::Retryable,
         }
-    }
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_context_section, build_prompt};
+    use super::{
+        build_context_section, build_polish_request_body, build_prompt, classify_gemini_status,
+        extract_gemini_text, map_gemini_error, run_polish_with_retry, GeminiResponse,
+    };
+    use crate::error::CoreError;
+    use crate::retry::HttpResult;
+    use reqwest::StatusCode;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
-    fn build_context_section_should_include_guidelines_when_context_provided() {
-        let context = Some("email");
+    fn build_context_section_should_include_one_context_block_when_context_provided() {
+        let context = Some("email and calendar invite");
         let formatted = build_context_section(context);
-        assert!(formatted.contains("email"));
-        assert!(formatted.contains("Context about where this text will be used"));
+        let marker = "Context about where this text will be used:";
+        assert!(formatted.contains(marker));
+        assert_eq!(formatted.matches(marker).count(), 1);
+        assert!(formatted.contains("email and calendar invite"));
         assert!(formatted.contains("Gmail, Outlook"));
     }
 
     #[test]
-    fn build_context_section_should_return_empty_when_empty_string() {
-        let context: Option<&str> = Some("");
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
+    fn build_context_section_should_be_absent_for_empty_or_missing_context() {
+        let empty = build_context_section(Some(""));
+        let whitespace = build_context_section(Some("   "));
+        let none = build_context_section(None);
+
+        let marker = "Context about where this text will be used:";
+        assert!(empty.is_empty());
+        assert!(whitespace.is_empty());
+        assert!(none.is_empty());
+        assert!(!empty.contains(marker));
+        assert!(!whitespace.contains(marker));
+        assert!(!none.contains(marker));
     }
 
     #[test]
-    fn build_context_section_should_return_empty_when_whitespace_only() {
-        let context: Option<&str> = Some("   ");
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
-    }
-
-    #[test]
-    fn build_context_section_should_return_empty_when_none() {
-        let context: Option<&str> = None;
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
-    }
-
-    #[test]
-    fn build_prompt_should_contain_all_rules() {
+    fn build_prompt_should_include_rules_section_once_and_before_transcript() {
         let raw_text = "Hello world";
         let prompt = build_prompt(raw_text, None);
 
-        assert!(prompt.contains("You are a professional text editor"));
-        assert!(prompt.contains("Rules:"));
-        assert!(prompt.contains("Keep the SAME language"));
-        assert!(prompt.contains("Original transcript:"));
-        assert!(prompt.contains("Hello world"));
-        assert!(prompt.contains("Output the polished text directly"));
+        let rules_marker = "\n\nRules:\n";
+        let transcript_marker = "\nOriginal transcript:\n";
+        let rules_pos = prompt
+            .find(rules_marker)
+            .expect("Rules section should exist");
+        let transcript_pos = prompt
+            .find(transcript_marker)
+            .expect("Transcript section should exist");
+
+        assert_eq!(prompt.matches(rules_marker).count(), 1);
+        assert_eq!(prompt.matches(transcript_marker).count(), 1);
+        assert!(rules_pos < transcript_pos);
     }
 
     #[test]
-    fn build_prompt_should_include_context_when_provided() {
-        let raw_text = "Meeting notes";
-        let context = Some("email");
-        let prompt = build_prompt(raw_text, context);
+    fn build_prompt_should_embed_transcript_verbatim() {
+        let raw_text = "Line one.\nLine two has  spaces.\n\nFinal line.";
+        let prompt = build_prompt(raw_text, None);
+        let transcript_block = format!("\nOriginal transcript:\n{raw_text}\n\nOutput");
 
-        assert!(prompt.contains("Context about where this text will be used"));
+        assert!(prompt.contains(&transcript_block));
+    }
+
+    #[test]
+    fn build_prompt_should_include_context_section_once_when_provided() {
+        let raw_text = "Meeting notes";
+        let prompt = build_prompt(raw_text, Some("email"));
+        let marker = "Context about where this text will be used:";
+
+        assert_eq!(prompt.matches(marker).count(), 1);
         assert!(prompt.contains("email"));
     }
 
     #[test]
-    fn build_prompt_should_preserve_all_substantive_content_instruction() {
-        let raw_text = "The quick brown fox jumps over the lazy dog";
-        let prompt = build_prompt(raw_text, None);
+    fn build_prompt_should_not_include_context_section_when_context_missing() {
+        let prompt_empty = build_prompt("Raw text", Some(""));
+        let prompt_whitespace = build_prompt("Raw text", Some("   "));
+        let prompt_none = build_prompt("Raw text", None);
+        let marker = "Context about where this text will be used:";
 
-        assert!(prompt.contains("Preserve ALL substantive information"));
-        assert!(prompt.contains(raw_text));
+        assert!(!prompt_empty.contains(marker));
+        assert!(!prompt_whitespace.contains(marker));
+        assert!(!prompt_none.contains(marker));
     }
 
     #[test]
-    fn build_prompt_should_include_rules_section_before_transcript() {
-        let raw_text = "Test content";
+    fn build_prompt_should_contain_critical_instructions() {
+        let raw_text = "The quick brown fox jumps over the lazy dog";
         let prompt = build_prompt(raw_text, None);
 
-        let rules_pos = prompt.find("Rules:").expect("Rules section should exist");
-        let transcript_pos = prompt.find("Original transcript:").expect("Transcript section should exist");
+        assert!(prompt.contains("You are a professional text editor"));
+        assert!(prompt.contains("Keep the SAME language"));
+        assert!(prompt.contains("Preserve ALL substantive information"));
+        assert!(prompt.contains("Output ONLY the final polished text"));
+    }
 
+    #[test]
+    fn build_prompt_should_keep_transcript_and_output_boundary_stable() {
+        let raw_text = "Test content";
+        let prompt = build_prompt(raw_text, None);
+        let boundary = "\nOriginal transcript:\nTest content\n\nOutput the polished text directly.";
+
+        assert!(prompt.contains(boundary));
+    }
+
+    #[test]
+    fn build_polish_request_body_should_embed_prompt_as_user_text() {
+        let body = build_polish_request_body("hello");
+        assert_eq!(body["contents"][0]["role"], "user");
+        assert_eq!(body["contents"][0]["parts"][0]["text"], "hello");
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_success_when_payload_contains_text() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": [{"content": {"parts": [{"text": "  polished output  "}]}}]
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::Success(value) if value == "polished output"));
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_empty_response_when_candidates_are_missing() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": []
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_empty_response_when_text_is_blank() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": [{"content": {"parts": [{"text": "   "} ]}}]
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
+    }
+
+    #[test]
+    fn classify_gemini_status_should_retry_on_server_errors() {
+        let result = classify_gemini_status(StatusCode::SERVICE_UNAVAILABLE);
+        assert!(matches!(result, HttpResult::Retryable));
+    }
+
+    #[test]
+    fn classify_gemini_status_should_map_client_error_to_non_retryable() {
+        let result = classify_gemini_status(StatusCode::UNAUTHORIZED);
         assert!(
-            rules_pos < transcript_pos,
-            "Rules should appear before transcript"
+            matches!(result, HttpResult::NonRetryable(msg) if msg == "Gemini API error: HTTP 401 Unauthorized")
         );
     }
 
     #[test]
-    fn test_exponential_backoff_calculation() {
-        // Test that backoff increases exponentially: 2^0, 2^1, 2^2
-        assert_eq!(2u64.pow(0), 1);
-        assert_eq!(2u64.pow(1), 2);
-        assert_eq!(2u64.pow(2), 4);
+    fn map_gemini_error_should_map_empty_response_variant() {
+        let result = map_gemini_error("Empty response".to_string());
+        assert!(matches!(result, CoreError::EmptyResponse));
+    }
+
+    #[test]
+    fn map_gemini_error_should_map_api_variant() {
+        let result = map_gemini_error("Gemini API error: HTTP 403 Forbidden".to_string());
+        assert!(matches!(result, CoreError::Api(_)));
+    }
+
+    #[test]
+    fn map_gemini_error_should_map_http_variant() {
+        let result = map_gemini_error("request timeout".to_string());
+        assert!(matches!(result, CoreError::Http(_)));
+    }
+
+    #[test]
+    fn run_polish_with_retry_should_retry_until_third_attempt_success() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_polish_with_retry(|| {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt < 2 {
+                HttpResult::Retryable
+            } else {
+                HttpResult::Success("ok".to_string())
+            }
+        });
+
+        assert!(matches!(result, Ok(value) if value == "ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn run_polish_with_retry_should_fail_after_retry_budget_exhausted() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_polish_with_retry(|| {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            HttpResult::Retryable
+        });
+
+        assert!(
+            matches!(result, Err(CoreError::Http(message)) if message == "Gemini API: retries exceeded")
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }

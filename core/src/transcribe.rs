@@ -5,128 +5,204 @@ use crate::retry::{is_retryable_status, with_retry, HttpResult};
 use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 
+const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const TRANSCRIBE_MAX_RETRY_ATTEMPTS: u32 = 3;
+
+fn normalize_language(language: Option<&str>) -> Option<String> {
+    language.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
+fn normalize_transcription_text(text: String) -> HttpResult<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string())
+    } else {
+        HttpResult::Success(trimmed.to_string())
+    }
+}
+
+fn classify_transcribe_status(status: StatusCode) -> HttpResult<()> {
+    if status == StatusCode::OK {
+        HttpResult::Success(())
+    } else if is_retryable_status(status) {
+        HttpResult::Retryable
+    } else {
+        HttpResult::NonRetryable(format!("Groq API error: HTTP {status}"))
+    }
+}
+
+fn map_transcribe_error(msg: String) -> CoreError {
+    if msg == EMPTY_RESPONSE_MESSAGE {
+        CoreError::EmptyResponse
+    } else if msg.starts_with("Groq API error") {
+        CoreError::Api(msg)
+    } else {
+        CoreError::Http(msg)
+    }
+}
+
+fn run_transcribe_with_retry(
+    operation: impl FnMut() -> HttpResult<String>,
+) -> Result<String, CoreError> {
+    with_retry(TRANSCRIBE_MAX_RETRY_ATTEMPTS, operation, "Groq API").map_err(map_transcribe_error)
+}
+
 pub(crate) fn transcribe_audio_bytes(
     api_key: &SecretString,
     audio_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
     let client = get_http_client();
+    let normalized_language = normalize_language(language);
 
-    with_retry(
-        3,
-        || {
-            let mut form = reqwest::blocking::multipart::Form::new()
-                .text("model", GROQ_WHISPER_MODEL)
-                .text("response_format", "text");
+    run_transcribe_with_retry(|| {
+        let mut form = reqwest::blocking::multipart::Form::new()
+            .text("model", GROQ_WHISPER_MODEL)
+            .text("response_format", "text");
 
-            if let Some(language) = language {
-                if !language.trim().is_empty() {
-                    form = form.text("language", language.trim().to_string());
-                }
-            }
+        if let Some(language) = normalized_language.as_deref() {
+            form = form.text("language", language.to_string());
+        }
 
-            // Audio bytes are FLAC format (compressed, ~50-70% smaller)
-            let part = match reqwest::blocking::multipart::Part::bytes(audio_bytes.to_vec())
-                .file_name("audio.flac")
-                .mime_str("audio/flac")
-            {
-                Ok(p) => p,
-                Err(e) => return HttpResult::NonRetryable(e.to_string()),
-            };
+        // Audio bytes are FLAC format (compressed, ~50-70% smaller)
+        let part = match reqwest::blocking::multipart::Part::bytes(audio_bytes.to_vec())
+            .file_name("audio.flac")
+            .mime_str("audio/flac")
+        {
+            Ok(p) => p,
+            Err(e) => return HttpResult::NonRetryable(e.to_string()),
+        };
 
-            form = form.part("file", part);
+        form = form.part("file", part);
 
-            let response = client
-                .post(GROQ_TRANSCRIBE_URL)
-                .bearer_auth(api_key.expose_secret())
-                .multipart(form)
-                .send();
+        let response = client
+            .post(GROQ_TRANSCRIBE_URL)
+            .bearer_auth(api_key.expose_secret())
+            .multipart(form)
+            .send();
 
-            match response {
-                Ok(resp) if resp.status() == StatusCode::OK => {
-                    match resp.text() {
-                        Ok(text) => {
-                            let trimmed = text.trim();
-                            if trimmed.is_empty() {
-                                HttpResult::NonRetryable("Empty response".to_string())
-                            } else {
-                                HttpResult::Success(trimmed.to_string())
-                            }
-                        }
-                        Err(e) => HttpResult::NonRetryable(e.to_string()),
-                    }
-                }
-                Ok(resp) if is_retryable_status(resp.status()) => HttpResult::Retryable,
-                Ok(resp) => HttpResult::NonRetryable(format!(
-                    "Groq API error: HTTP {}",
-                    resp.status()
-                )),
-                Err(_) => HttpResult::Retryable,
-            }
-        },
-        "Groq API",
-    )
-    .map_err(|msg| {
-        if msg.contains("Empty response") {
-            CoreError::EmptyResponse
-        } else if msg.starts_with("Groq API error") {
-            CoreError::Api(msg)
-        } else {
-            CoreError::Http(msg)
+        match response {
+            Ok(resp) => match classify_transcribe_status(resp.status()) {
+                HttpResult::Success(()) => match resp.text() {
+                    Ok(text) => normalize_transcription_text(text),
+                    Err(e) => HttpResult::NonRetryable(e.to_string()),
+                },
+                HttpResult::Retryable => HttpResult::Retryable,
+                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+            },
+            Err(_) => HttpResult::Retryable,
         }
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        classify_transcribe_status, map_transcribe_error, normalize_language,
+        normalize_transcription_text, run_transcribe_with_retry,
+    };
+    use crate::error::CoreError;
+    use crate::retry::HttpResult;
+    use reqwest::StatusCode;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
     #[test]
-    fn test_exponential_backoff_calculation() {
-        // Test that backoff increases exponentially: 2^0, 2^1, 2^2
-        assert_eq!(2u64.pow(0), 1);
-        assert_eq!(2u64.pow(1), 2);
-        assert_eq!(2u64.pow(2), 4);
+    fn normalize_language_should_return_none_when_absent() {
+        assert_eq!(normalize_language(None), None);
     }
 
     #[test]
-    fn test_backoff_sequence_for_three_attempts() {
-        // Verify the backoff sequence used in retry logic
-        let expected: Vec<u64> = (0..3).map(|attempt| 2u64.pow(attempt)).collect();
-        assert_eq!(expected, vec![1, 2, 4]);
+    fn normalize_language_should_return_none_when_blank() {
+        assert_eq!(normalize_language(Some("   ")), None);
     }
 
     #[test]
-    fn test_language_parameter_handling_some_with_content() {
-        // Test that Some("en") is handled correctly
-        let lang: Option<&str> = Some("en");
-        assert!(lang.map(|l| !l.trim().is_empty()).unwrap_or(false));
+    fn normalize_language_should_trim_and_preserve_value() {
+        assert_eq!(normalize_language(Some("  en  ")), Some("en".to_string()));
     }
 
     #[test]
-    fn test_language_parameter_handling_some_empty() {
-        // Test that Some("") is treated as empty
-        let lang: Option<&str> = Some("");
-        assert!(!lang.map(|l| !l.trim().is_empty()).unwrap_or(false));
+    fn normalize_transcription_text_should_reject_blank_body() {
+        let result = normalize_transcription_text("   \n\t".to_string());
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
     }
 
     #[test]
-    fn test_language_parameter_handling_some_whitespace() {
-        // Test that Some("   ") is treated as empty after trim
-        let lang: Option<&str> = Some("   ");
-        assert!(!lang.map(|l| !l.trim().is_empty()).unwrap_or(false));
+    fn normalize_transcription_text_should_trim_non_empty_body() {
+        let result = normalize_transcription_text("  hello world  ".to_string());
+        assert!(matches!(result, HttpResult::Success(text) if text == "hello world"));
     }
 
     #[test]
-    fn test_language_parameter_handling_none() {
-        // Test that None is handled correctly
-        let lang: Option<&str> = None;
-        assert!(!lang.map(|l| !l.trim().is_empty()).unwrap_or(false));
+    fn classify_transcribe_status_should_mark_retryable_statuses() {
+        let result = classify_transcribe_status(StatusCode::TOO_MANY_REQUESTS);
+        assert!(matches!(result, HttpResult::Retryable));
     }
 
     #[test]
-    fn test_language_parameter_trimmed_value() {
-        // Test that the trimmed value is what gets used
-        let lang = Some("  fr  ");
-        let trimmed = lang.map(|l| l.trim()).unwrap_or("");
-        assert_eq!(trimmed, "fr");
+    fn classify_transcribe_status_should_retry_on_server_errors() {
+        let result = classify_transcribe_status(StatusCode::SERVICE_UNAVAILABLE);
+        assert!(matches!(result, HttpResult::Retryable));
+    }
+
+    #[test]
+    fn classify_transcribe_status_should_mark_api_errors_as_non_retryable() {
+        let result = classify_transcribe_status(StatusCode::BAD_REQUEST);
+        assert!(
+            matches!(result, HttpResult::NonRetryable(msg) if msg == "Groq API error: HTTP 400 Bad Request")
+        );
+    }
+
+    #[test]
+    fn map_transcribe_error_should_map_empty_response_variant() {
+        let result = map_transcribe_error("Empty response".to_string());
+        assert!(matches!(result, CoreError::EmptyResponse));
+    }
+
+    #[test]
+    fn map_transcribe_error_should_map_api_variant() {
+        let result = map_transcribe_error("Groq API error: HTTP 401 Unauthorized".to_string());
+        assert!(matches!(result, CoreError::Api(_)));
+    }
+
+    #[test]
+    fn map_transcribe_error_should_map_http_variant() {
+        let result = map_transcribe_error("transport failed".to_string());
+        assert!(matches!(result, CoreError::Http(_)));
+    }
+
+    #[test]
+    fn run_transcribe_with_retry_should_retry_until_third_attempt_success() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_transcribe_with_retry(|| {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt < 2 {
+                HttpResult::Retryable
+            } else {
+                HttpResult::Success("ok".to_string())
+            }
+        });
+
+        assert!(matches!(result, Ok(value) if value == "ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn run_transcribe_with_retry_should_fail_after_retry_budget_exhausted() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_transcribe_with_retry(|| {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            HttpResult::Retryable
+        });
+
+        assert!(
+            matches!(result, Err(CoreError::Http(message)) if message == "Groq API: retries exceeded")
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }

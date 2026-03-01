@@ -9,3 +9,30 @@ pub(crate) const GEMINI_API_URL: &str = "https://generativelanguage.googleapis.c
 
 pub(crate) const HIGHPASS_FREQ_HZ: f32 = 80.0;
 pub(crate) const TARGET_RMS_DB: f32 = -18.0;
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        GEMINI_API_URL, GROQ_TRANSCRIBE_URL, HIGHPASS_FREQ_HZ, TARGET_RMS_DB, WHISPER_CHANNELS,
+        WHISPER_SAMPLE_RATE,
+    };
+    use std::hint::black_box;
+
+    #[test]
+    fn whisper_audio_constants_should_be_valid() {
+        assert!(black_box(WHISPER_SAMPLE_RATE) > 0);
+        assert!(black_box(WHISPER_CHANNELS) > 0);
+    }
+
+    #[test]
+    fn api_urls_should_use_https() {
+        assert!(GROQ_TRANSCRIBE_URL.starts_with("https://"));
+        assert!(GEMINI_API_URL.starts_with("https://"));
+    }
+
+    #[test]
+    fn audio_tuning_constants_should_be_in_sane_range() {
+        assert!(black_box(HIGHPASS_FREQ_HZ) > 0.0);
+        assert!(black_box(TARGET_RMS_DB) < 0.0);
+    }
+}
