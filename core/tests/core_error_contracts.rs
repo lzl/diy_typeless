@@ -2,9 +2,7 @@
 //!
 //! These tests intentionally avoid network and audio device side effects.
 
-use diy_typeless_core::{
-    stop_recording, CoreError,
-};
+use diy_typeless_core::{stop_recording, CoreError};
 
 #[test]
 fn core_error_display_messages_are_stable_for_common_variants() {
@@ -15,10 +13,9 @@ fn core_error_display_messages_are_stable_for_common_variants() {
     assert_eq!(not_active.to_string(), "Recording not active");
 
     let api = CoreError::Api("Gemini API error: HTTP 400 Bad Request".to_string());
-    assert!(
-        api.to_string()
-            .contains("API error: Gemini API error: HTTP 400 Bad Request")
-    );
+    assert!(api
+        .to_string()
+        .contains("API error: Gemini API error: HTTP 400 Bad Request"));
 }
 
 #[test]

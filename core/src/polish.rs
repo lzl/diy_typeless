@@ -6,6 +6,8 @@ use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
+const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+
 #[derive(Deserialize)]
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
@@ -24,6 +26,57 @@ struct GeminiContent {
 #[derive(Deserialize)]
 struct GeminiPart {
     text: Option<String>,
+}
+
+fn build_polish_request_body(prompt: &str) -> serde_json::Value {
+    serde_json::json!({
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ]
+    })
+}
+
+fn extract_gemini_text(payload: GeminiResponse) -> HttpResult<String> {
+    let text = payload
+        .candidates
+        .first()
+        .and_then(|c| c.content.parts.first())
+        .and_then(|p| p.text.clone());
+
+    match text {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string())
+            } else {
+                HttpResult::Success(trimmed.to_string())
+            }
+        }
+        None => HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string()),
+    }
+}
+
+fn classify_gemini_status(status: StatusCode) -> HttpResult<()> {
+    if status == StatusCode::OK {
+        HttpResult::Success(())
+    } else if is_retryable_status(status) {
+        HttpResult::Retryable
+    } else {
+        HttpResult::NonRetryable(format!("Gemini API error: HTTP {status}"))
+    }
+}
+
+fn map_gemini_error(msg: String) -> CoreError {
+    if msg == EMPTY_RESPONSE_MESSAGE {
+        CoreError::EmptyResponse
+    } else if msg.starts_with("Gemini API error") {
+        CoreError::Api(msg)
+    } else {
+        CoreError::Http(msg)
+    }
 }
 
 /// Build the context section for the polishing prompt.
@@ -68,14 +121,7 @@ pub(crate) fn polish_text(
     let result = with_retry(
         3,
         || {
-            let body = serde_json::json!({
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": prompt}],
-                    }
-                ]
-            });
+            let body = build_polish_request_body(&prompt);
 
             let response = client
                 .post(&url)
@@ -84,58 +130,32 @@ pub(crate) fn polish_text(
                 .send();
 
             match response {
-                Ok(resp) if resp.status() == StatusCode::OK => {
-                    match resp.json::<GeminiResponse>() {
-                        Ok(payload) => {
-                            let text = payload
-                                .candidates
-                                .first()
-                                .and_then(|c| c.content.parts.first())
-                                .and_then(|p| p.text.clone());
-
-                            match text {
-                                Some(t) => {
-                                    let trimmed = t.trim();
-                                    if trimmed.is_empty() {
-                                        HttpResult::NonRetryable("Empty response".to_string())
-                                    } else {
-                                        HttpResult::Success(trimmed.to_string())
-                                    }
-                                }
-                                None => HttpResult::NonRetryable("Empty response".to_string()),
-                            }
-                        }
+                Ok(resp) => match classify_gemini_status(resp.status()) {
+                    HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
+                        Ok(payload) => extract_gemini_text(payload),
                         Err(e) => HttpResult::NonRetryable(e.to_string()),
-                    }
-                }
-                Ok(resp) if is_retryable_status(resp.status()) => HttpResult::Retryable,
-                Ok(resp) => HttpResult::NonRetryable(format!(
-                    "Gemini API error: HTTP {}",
-                    resp.status()
-                )),
+                    },
+                    HttpResult::Retryable => HttpResult::Retryable,
+                    HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+                },
                 Err(_) => HttpResult::Retryable,
             }
         },
         "Gemini API",
     );
 
-    match result {
-        Ok(text) => Ok(text),
-        Err(msg) => {
-            if msg == "Empty response" {
-                Err(CoreError::EmptyResponse)
-            } else if msg.starts_with("Gemini API error") {
-                Err(CoreError::Api(msg))
-            } else {
-                Err(CoreError::Http(msg))
-            }
-        }
-    }
+    result.map_err(map_gemini_error)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_context_section, build_prompt};
+    use super::{
+        build_context_section, build_polish_request_body, build_prompt, classify_gemini_status,
+        extract_gemini_text, map_gemini_error, GeminiResponse,
+    };
+    use crate::error::CoreError;
+    use crate::retry::HttpResult;
+    use reqwest::StatusCode;
 
     #[test]
     fn build_context_section_should_include_one_context_block_when_context_provided() {
@@ -231,5 +251,74 @@ mod tests {
         let boundary = "\nOriginal transcript:\nTest content\n\nOutput the polished text directly.";
 
         assert!(prompt.contains(boundary));
+    }
+
+    #[test]
+    fn build_polish_request_body_should_embed_prompt_as_user_text() {
+        let body = build_polish_request_body("hello");
+        assert_eq!(body["contents"][0]["role"], "user");
+        assert_eq!(body["contents"][0]["parts"][0]["text"], "hello");
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_success_when_payload_contains_text() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": [{"content": {"parts": [{"text": "  polished output  "}]}}]
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::Success(value) if value == "polished output"));
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_empty_response_when_candidates_are_missing() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": []
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
+    }
+
+    #[test]
+    fn extract_gemini_text_should_return_empty_response_when_text_is_blank() {
+        let payload: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": [{"content": {"parts": [{"text": "   "} ]}}]
+        }))
+        .expect("valid payload");
+        let result = extract_gemini_text(payload);
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
+    }
+
+    #[test]
+    fn classify_gemini_status_should_retry_on_server_errors() {
+        let result = classify_gemini_status(StatusCode::SERVICE_UNAVAILABLE);
+        assert!(matches!(result, HttpResult::Retryable));
+    }
+
+    #[test]
+    fn classify_gemini_status_should_map_client_error_to_non_retryable() {
+        let result = classify_gemini_status(StatusCode::UNAUTHORIZED);
+        assert!(
+            matches!(result, HttpResult::NonRetryable(msg) if msg == "Gemini API error: HTTP 401 Unauthorized")
+        );
+    }
+
+    #[test]
+    fn map_gemini_error_should_map_empty_response_variant() {
+        let result = map_gemini_error("Empty response".to_string());
+        assert!(matches!(result, CoreError::EmptyResponse));
+    }
+
+    #[test]
+    fn map_gemini_error_should_map_api_variant() {
+        let result = map_gemini_error("Gemini API error: HTTP 403 Forbidden".to_string());
+        assert!(matches!(result, CoreError::Api(_)));
+    }
+
+    #[test]
+    fn map_gemini_error_should_map_http_variant() {
+        let result = map_gemini_error("request timeout".to_string());
+        assert!(matches!(result, CoreError::Http(_)));
     }
 }

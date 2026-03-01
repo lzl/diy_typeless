@@ -410,4 +410,66 @@ mod tests {
         assert!((locked[0] - 0.6).abs() < f32::EPSILON);
         assert!((locked[1] - 0.8).abs() < 0.0001);
     }
+
+    #[test]
+    fn capture_i16_mono_scales_to_unit_range() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let data = vec![i16::MIN, 0, i16::MAX];
+        capture_i16(&data, 1, &samples);
+        let locked = samples.lock().expect("buffer lock should succeed");
+        assert_eq!(locked.len(), 3);
+        assert!(locked[0] <= -1.0);
+        assert_eq!(locked[1], 0.0);
+        assert!((locked[2] - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn capture_i16_stereo_averages_channels() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let data = vec![i16::MAX, 0, 0, i16::MAX];
+        capture_i16(&data, 2, &samples);
+        let locked = samples.lock().expect("buffer lock should succeed");
+        assert_eq!(locked.len(), 2);
+        assert!((locked[0] - 0.5).abs() < 0.0001);
+        assert!((locked[1] - 0.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn capture_u16_mono_maps_unsigned_samples_to_signed_range() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let data = vec![0u16, u16::MAX / 2, u16::MAX];
+        capture_u16(&data, 1, &samples);
+        let locked = samples.lock().expect("buffer lock should succeed");
+        assert_eq!(locked.len(), 3);
+        assert!((locked[0] + 1.0).abs() < 0.0001);
+        assert!(locked[1].abs() < 0.001);
+        assert!((locked[2] - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn capture_u16_stereo_averages_channels() {
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let data = vec![0u16, u16::MAX, u16::MAX, 0u16];
+        capture_u16(&data, 2, &samples);
+        let locked = samples.lock().expect("buffer lock should succeed");
+        assert_eq!(locked.len(), 2);
+        assert!(locked[0].abs() < 0.0001);
+        assert!(locked[1].abs() < 0.0001);
+    }
+
+    #[test]
+    fn enhance_audio_zero_signal_should_not_produce_nan() {
+        let input = vec![0.0; 256];
+        let output = enhance_audio(&input, 16000);
+        assert_eq!(output.len(), input.len());
+        assert!(output.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn flac_bytes_from_samples_should_start_with_flac_magic() {
+        let input = vec![0.0f32; 1024];
+        let bytes = flac_bytes_from_samples(&input).expect("flac encoding should succeed");
+        assert!(bytes.len() > 4);
+        assert_eq!(&bytes[0..4], b"fLaC");
+    }
 }

@@ -49,3 +49,71 @@ impl From<serde_json::Error> for CoreError {
         CoreError::Serialization(err.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CoreError;
+
+    #[test]
+    fn core_error_display_messages_should_match_contract() {
+        assert_eq!(
+            CoreError::AudioDeviceUnavailable.to_string(),
+            "Audio device not available"
+        );
+        assert_eq!(
+            CoreError::RecordingAlreadyActive.to_string(),
+            "Recording already active"
+        );
+        assert_eq!(
+            CoreError::RecordingNotActive.to_string(),
+            "Recording not active"
+        );
+        assert_eq!(
+            CoreError::AudioCapture("x".to_string()).to_string(),
+            "Audio capture failed: x"
+        );
+        assert_eq!(
+            CoreError::AudioProcessing("x".to_string()).to_string(),
+            "Audio processing failed: x"
+        );
+        assert_eq!(
+            CoreError::Http("x".to_string()).to_string(),
+            "HTTP error: x"
+        );
+        assert_eq!(CoreError::Api("x".to_string()).to_string(), "API error: x");
+        assert_eq!(
+            CoreError::Serialization("x".to_string()).to_string(),
+            "Serialization error: x"
+        );
+        assert_eq!(
+            CoreError::EmptyResponse.to_string(),
+            "Unexpected empty response"
+        );
+        assert_eq!(
+            CoreError::Transcription("x".to_string()).to_string(),
+            "Transcription failed: x"
+        );
+        assert_eq!(
+            CoreError::Config("x".to_string()).to_string(),
+            "Configuration error: x"
+        );
+    }
+
+    #[test]
+    fn from_serde_json_error_should_map_to_serialization_variant() {
+        let parse_error = serde_json::from_str::<serde_json::Value>("{bad json}")
+            .expect_err("invalid json should fail");
+        let mapped: CoreError = parse_error.into();
+        assert!(matches!(mapped, CoreError::Serialization(_)));
+    }
+
+    #[test]
+    fn from_reqwest_error_should_map_to_http_variant() {
+        let error = reqwest::blocking::Client::new()
+            .get("http://[::1")
+            .send()
+            .expect_err("invalid URL should fail");
+        let mapped: CoreError = error.into();
+        assert!(matches!(mapped, CoreError::Http(_)));
+    }
+}

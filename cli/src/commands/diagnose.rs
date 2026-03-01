@@ -143,3 +143,17 @@ pub(crate) fn run_diagnose_pipeline(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::run_diagnose_audio;
+
+    #[test]
+    fn run_diagnose_audio_should_fail_when_duration_is_zero() {
+        let result = run_diagnose_audio(0, None);
+        assert!(result
+            .expect_err("zero duration should fail")
+            .to_string()
+            .contains("--duration-seconds must be greater than 0"));
+    }
+}

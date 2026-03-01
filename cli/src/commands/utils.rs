@@ -128,8 +128,9 @@ pub(crate) fn print_binary_status(binary: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::ensure_flac_bytes;
-    use std::path::Path;
+    use super::{ensure_flac_bytes, format_duration, mask_secret, resolve_output_dir};
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
     #[test]
     fn ensure_flac_bytes_accepts_valid_flac_header() {
@@ -143,6 +144,10 @@ mod tests {
         let bytes = b"RIFF";
         let result = ensure_flac_bytes(bytes, Path::new("audio.bin"));
         assert!(result.is_err());
+        assert_eq!(
+            result.expect_err("must be error").to_string(),
+            "Input file is not FLAC: audio.bin (expected 'fLaC' header)"
+        );
     }
 
     #[test]
@@ -150,5 +155,29 @@ mod tests {
         let bytes = b"fL";
         let result = ensure_flac_bytes(bytes, Path::new("audio.flac"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn mask_secret_should_hide_short_values() {
+        assert_eq!(mask_secret("12345678"), "***");
+        assert_eq!(mask_secret("123"), "***");
+    }
+
+    #[test]
+    fn mask_secret_should_keep_prefix_and_suffix_for_long_values() {
+        assert_eq!(mask_secret("abcdefghijk"), "abcd...hijk");
+    }
+
+    #[test]
+    fn format_duration_should_show_two_decimal_places() {
+        let value = format_duration(Duration::from_millis(1234));
+        assert_eq!(value, "1.23s");
+    }
+
+    #[test]
+    fn resolve_output_dir_should_return_provided_path() {
+        let path = PathBuf::from("/tmp/custom-output");
+        let resolved = resolve_output_dir(Some(path.clone())).expect("path should resolve");
+        assert_eq!(resolved, path);
     }
 }

@@ -4,9 +4,19 @@ use reqwest::blocking::Client;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+const GROQ_MODELS_URL: &str = "https://api.groq.com/openai/v1/models";
+
 /// Global HTTP client with connection pooling
 /// Initialized lazily on first use
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn gemini_models_url() -> String {
+    format!("{GEMINI_API_URL}/models")
+}
+
+fn warmup_error(target: &str, detail: impl std::fmt::Display) -> CoreError {
+    CoreError::Http(format!("Failed to warmup {target} connection: {detail}"))
+}
 
 /// Get or initialize the global HTTP client
 ///
@@ -59,16 +69,7 @@ pub(crate) fn get_http_client() -> &'static Client {
 /// - A previous API call failed with a connection error
 /// - The app has been backgrounded and resumed
 pub(crate) fn warmup_groq_connection() -> Result<(), CoreError> {
-    let client = get_http_client();
-
-    // Send a lightweight HEAD request to establish TLS connection
-    // We use GET since HEAD might not be supported, but with minimal overhead
-    let _ = client
-        .get("https://api.groq.com/openai/v1/models")
-        .send()
-        .map_err(|e| CoreError::Http(format!("Failed to warmup Groq connection: {}", e)))?;
-
-    Ok(())
+    warmup_connection_with_label(GROQ_MODELS_URL, "Groq")
 }
 
 /// Warm up the TLS connection to Gemini API
@@ -106,29 +107,50 @@ pub(crate) fn warmup_groq_connection() -> Result<(), CoreError> {
 /// - A previous API call failed with a connection error
 /// - You want to ensure minimal latency for a critical operation
 pub(crate) fn warmup_gemini_connection() -> Result<(), CoreError> {
-    let client = get_http_client();
-
-    // Send a lightweight request to establish TLS connection
-    let url = format!("{}/models", GEMINI_API_URL);
-    let _ = client
-        .get(&url)
-        .send()
-        .map_err(|e| CoreError::Http(format!("Failed to warmup Gemini connection: {}", e)))?;
-
-    Ok(())
+    warmup_connection_with_label(&gemini_models_url(), "Gemini")
 }
 
 /// Generic warmup for any URL
 ///
 /// Used internally or for testing connection to custom endpoints.
-#[expect(dead_code, reason = "Used internally or for testing connection to custom endpoints")]
+#[expect(
+    dead_code,
+    reason = "Available for diagnostics and custom endpoint warmup in internal flows"
+)]
 pub(crate) fn warmup_connection(url: &str) -> Result<(), CoreError> {
+    warmup_connection_with_label(url, "custom")
+}
+
+fn warmup_connection_with_label(url: &str, label: &str) -> Result<(), CoreError> {
     let client = get_http_client();
 
-    let _ = client
-        .get(url)
-        .send()
-        .map_err(|e| CoreError::Http(format!("Failed to warmup connection to {}: {}", url, e)))?;
+    let _ = client.get(url).send().map_err(|e| warmup_error(label, e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{gemini_models_url, warmup_error, GROQ_MODELS_URL};
+    use crate::config::GEMINI_API_URL;
+    use crate::error::CoreError;
+
+    #[test]
+    fn gemini_models_url_should_append_models_suffix() {
+        let url = gemini_models_url();
+        assert_eq!(url, format!("{GEMINI_API_URL}/models"));
+    }
+
+    #[test]
+    fn groq_models_url_should_match_expected_endpoint() {
+        assert_eq!(GROQ_MODELS_URL, "https://api.groq.com/openai/v1/models");
+    }
+
+    #[test]
+    fn warmup_error_should_return_http_variant_with_label() {
+        let error = warmup_error("Gemini", "connection refused");
+        assert!(
+            matches!(error, CoreError::Http(message) if message == "Failed to warmup Gemini connection: connection refused")
+        );
+    }
 }

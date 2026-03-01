@@ -183,4 +183,50 @@ mod tests {
         let result = with_retry(0, || HttpResult::Success::<i32>(42), "test");
         assert_eq!(result, Err("max_attempts must be at least 1".to_string()));
     }
+
+    #[test]
+    fn test_exponential_backoff_sequence_for_four_attempts() {
+        let mut backoff_calls = Vec::new();
+        let _ = with_retry_impl(
+            4,
+            || HttpResult::Retryable::<u32>,
+            "API call",
+            |seconds| backoff_calls.push(seconds),
+        );
+        assert_eq!(backoff_calls, vec![1, 2, 4]);
+    }
+
+    #[test]
+    fn test_no_sleep_after_final_attempt() {
+        let mut backoff_calls = Vec::new();
+        let _ = with_retry_impl(
+            1,
+            || HttpResult::Retryable::<u32>,
+            "API call",
+            |seconds| backoff_calls.push(seconds),
+        );
+        assert!(backoff_calls.is_empty());
+    }
+
+    #[test]
+    fn test_success_on_last_attempt_returns_value() {
+        let attempts = AtomicU32::new(0);
+        let mut backoff_calls = Vec::new();
+        let result = with_retry_impl(
+            4,
+            || {
+                let current = attempts.fetch_add(1, Ordering::SeqCst);
+                if current == 3 {
+                    HttpResult::Success("ok")
+                } else {
+                    HttpResult::Retryable
+                }
+            },
+            "API call",
+            |seconds| backoff_calls.push(seconds),
+        );
+        assert_eq!(result, Ok("ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 4);
+        assert_eq!(backoff_calls, vec![1, 2, 4]);
+    }
 }
