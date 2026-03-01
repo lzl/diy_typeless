@@ -130,14 +130,3 @@ pub(crate) fn process_text_with_llm(
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_exponential_backoff_calculation() {
-        // Test that backoff increases exponentially
-        assert_eq!(2u64.pow(0), 1);
-        assert_eq!(2u64.pow(1), 2);
-        assert_eq!(2u64.pow(2), 4);
-    }
-}

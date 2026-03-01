@@ -96,14 +96,18 @@ mod tests {
     #[test]
     fn test_success_after_retries() {
         let attempts = AtomicU32::new(0);
-        let result = with_retry(3, || {
-            let current = attempts.fetch_add(1, Ordering::SeqCst);
-            if current < 2 {
-                HttpResult::Retryable::<u32>
-            } else {
-                HttpResult::Success(current)
-            }
-        }, "test");
+        let result = with_retry(
+            3,
+            || {
+                let current = attempts.fetch_add(1, Ordering::SeqCst);
+                if current < 2 {
+                    HttpResult::Retryable::<u32>
+                } else {
+                    HttpResult::Success(current)
+                }
+            },
+            "test",
+        );
         assert_eq!(result, Ok(2));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
@@ -147,10 +151,8 @@ mod tests {
     }
 
     #[test]
-    fn test_exponential_backoff_timing() {
-        // Verify the backoff calculation is correct
-        assert_eq!(2u64.pow(0), 1);
-        assert_eq!(2u64.pow(1), 2);
-        assert_eq!(2u64.pow(2), 4);
+    fn test_max_attempts_zero_returns_validation_error() {
+        let result = with_retry(0, || HttpResult::Success::<i32>(42), "test");
+        assert_eq!(result, Err("max_attempts must be at least 1".to_string()));
     }
 }

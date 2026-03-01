@@ -138,86 +138,98 @@ mod tests {
     use super::{build_context_section, build_prompt};
 
     #[test]
-    fn build_context_section_should_include_guidelines_when_context_provided() {
-        let context = Some("email");
+    fn build_context_section_should_include_one_context_block_when_context_provided() {
+        let context = Some("email and calendar invite");
         let formatted = build_context_section(context);
-        assert!(formatted.contains("email"));
-        assert!(formatted.contains("Context about where this text will be used"));
+        let marker = "Context about where this text will be used:";
+        assert!(formatted.contains(marker));
+        assert_eq!(formatted.matches(marker).count(), 1);
+        assert!(formatted.contains("email and calendar invite"));
         assert!(formatted.contains("Gmail, Outlook"));
     }
 
     #[test]
-    fn build_context_section_should_return_empty_when_empty_string() {
-        let context: Option<&str> = Some("");
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
+    fn build_context_section_should_be_absent_for_empty_or_missing_context() {
+        let empty = build_context_section(Some(""));
+        let whitespace = build_context_section(Some("   "));
+        let none = build_context_section(None);
+
+        let marker = "Context about where this text will be used:";
+        assert!(empty.is_empty());
+        assert!(whitespace.is_empty());
+        assert!(none.is_empty());
+        assert!(!empty.contains(marker));
+        assert!(!whitespace.contains(marker));
+        assert!(!none.contains(marker));
     }
 
     #[test]
-    fn build_context_section_should_return_empty_when_whitespace_only() {
-        let context: Option<&str> = Some("   ");
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
-    }
-
-    #[test]
-    fn build_context_section_should_return_empty_when_none() {
-        let context: Option<&str> = None;
-        let formatted = build_context_section(context);
-        assert!(formatted.is_empty());
-    }
-
-    #[test]
-    fn build_prompt_should_contain_all_rules() {
+    fn build_prompt_should_include_rules_section_once_and_before_transcript() {
         let raw_text = "Hello world";
         let prompt = build_prompt(raw_text, None);
 
-        assert!(prompt.contains("You are a professional text editor"));
-        assert!(prompt.contains("Rules:"));
-        assert!(prompt.contains("Keep the SAME language"));
-        assert!(prompt.contains("Original transcript:"));
-        assert!(prompt.contains("Hello world"));
-        assert!(prompt.contains("Output the polished text directly"));
+        let rules_marker = "\n\nRules:\n";
+        let transcript_marker = "\nOriginal transcript:\n";
+        let rules_pos = prompt
+            .find(rules_marker)
+            .expect("Rules section should exist");
+        let transcript_pos = prompt
+            .find(transcript_marker)
+            .expect("Transcript section should exist");
+
+        assert_eq!(prompt.matches(rules_marker).count(), 1);
+        assert_eq!(prompt.matches(transcript_marker).count(), 1);
+        assert!(rules_pos < transcript_pos);
     }
 
     #[test]
-    fn build_prompt_should_include_context_when_provided() {
-        let raw_text = "Meeting notes";
-        let context = Some("email");
-        let prompt = build_prompt(raw_text, context);
+    fn build_prompt_should_embed_transcript_verbatim() {
+        let raw_text = "Line one.\nLine two has  spaces.\n\nFinal line.";
+        let prompt = build_prompt(raw_text, None);
+        let transcript_block = format!("\nOriginal transcript:\n{raw_text}\n\nOutput");
 
-        assert!(prompt.contains("Context about where this text will be used"));
+        assert!(prompt.contains(&transcript_block));
+    }
+
+    #[test]
+    fn build_prompt_should_include_context_section_once_when_provided() {
+        let raw_text = "Meeting notes";
+        let prompt = build_prompt(raw_text, Some("email"));
+        let marker = "Context about where this text will be used:";
+
+        assert_eq!(prompt.matches(marker).count(), 1);
         assert!(prompt.contains("email"));
     }
 
     #[test]
-    fn build_prompt_should_preserve_all_substantive_content_instruction() {
+    fn build_prompt_should_not_include_context_section_when_context_missing() {
+        let prompt_empty = build_prompt("Raw text", Some(""));
+        let prompt_whitespace = build_prompt("Raw text", Some("   "));
+        let prompt_none = build_prompt("Raw text", None);
+        let marker = "Context about where this text will be used:";
+
+        assert!(!prompt_empty.contains(marker));
+        assert!(!prompt_whitespace.contains(marker));
+        assert!(!prompt_none.contains(marker));
+    }
+
+    #[test]
+    fn build_prompt_should_contain_critical_instructions() {
         let raw_text = "The quick brown fox jumps over the lazy dog";
         let prompt = build_prompt(raw_text, None);
 
+        assert!(prompt.contains("You are a professional text editor"));
+        assert!(prompt.contains("Keep the SAME language"));
         assert!(prompt.contains("Preserve ALL substantive information"));
-        assert!(prompt.contains(raw_text));
+        assert!(prompt.contains("Output ONLY the final polished text"));
     }
 
     #[test]
-    fn build_prompt_should_include_rules_section_before_transcript() {
+    fn build_prompt_should_keep_transcript_and_output_boundary_stable() {
         let raw_text = "Test content";
         let prompt = build_prompt(raw_text, None);
+        let boundary = "\nOriginal transcript:\nTest content\n\nOutput the polished text directly.";
 
-        let rules_pos = prompt.find("Rules:").expect("Rules section should exist");
-        let transcript_pos = prompt.find("Original transcript:").expect("Transcript section should exist");
-
-        assert!(
-            rules_pos < transcript_pos,
-            "Rules should appear before transcript"
-        );
-    }
-
-    #[test]
-    fn test_exponential_backoff_calculation() {
-        // Test that backoff increases exponentially: 2^0, 2^1, 2^2
-        assert_eq!(2u64.pow(0), 1);
-        assert_eq!(2u64.pow(1), 2);
-        assert_eq!(2u64.pow(2), 4);
+        assert!(prompt.contains(boundary));
     }
 }
