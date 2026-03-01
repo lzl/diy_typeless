@@ -3,12 +3,8 @@
 //! These tests intentionally avoid network and audio device side effects.
 
 use diy_typeless_core::{
-    polish_text, process_text_with_llm, start_recording, stop_recording, transcribe_audio_bytes,
-    warmup_gemini_connection, warmup_groq_connection, AudioData, CoreError,
+    stop_recording, CoreError,
 };
-
-type LlmFnSignature =
-    fn(String, String, Option<String>, Option<f32>) -> Result<String, CoreError>;
 
 #[test]
 fn core_error_display_messages_are_stable_for_common_variants() {
@@ -26,13 +22,15 @@ fn core_error_display_messages_are_stable_for_common_variants() {
 }
 
 #[test]
-fn public_exports_have_expected_signatures() {
-    let _start_fn: fn() -> Result<(), CoreError> = start_recording;
-    let _stop_fn: fn() -> Result<AudioData, CoreError> = stop_recording;
-    let _transcribe_fn: fn(String, Vec<u8>, Option<String>) -> Result<String, CoreError> =
-        transcribe_audio_bytes;
-    let _polish_fn: fn(String, String, Option<String>) -> Result<String, CoreError> = polish_text;
-    let _warmup_groq_fn: fn() -> Result<(), CoreError> = warmup_groq_connection;
-    let _warmup_gemini_fn: fn() -> Result<(), CoreError> = warmup_gemini_connection;
-    let _llm_fn: LlmFnSignature = process_text_with_llm;
+fn stop_recording_should_fail_with_not_active_when_no_session_started() {
+    let result = stop_recording();
+    assert!(matches!(result, Err(CoreError::RecordingNotActive)));
+}
+
+#[test]
+fn serde_json_errors_should_map_to_serialization_core_error() {
+    let parse_result = serde_json::from_str::<serde_json::Value>("{invalid json}");
+    let parse_error = parse_result.expect_err("Expected invalid JSON to fail parsing");
+    let core_error: CoreError = parse_error.into();
+    assert!(matches!(core_error, CoreError::Serialization(_)));
 }

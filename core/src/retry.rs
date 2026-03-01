@@ -49,8 +49,19 @@ pub(crate) enum HttpResult<T> {
 /// ```
 pub(crate) fn with_retry<T>(
     max_attempts: u32,
+    operation: impl FnMut() -> HttpResult<T>,
+    error_message: &str,
+) -> Result<T, String> {
+    with_retry_impl(max_attempts, operation, error_message, |seconds| {
+        sleep(Duration::from_secs(seconds));
+    })
+}
+
+fn with_retry_impl<T>(
+    max_attempts: u32,
     mut operation: impl FnMut() -> HttpResult<T>,
     error_message: &str,
+    mut sleep_fn: impl FnMut(u64),
 ) -> Result<T, String> {
     if max_attempts == 0 {
         return Err("max_attempts must be at least 1".to_string());
@@ -64,7 +75,7 @@ pub(crate) fn with_retry<T>(
                 // Only sleep if we're going to retry
                 if attempt < max_attempts - 1 {
                     let backoff = 2u64.pow(attempt);
-                    sleep(Duration::from_secs(backoff));
+                    sleep_fn(backoff);
                 }
             }
         }
@@ -96,7 +107,8 @@ mod tests {
     #[test]
     fn test_success_after_retries() {
         let attempts = AtomicU32::new(0);
-        let result = with_retry(
+        let mut backoff_calls = Vec::new();
+        let result = with_retry_impl(
             3,
             || {
                 let current = attempts.fetch_add(1, Ordering::SeqCst);
@@ -107,33 +119,49 @@ mod tests {
                 }
             },
             "test",
+            |seconds| backoff_calls.push(seconds),
         );
         assert_eq!(result, Ok(2));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        assert_eq!(backoff_calls, vec![1, 2]);
     }
 
     #[test]
     fn test_non_retryable_fails_immediately() {
         let attempts = AtomicU32::new(0);
-        let result = with_retry(3, || {
-            attempts.fetch_add(1, Ordering::SeqCst);
-            HttpResult::NonRetryable::<u32>("bad request".to_string())
-        }, "test");
+        let mut sleeper_called = false;
+        let result = with_retry_impl(
+            3,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::NonRetryable::<u32>("bad request".to_string())
+            },
+            "test",
+            |_| sleeper_called = true,
+        );
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "bad request");
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert!(!sleeper_called);
     }
 
     #[test]
     fn test_all_retries_exhausted() {
         let attempts = AtomicU32::new(0);
-        let result = with_retry(3, || {
-            attempts.fetch_add(1, Ordering::SeqCst);
-            HttpResult::Retryable::<u32>
-        }, "API call");
+        let mut backoff_calls = Vec::new();
+        let result = with_retry_impl(
+            3,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Retryable::<u32>
+            },
+            "API call",
+            |seconds| backoff_calls.push(seconds),
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("API call: retries exceeded"));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        assert_eq!(backoff_calls, vec![1, 2]);
     }
 
     #[test]
