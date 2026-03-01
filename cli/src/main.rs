@@ -11,8 +11,8 @@ use std::time::Duration;
 mod commands;
 use commands::diagnose::{run_diagnose_audio, run_diagnose_env, run_diagnose_pipeline};
 use commands::utils::{
-    copy_to_clipboard, read_stdin, resolve_gemini_key, resolve_groq_key, resolve_output_dir,
-    timestamp, wait_for_enter,
+    copy_to_clipboard, ensure_flac_bytes, read_stdin, resolve_gemini_key, resolve_groq_key,
+    resolve_output_dir, timestamp, wait_for_enter,
 };
 
 #[derive(Parser)]
@@ -169,26 +169,27 @@ fn cmd_record(output_dir: Option<PathBuf>, duration_seconds: Option<u64>) -> Res
         wait_for_enter()?;
     }
 
-    let wav_data = stop_recording().context("Failed to stop recording")?;
-    let wav_path = output_dir.join(format!("recording_{}.wav", timestamp()));
-    fs::write(&wav_path, wav_data.bytes)?;
+    let audio_data = stop_recording().context("Failed to stop recording")?;
+    let flac_path = output_dir.join(format!("recording_{}.flac", timestamp()));
+    fs::write(&flac_path, audio_data.bytes)?;
 
     println!(
-        "Saved WAV to {} (duration {:.2}s)",
-        wav_path.display(),
-        wav_data.duration_seconds
+        "Saved FLAC to {} (duration {:.2}s)",
+        flac_path.display(),
+        audio_data.duration_seconds
     );
 
     Ok(())
 }
 
 fn cmd_transcribe(file: PathBuf, groq_key: Option<String>, language: Option<String>) -> Result<()> {
+    let audio_bytes = fs::read(&file).context("Failed to read audio file")?;
+    ensure_flac_bytes(&audio_bytes, &file)?;
     let api_key = resolve_groq_key(groq_key)?;
-    let wav_bytes = fs::read(&file).context("Failed to read WAV file")?;
     use secrecy::ExposeSecret;
     let text = diy_typeless_core::transcribe_audio_bytes(
         api_key.expose_secret().to_string(),
-        wav_bytes,
+        audio_bytes,
         language,
     )?;
     println!("{text}");
@@ -206,11 +207,8 @@ fn cmd_polish(
         None => read_stdin()?,
     };
     use secrecy::ExposeSecret;
-    let polished = diy_typeless_core::polish_text(
-        api_key.expose_secret().to_string(),
-        raw_text,
-        context,
-    )?;
+    let polished =
+        diy_typeless_core::polish_text(api_key.expose_secret().to_string(), raw_text, context)?;
     println!("{polished}");
     copy_to_clipboard(&polished);
     Ok(())
@@ -233,11 +231,8 @@ fn cmd_full(
 
     println!("Polishing...");
     use secrecy::ExposeSecret;
-    let polished_text = diy_typeless_core::polish_text(
-        gemini_key.expose_secret().to_string(),
-        raw_text,
-        context,
-    )?;
+    let polished_text =
+        diy_typeless_core::polish_text(gemini_key.expose_secret().to_string(), raw_text, context)?;
 
     let polished_path = output_dir.join(format!("recording_{}_polished.txt", timestamp()));
     fs::write(&polished_path, &polished_text)?;
@@ -270,16 +265,16 @@ fn run_groq_full(
         wait_for_enter()?;
     }
 
-    let wav_data = stop_recording().context("Failed to stop recording")?;
+    let audio_data = stop_recording().context("Failed to stop recording")?;
     let base = format!("recording_{}", timestamp());
-    let wav_path = output_dir.join(format!("{base}.wav"));
-    fs::write(&wav_path, &wav_data.bytes)?;
+    let flac_path = output_dir.join(format!("{base}.flac"));
+    fs::write(&flac_path, &audio_data.bytes)?;
 
     println!("Transcribing with Groq API...");
     use secrecy::ExposeSecret;
     let text = diy_typeless_core::transcribe_audio_bytes(
         groq_key.expose_secret().to_string(),
-        wav_data.bytes,
+        audio_data.bytes,
         language,
     )?;
     let raw_path = output_dir.join(format!("{base}_raw.txt"));

@@ -67,8 +67,8 @@ uniffi-bindgen generate \
  Additional commands:
  
  ```bash
- # Transcribe an existing wav file
- cargo run -p diy_typeless_cli -- transcribe ./audio.wav
+# Transcribe an existing FLAC file
+cargo run -p diy_typeless_cli -- transcribe ./audio.flac
  
  # Polish a text string (reads stdin if --text not provided)
  echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
@@ -76,12 +76,12 @@ uniffi-bindgen generate \
  # Print environment diagnostics (keys/tooling/path checks)
  cargo run -p diy_typeless_cli -- diagnose env
  
- # Capture a timed diagnostic clip and print WAV metrics
- cargo run -p diy_typeless_cli -- diagnose audio --duration-seconds 2
- 
- # Run pipeline diagnostics on an existing wav file
- GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
- cargo run -p diy_typeless_cli -- diagnose pipeline ./audio.wav
+# Capture a timed diagnostic clip and print FLAC metadata
+cargo run -p diy_typeless_cli -- diagnose audio --duration-seconds 2
+
+# Run pipeline diagnostics on an existing FLAC file
+GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
+cargo run -p diy_typeless_cli -- diagnose pipeline ./audio.flac
  ```
  
 ## Fast Debug Loop (CLI + xcodebuild)
@@ -201,4 +201,3 @@ This project is dual-licensed under either:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 
 at your option.
-

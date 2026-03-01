@@ -4,4 +4,3 @@
 
 pub(crate) mod diagnose;
 pub(crate) mod utils;
-pub(crate) mod wav;

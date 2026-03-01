@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use secrecy::SecretString;
 use std::io::{self, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Generate a timestamp string for file naming
@@ -79,6 +79,18 @@ pub(crate) fn read_stdin() -> Result<String> {
     Ok(buffer.trim().to_string())
 }
 
+/// Validate that bytes start with the FLAC stream marker.
+pub(crate) fn ensure_flac_bytes(bytes: &[u8], path: &Path) -> Result<()> {
+    const FLAC_MAGIC: &[u8; 4] = b"fLaC";
+    if bytes.len() < FLAC_MAGIC.len() || &bytes[..FLAC_MAGIC.len()] != FLAC_MAGIC {
+        anyhow::bail!(
+            "Input file is not FLAC: {} (expected 'fLaC' header)",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 /// Copy text to clipboard (macOS only)
 pub(crate) fn copy_to_clipboard(text: &str) {
     if cfg!(target_os = "macos") {
@@ -111,5 +123,32 @@ pub(crate) fn print_binary_status(binary: &str) {
     match find_binary(binary) {
         Some(path) => println!("- {binary}: {}", path.display()),
         None => println!("- {binary}: not found in PATH"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_flac_bytes;
+    use std::path::Path;
+
+    #[test]
+    fn ensure_flac_bytes_accepts_valid_flac_header() {
+        let bytes = b"fLaC\x00\x00\x00\x22";
+        let result = ensure_flac_bytes(bytes, Path::new("audio.flac"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ensure_flac_bytes_rejects_invalid_header() {
+        let bytes = b"RIFF";
+        let result = ensure_flac_bytes(bytes, Path::new("audio.bin"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_flac_bytes_rejects_too_short_input() {
+        let bytes = b"fL";
+        let result = ensure_flac_bytes(bytes, Path::new("audio.flac"));
+        assert!(result.is_err());
     }
 }

@@ -265,12 +265,6 @@ RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording(RustCallStatus *_Nonn
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_RECORDING_WAV
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_STOP_RECORDING_WAV
-RustBuffer uniffi_diy_typeless_core_fn_func_stop_recording_wav(RustCallStatus *_Nonnull out_status
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_AUDIO_BYTES
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_TRANSCRIBE_AUDIO_BYTES
 RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes(RustBuffer api_key, RustBuffer audio_bytes, RustBuffer language, RustCallStatus *_Nonnull out_status
@@ -569,12 +563,6 @@ uint16_t uniffi_diy_typeless_core_checksum_func_start_recording(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING
 uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING_WAV
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_STOP_RECORDING_WAV
-uint16_t uniffi_diy_typeless_core_checksum_func_stop_recording_wav(void
     
 );
 #endif

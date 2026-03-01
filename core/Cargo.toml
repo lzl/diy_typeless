@@ -11,7 +11,6 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [dependencies]
 biquad = "0.5.0"
 cpal = "0.17.1"
-hound = "3.5.1"
 flacenc = "0.3"
 log = "0.4.29"
 reqwest = { version = "0.13.1", features = ["blocking", "json", "multipart"] }
