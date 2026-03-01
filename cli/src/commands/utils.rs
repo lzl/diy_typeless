@@ -45,7 +45,11 @@ pub(crate) fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf>
     if let Some(dir) = output_dir {
         return Ok(dir);
     }
-    let home = dirs::home_dir().context("Failed to resolve home directory")?;
+    default_output_dir(dirs::home_dir())
+}
+
+fn default_output_dir(home_dir: Option<PathBuf>) -> Result<PathBuf> {
+    let home = home_dir.context("Failed to resolve home directory")?;
     Ok(home.join("diy_typeless_recordings"))
 }
 
@@ -149,7 +153,7 @@ pub(crate) fn print_binary_status(binary: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_flac_bytes, find_binary_in_path, format_duration, mask_secret,
+        default_output_dir, ensure_flac_bytes, find_binary_in_path, format_duration, mask_secret,
         resolve_api_key_value, resolve_output_dir,
     };
     use secrecy::ExposeSecret;
@@ -161,6 +165,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static PATH_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    static HOME_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     struct PathEnvGuard {
         original: Option<OsString>,
@@ -180,6 +185,38 @@ mod tests {
         let original = std::env::var_os("PATH");
         std::env::set_var("PATH", path);
         PathEnvGuard { original }
+    }
+
+    struct HomeEnvGuard {
+        original_home: Option<OsString>,
+        original_user_profile: Option<OsString>,
+    }
+
+    impl Drop for HomeEnvGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.original_home {
+                std::env::set_var("HOME", value);
+            } else {
+                std::env::remove_var("HOME");
+            }
+
+            if let Some(value) = &self.original_user_profile {
+                std::env::set_var("USERPROFILE", value);
+            } else {
+                std::env::remove_var("USERPROFILE");
+            }
+        }
+    }
+
+    fn set_home_for_test(path: &std::ffi::OsStr) -> HomeEnvGuard {
+        let original_home = std::env::var_os("HOME");
+        let original_user_profile = std::env::var_os("USERPROFILE");
+        std::env::set_var("HOME", path);
+        std::env::set_var("USERPROFILE", path);
+        HomeEnvGuard {
+            original_home,
+            original_user_profile,
+        }
     }
 
     fn make_temp_dir(label: &str) -> PathBuf {
@@ -243,6 +280,39 @@ mod tests {
         let path = PathBuf::from("/tmp/custom-output");
         let resolved = resolve_output_dir(Some(path.clone())).expect("path should resolve");
         assert_eq!(resolved, path);
+    }
+
+    #[test]
+    fn default_output_dir_should_append_recordings_suffix_to_home() {
+        let resolved = default_output_dir(Some(PathBuf::from("/tmp/test-home")))
+            .expect("default output dir should resolve");
+        assert_eq!(
+            resolved,
+            PathBuf::from("/tmp/test-home/diy_typeless_recordings")
+        );
+    }
+
+    #[test]
+    fn default_output_dir_should_fail_when_home_is_missing() {
+        let result = default_output_dir(None);
+        assert_eq!(
+            result.expect_err("missing home should fail").to_string(),
+            "Failed to resolve home directory"
+        );
+    }
+
+    #[test]
+    fn resolve_output_dir_should_use_home_environment_when_not_provided() {
+        let _lock = HOME_TEST_LOCK
+            .lock()
+            .expect("home test lock should be acquired");
+        let fake_home = make_temp_dir("home_env");
+        let _guard = set_home_for_test(fake_home.as_os_str());
+
+        let resolved = resolve_output_dir(None).expect("default output dir should resolve");
+        assert_eq!(resolved, fake_home.join("diy_typeless_recordings"));
+
+        let _ = fs::remove_dir_all(fake_home);
     }
 
     #[test]
