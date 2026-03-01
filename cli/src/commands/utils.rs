@@ -47,22 +47,38 @@ pub(crate) fn resolve_output_dir(output_dir: Option<PathBuf>) -> Result<PathBuf>
 
 /// Resolve Groq API key from argument or environment
 pub(crate) fn resolve_groq_key(provided: Option<String>) -> Result<SecretString> {
-    let key = if let Some(key) = provided {
-        key
-    } else {
-        std::env::var("GROQ_API_KEY").context("GROQ_API_KEY not set")?
-    };
-    Ok(SecretString::from(key))
+    resolve_api_key_value(provided, std::env::var("GROQ_API_KEY").ok(), "GROQ_API_KEY")
 }
 
 /// Resolve Gemini API key from argument or environment
 pub(crate) fn resolve_gemini_key(provided: Option<String>) -> Result<SecretString> {
-    let key = if let Some(key) = provided {
-        key
-    } else {
-        std::env::var("GEMINI_API_KEY").context("GEMINI_API_KEY not set")?
-    };
-    Ok(SecretString::from(key))
+    resolve_api_key_value(
+        provided,
+        std::env::var("GEMINI_API_KEY").ok(),
+        "GEMINI_API_KEY",
+    )
+}
+
+fn resolve_api_key_value(
+    provided: Option<String>,
+    env_value: Option<String>,
+    env_name: &str,
+) -> Result<SecretString> {
+    if let Some(key) = provided {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            anyhow::bail!("Provided API key is empty");
+        }
+        return Ok(SecretString::from(trimmed.to_string()));
+    }
+
+    let env_key = env_value.with_context(|| format!("{env_name} not set"))?;
+    let trimmed = env_key.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("{env_name} is set but empty");
+    }
+
+    Ok(SecretString::from(trimmed.to_string()))
 }
 
 /// Wait for user to press Enter
@@ -128,7 +144,10 @@ pub(crate) fn print_binary_status(binary: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_flac_bytes, format_duration, mask_secret, resolve_output_dir};
+    use super::{
+        ensure_flac_bytes, format_duration, mask_secret, resolve_api_key_value, resolve_output_dir,
+    };
+    use secrecy::ExposeSecret;
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
@@ -179,5 +198,48 @@ mod tests {
         let path = PathBuf::from("/tmp/custom-output");
         let resolved = resolve_output_dir(Some(path.clone())).expect("path should resolve");
         assert_eq!(resolved, path);
+    }
+
+    #[test]
+    fn resolve_api_key_value_should_use_trimmed_provided_key() {
+        let key = resolve_api_key_value(Some("  abc123  ".to_string()), None, "GROQ_API_KEY")
+            .expect("provided key should resolve");
+        assert_eq!(key.expose_secret(), "abc123");
+    }
+
+    #[test]
+    fn resolve_api_key_value_should_reject_blank_provided_key() {
+        let result = resolve_api_key_value(Some("   ".to_string()), None, "GROQ_API_KEY");
+        assert_eq!(
+            result
+                .expect_err("blank provided key should fail")
+                .to_string(),
+            "Provided API key is empty"
+        );
+    }
+
+    #[test]
+    fn resolve_api_key_value_should_use_trimmed_env_key_when_provided_missing() {
+        let key = resolve_api_key_value(None, Some("  env-secret  ".to_string()), "GROQ_API_KEY")
+            .expect("env key should resolve");
+        assert_eq!(key.expose_secret(), "env-secret");
+    }
+
+    #[test]
+    fn resolve_api_key_value_should_fail_when_env_missing() {
+        let result = resolve_api_key_value(None, None, "GROQ_API_KEY");
+        assert_eq!(
+            result.expect_err("missing env should fail").to_string(),
+            "GROQ_API_KEY not set"
+        );
+    }
+
+    #[test]
+    fn resolve_api_key_value_should_fail_when_env_empty() {
+        let result = resolve_api_key_value(None, Some("   ".to_string()), "GROQ_API_KEY");
+        assert_eq!(
+            result.expect_err("empty env key should fail").to_string(),
+            "GROQ_API_KEY is set but empty"
+        );
     }
 }

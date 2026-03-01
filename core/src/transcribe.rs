@@ -143,6 +143,12 @@ mod tests {
     }
 
     #[test]
+    fn classify_transcribe_status_should_retry_on_server_errors() {
+        let result = classify_transcribe_status(StatusCode::SERVICE_UNAVAILABLE);
+        assert!(matches!(result, HttpResult::Retryable));
+    }
+
+    #[test]
     fn classify_transcribe_status_should_mark_api_errors_as_non_retryable() {
         let result = classify_transcribe_status(StatusCode::BAD_REQUEST);
         assert!(
