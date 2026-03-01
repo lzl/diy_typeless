@@ -32,6 +32,8 @@ xcodebuild archive \
     -archivePath "$ARCHIVE_PATH" \
     ARCHS="arm64 x86_64" \
     ONLY_ACTIVE_ARCH=NO \
+    # Work around a Swift x86_64 Release optimizer crash in UniFFI-generated bindings.
+    OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sil-perf-optzns' \
     -quiet
 
 echo "      Archive created at: $ARCHIVE_PATH"
