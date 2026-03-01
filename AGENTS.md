@@ -61,6 +61,37 @@ Required workflow:
 
 If there is uncertainty, extend the CLI with additional flags or diagnostics so the agent can re-run and confirm fixes.
 
+### CLI Validation Commands
+
+Use these commands to validate the same Rust code paths consumed by the macOS app:
+
+```bash
+# Record a short clip (auto-start)
+cargo run -p diy_typeless_cli -- record --duration-seconds 3
+
+# Full pipeline (record -> transcribe -> polish)
+GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
+cargo run -p diy_typeless_cli -- full --duration-seconds 4
+
+# Transcribe an existing FLAC file
+cargo run -p diy_typeless_cli -- transcribe ./audio.flac
+
+# Polish text (reads stdin if --text is not provided)
+echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
+
+# Environment diagnostics (keys/tooling/path checks)
+cargo run -p diy_typeless_cli -- diagnose env
+
+# Capture a timed diagnostic clip and print FLAC metadata
+cargo run -p diy_typeless_cli -- diagnose audio --duration-seconds 2
+
+# Run pipeline diagnostics on an existing FLAC file
+GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
+cargo run -p diy_typeless_cli -- diagnose pipeline ./audio.flac
+```
+
+The CLI automatically loads a local `.env` file if present.
+
 ## Clean Architecture Guidelines
 
 ### Layer Structure
@@ -310,6 +341,55 @@ To verify the app builds successfully without launching it or modifying permissi
 
 This is the **only** way to validate macOS app builds during development. Do not use direct `xcodebuild` commands.
 
+### Dev Loop Script
+
+Use this command to rebuild Rust core, build the app, install to a stable path, and relaunch:
+
+```bash
+./scripts/dev-loop-build.sh
+```
+
+Default behavior:
+
+1. Builds `diy_typeless_core` with profile inferred from `--configuration` (`Debug -> debug`, `Release -> release`).
+2. Builds the app in Debug with `xcodebuild`.
+3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
+4. Launches the copied app.
+
+Useful flags:
+
+```bash
+# Build only (no launch)
+./scripts/dev-loop-build.sh --testing
+
+# Install to a custom location
+./scripts/dev-loop-build.sh --destination-dir ./.context/apps
+
+# Build Release app + release Rust dylib
+./scripts/dev-loop-build.sh --configuration Release
+```
+
+Recommended day-to-day loop:
+
+```bash
+# 1) Validate Rust core behavior first
+GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
+cargo run -p diy_typeless_cli -- full --duration-seconds 4
+
+# 2) Rebuild + reinstall + relaunch macOS app
+./scripts/dev-loop-build.sh
+
+# 3) Verify build in testing mode (CI-style)
+./scripts/dev-loop-build.sh --testing
+```
+
+Reset permissions if needed:
+
+```bash
+./scripts/reset-permissions.sh
+./scripts/reset-permissions.sh --include-microphone
+```
+
 ### Error Handling Workflow
 
 1. Run `./scripts/dev-loop-build.sh --testing`
@@ -355,6 +435,17 @@ This is because:
 - `SWIFT_INCLUDE_PATHS` in `project.pbxproj` is set to `$(SRCROOT)/DIYTypeless`, which resolves to `app/DIYTypeless/DIYTypeless/`.
 
 Do NOT place copies of these files in `app/DIYTypeless/` (the parent directory). That path is not referenced by the Xcode project and creates confusing duplicates.
+
+### Regenerating Swift Bindings
+
+When Rust UniFFI API surfaces change, regenerate Swift bindings with:
+
+```bash
+uniffi-bindgen generate \
+  --library target/release/libdiy_typeless_core.dylib \
+  --language swift \
+  --out-dir app/DIYTypeless/DIYTypeless
+```
 
 ## File Naming Conventions
 

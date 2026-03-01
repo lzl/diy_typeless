@@ -1,197 +1,62 @@
- # DIY Typeless
- 
- DIY Typeless is a macOS app that lets you hold the **Fn** key to record speech, release to transcribe with Groq Whisper, and polish with Gemini. The final text is pasted into the active text field or copied to the clipboard.
- 
- ## Features
- 
- - Push-to-talk voice capture (Fn key)
- - Groq Whisper v3 transcription
- - Gemini Flash Lite text polishing
- - Automatic paste into focused input field (or clipboard fallback)
- - Rust core with Swift UI
- - CLI for fast, repeatable testing
- 
- ## Requirements
- 
- - macOS 13+
- - Xcode 15+
- - Rust toolchain (stable)
- - Groq API key
- - Gemini API key
- 
+# DIY Typeless
+
+DIY Typeless is a macOS app that lets you hold **Fn** to record speech, release to transcribe with Groq Whisper, polish with Gemini, and paste the final text into the active field (or copy to clipboard).
+
+## Features
+
+- Push-to-talk voice capture with **Fn**
+- Whisper Large v3 Turbo transcription
+- Gemini Flash Lite text polishing
+- Automatic paste with clipboard fallback
+- Rust core + Swift macOS app
+
+## Requirements
+
+- macOS 13+
+- Xcode 15+ (for local app builds)
+- Rust toolchain (stable, for core/CLI development)
+- Groq API key
+- Gemini API key
+
 ## Repository Structure
 
-- `core/` — Rust core library (audio capture + Groq + Gemini)
-- `cli/` — CLI for end-to-end testing
-- `app/DIYTypeless/` — Swift UI layer + UniFFI bindings
-- `scripts/` — Setup and utility scripts
- 
- ## Setup
- 
- 1. Install Rust:
- 
- ```bash
- curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
- ```
- 
- 2. Build the Rust core:
- 
- ```bash
- cargo build -p diy_typeless_core --release
- ```
- 
-3. Generate Swift bindings:
+- `core/` - Rust core library
+- `cli/` - CLI for end-to-end validation
+- `app/DIYTypeless/` - macOS app + UniFFI bridge
+- `scripts/` - build and utility scripts
+
+## Quick Start (Contributors)
 
 ```bash
-uniffi-bindgen generate \
-  --library target/release/libdiy_typeless_core.dylib \
-  --language swift \
-  --out-dir app/DIYTypeless/DIYTypeless
-```
- 
- ## CLI Usage (Closing the Loop)
- 
- The CLI exercises the same Rust core logic used by the macOS app. Always verify changes here first.
- 
- ```bash
- # Record a short clip (auto-start)
- cargo run -p diy_typeless_cli -- record --duration-seconds 3
+# Build Rust core
+cargo build -p diy_typeless_core --release
 
- # Full pipeline (record -> transcribe -> polish)
- GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
- cargo run -p diy_typeless_cli -- full --duration-seconds 4
- ```
- 
- The CLI automatically loads a local `.env` file if present.
- 
- Additional commands:
- 
- ```bash
-# Transcribe an existing FLAC file
-cargo run -p diy_typeless_cli -- transcribe ./audio.flac
- 
- # Polish a text string (reads stdin if --text not provided)
- echo "raw transcript" | cargo run -p diy_typeless_cli -- polish
- 
- # Print environment diagnostics (keys/tooling/path checks)
- cargo run -p diy_typeless_cli -- diagnose env
- 
-# Capture a timed diagnostic clip and print FLAC metadata
-cargo run -p diy_typeless_cli -- diagnose audio --duration-seconds 2
-
-# Run pipeline diagnostics on an existing FLAC file
+# Validate core pipeline through CLI
 GROQ_API_KEY=your_key GEMINI_API_KEY=your_key \
-cargo run -p diy_typeless_cli -- diagnose pipeline ./audio.flac
- ```
- 
-## Fast Debug Loop (CLI + xcodebuild)
-
-Use one command to rebuild Rust core, build the app with `xcodebuild`, install to a stable path, and relaunch.
-
-```bash
-./scripts/dev-loop-build.sh
-```
-
-By default it:
-
-1. Builds `diy_typeless_core` with a profile inferred from `--configuration` (`Debug -> debug`, `Release -> release`).
-2. Builds the app in Debug with `xcodebuild`.
-3. Copies the bundle to `~/Applications/DIYTypeless Dev.app`.
-4. Launches the copied app.
-
-Useful flags:
-
-```bash
-# Build only (no launch)
-./scripts/dev-loop-build.sh --testing
-
-# Install somewhere else
-./scripts/dev-loop-build.sh --destination-dir ./.context/apps
-
-# Build Release app + release Rust dylib
-./scripts/dev-loop-build.sh --configuration Release
-```
-
-Reset permissions manually (if needed):
-
-```bash
-./scripts/reset-permissions.sh --include-microphone
-```
-
-Recommended day-to-day debug flow:
-
-```bash
-# 1) Validate Rust core behavior first (closing the loop)
 cargo run -p diy_typeless_cli -- full --duration-seconds 4
 
-# 2) Rebuild + reinstall + relaunch macOS app
-./scripts/dev-loop-build.sh
-
-# 3) Build verification (CI/testing)
+# Verify macOS app build without launching
 ./scripts/dev-loop-build.sh --testing
 ```
 
-## macOS App
+For full CLI diagnostics, debug loops, and agent/developer workflow rules, see [AGENTS.md](AGENTS.md).
 
-The Xcode project and Swift sources are in this repository:
+## Usage
 
-- `app/DIYTypeless/DIYTypeless.xcodeproj`
-- `app/DIYTypeless/DIYTypeless/`
- 
+1. Launch the app.
+2. Grant Microphone and Accessibility permissions.
+3. Save Groq and Gemini API keys.
+4. Hold **Fn** to record and release to finish.
+5. Use the polished output pasted into the active field (or from clipboard fallback).
+
 ## Permissions
 
-The app requires:
+The app needs:
 
-- **Accessibility** (global key monitoring + paste simulation)
-- **Microphone** (audio recording)
+- **Microphone** for recording audio
+- **Accessibility** for global key handling and paste automation
 
-### Granting Permissions
-
-Open **System Settings → Privacy & Security** and enable the app under:
-
-- Accessibility
-- Microphone
-
-### App Not Appearing in Permission Lists?
-
-If the app doesn't appear in the Accessibility list:
-
-1. **Run from Xcode first** — When you run the app from Xcode, macOS registers it for permission requests. Click "Request Permissions" in the app.
-
-2. **Quit and reopen System Settings** — Sometimes the Settings app needs to be fully closed and reopened to refresh the list.
-
-3. **Check signing** — The app must be code-signed (at least with a local development certificate). In Xcode:
-   - Go to **Signing & Capabilities**
-   - Ensure "Automatically manage signing" is enabled
-   - Select your development team
-
-4. **Manual addition** — If the app still doesn't appear:
-   - Click the **+** button in the permission list
-   - Navigate to `~/Library/Developer/Xcode/DerivedData/DIYTypeless-*/Build/Products/Debug/DIYTypeless.app`
-   - (The exact path depends on your build configuration)
-
-5. **Reset permissions (last resort)**:
-   ```bash
-   ./scripts/reset-permissions.sh
-
-   # Also reset microphone if needed
-   ./scripts/reset-permissions.sh --include-microphone
-   ```
-   Then run `./scripts/dev-loop-build.sh` and request permissions again.
- 
- ## Usage
- 
- 1. Launch the app.
- 2. Grant required permissions.
- 3. Save Groq and Gemini API keys.
- 4. Hold **Fn** to record; release to finish.
- 5. The polished text will be pasted into the active field or copied.
- 
- ## Notes
-
- - If Accessibility is missing, key capture will not work.
- - If no input field is focused, text is copied to the clipboard.
- - Re-generate UniFFI bindings whenever the Rust API changes.
+If the app does not appear in System Settings permission lists, run it once from Xcode and retry.
 
 ## License
 
