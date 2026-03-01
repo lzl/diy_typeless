@@ -7,6 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const POLISH_MAX_RETRY_ATTEMPTS: u32 = 3;
 
 #[derive(Deserialize)]
 struct GeminiResponse {
@@ -79,6 +80,12 @@ fn map_gemini_error(msg: String) -> CoreError {
     }
 }
 
+fn run_polish_with_retry(
+    operation: impl FnMut() -> HttpResult<String>,
+) -> Result<String, CoreError> {
+    with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+}
+
 /// Build the context section for the polishing prompt.
 ///
 /// Returns an empty string if context is None or empty,
@@ -118,44 +125,39 @@ pub(crate) fn polish_text(
     let client = get_http_client();
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 
-    let result = with_retry(
-        3,
-        || {
-            let body = build_polish_request_body(&prompt);
+    run_polish_with_retry(|| {
+        let body = build_polish_request_body(&prompt);
 
-            let response = client
-                .post(&url)
-                .header("x-goog-api-key", api_key.expose_secret())
-                .json(&body)
-                .send();
+        let response = client
+            .post(&url)
+            .header("x-goog-api-key", api_key.expose_secret())
+            .json(&body)
+            .send();
 
-            match response {
-                Ok(resp) => match classify_gemini_status(resp.status()) {
-                    HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
-                        Ok(payload) => extract_gemini_text(payload),
-                        Err(e) => HttpResult::NonRetryable(e.to_string()),
-                    },
-                    HttpResult::Retryable => HttpResult::Retryable,
-                    HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+        match response {
+            Ok(resp) => match classify_gemini_status(resp.status()) {
+                HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
+                    Ok(payload) => extract_gemini_text(payload),
+                    Err(e) => HttpResult::NonRetryable(e.to_string()),
                 },
-                Err(_) => HttpResult::Retryable,
-            }
-        },
-        "Gemini API",
-    );
-
-    result.map_err(map_gemini_error)
+                HttpResult::Retryable => HttpResult::Retryable,
+                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+            },
+            Err(_) => HttpResult::Retryable,
+        }
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         build_context_section, build_polish_request_body, build_prompt, classify_gemini_status,
-        extract_gemini_text, map_gemini_error, GeminiResponse,
+        extract_gemini_text, map_gemini_error, run_polish_with_retry, GeminiResponse,
     };
     use crate::error::CoreError;
     use crate::retry::HttpResult;
     use reqwest::StatusCode;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
     fn build_context_section_should_include_one_context_block_when_context_provided() {
@@ -320,5 +322,37 @@ mod tests {
     fn map_gemini_error_should_map_http_variant() {
         let result = map_gemini_error("request timeout".to_string());
         assert!(matches!(result, CoreError::Http(_)));
+    }
+
+    #[test]
+    fn run_polish_with_retry_should_retry_until_third_attempt_success() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_polish_with_retry(|| {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            if attempt < 2 {
+                HttpResult::Retryable
+            } else {
+                HttpResult::Success("ok".to_string())
+            }
+        });
+
+        assert!(matches!(result, Ok(value) if value == "ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn run_polish_with_retry_should_fail_after_retry_budget_exhausted() {
+        let attempts = AtomicU32::new(0);
+
+        let result = run_polish_with_retry(|| {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            HttpResult::Retryable
+        });
+
+        assert!(
+            matches!(result, Err(CoreError::Http(message)) if message == "Gemini API: retries exceeded")
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }
