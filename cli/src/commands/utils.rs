@@ -27,7 +27,11 @@ pub(crate) fn mask_secret(secret: &str) -> String {
 /// Find a binary in the system PATH
 pub(crate) fn find_binary(binary: &str) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path_var) {
+    find_binary_in_path(binary, &path_var)
+}
+
+fn find_binary_in_path(binary: &str, path_var: &std::ffi::OsStr) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_var) {
         let candidate = dir.join(binary);
         if candidate.is_file() {
             return Some(candidate);
@@ -145,11 +149,52 @@ pub(crate) fn print_binary_status(binary: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_flac_bytes, format_duration, mask_secret, resolve_api_key_value, resolve_output_dir,
+        ensure_flac_bytes, find_binary_in_path, format_duration, mask_secret,
+        resolve_api_key_value, resolve_output_dir,
     };
     use secrecy::ExposeSecret;
+    use std::ffi::OsString;
+    use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static PATH_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct PathEnvGuard {
+        original: Option<OsString>,
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.original {
+                std::env::set_var("PATH", value);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
+
+    fn set_path_for_test(path: &std::ffi::OsStr) -> PathEnvGuard {
+        let original = std::env::var_os("PATH");
+        std::env::set_var("PATH", path);
+        PathEnvGuard { original }
+    }
+
+    fn make_temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "diy_typeless_cli_utils_{label}_{}_{}",
+            std::process::id(),
+            nanos
+        ));
+        fs::create_dir_all(&path).expect("temp directory should be created");
+        path
+    }
 
     #[test]
     fn ensure_flac_bytes_accepts_valid_flac_header() {
@@ -198,6 +243,74 @@ mod tests {
         let path = PathBuf::from("/tmp/custom-output");
         let resolved = resolve_output_dir(Some(path.clone())).expect("path should resolve");
         assert_eq!(resolved, path);
+    }
+
+    #[test]
+    fn find_binary_in_path_should_return_first_match_by_path_order() {
+        let dir_one = make_temp_dir("path_first_one");
+        let dir_two = make_temp_dir("path_first_two");
+        let bin_name = "tool";
+        let first = dir_one.join(bin_name);
+        let second = dir_two.join(bin_name);
+        fs::write(&first, b"one").expect("first binary file should be created");
+        fs::write(&second, b"two").expect("second binary file should be created");
+
+        let path = std::env::join_paths([dir_one.clone(), dir_two.clone()])
+            .expect("path join should succeed");
+        let found = find_binary_in_path(bin_name, path.as_os_str());
+
+        assert_eq!(found, Some(first));
+
+        let _ = fs::remove_dir_all(dir_one);
+        let _ = fs::remove_dir_all(dir_two);
+    }
+
+    #[test]
+    fn find_binary_in_path_should_find_match_in_later_path_segment() {
+        let dir_one = make_temp_dir("path_later_one");
+        let dir_two = make_temp_dir("path_later_two");
+        let bin_name = "late_tool";
+        let expected = dir_two.join(bin_name);
+        fs::write(&expected, b"late").expect("later binary file should be created");
+
+        let path = std::env::join_paths([dir_one.clone(), dir_two.clone()])
+            .expect("path join should succeed");
+        let found = find_binary_in_path(bin_name, path.as_os_str());
+
+        assert_eq!(found, Some(expected));
+
+        let _ = fs::remove_dir_all(dir_one);
+        let _ = fs::remove_dir_all(dir_two);
+    }
+
+    #[test]
+    fn find_binary_in_path_should_return_none_when_binary_absent() {
+        let dir = make_temp_dir("path_none");
+        let path = OsString::from(dir.as_os_str());
+        let found = find_binary_in_path("missing_bin", path.as_os_str());
+
+        assert!(found.is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn find_binary_should_use_current_process_path_environment() {
+        let _lock = PATH_TEST_LOCK
+            .lock()
+            .expect("path test lock should be acquired");
+        let dir = make_temp_dir("path_env");
+        let bin_name = "env_tool";
+        let expected = dir.join(bin_name);
+        fs::write(&expected, b"env").expect("env binary file should be created");
+
+        let path = std::env::join_paths([dir.clone()]).expect("path join should succeed");
+        let _guard = set_path_for_test(path.as_os_str());
+        let found = super::find_binary(bin_name);
+
+        assert_eq!(found, Some(expected));
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
