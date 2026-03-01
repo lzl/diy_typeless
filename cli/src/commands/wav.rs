@@ -4,18 +4,18 @@ use anyhow::{anyhow, Context, Result};
 use std::io::Cursor;
 
 /// Metrics extracted from a WAV file
-pub struct WavMetrics {
-    pub sample_rate: u32,
-    pub channels: u16,
-    pub bits_per_sample: u16,
-    pub duration_seconds: f64,
-    pub rms_dbfs: f64,
-    pub peak_dbfs: f64,
-    pub sample_count: usize,
+pub(crate) struct WavMetrics {
+    pub(crate) sample_rate: u32,
+    pub(crate) channels: u16,
+    pub(crate) bits_per_sample: u16,
+    pub(crate) duration_seconds: f64,
+    pub(crate) rms_dbfs: f64,
+    pub(crate) peak_dbfs: f64,
+    pub(crate) sample_count: usize,
 }
 
 /// Inspect WAV bytes and extract metrics
-pub fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
+pub(crate) fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
     let mut reader = hound::WavReader::new(Cursor::new(bytes))?;
     let spec = reader.spec();
 
@@ -30,7 +30,7 @@ pub fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
     match spec.sample_format {
         hound::SampleFormat::Float => {
             for sample in reader.samples::<f32>() {
-                let normalized = sample.context("Failed to read WAV sample")? as f64;
+                let normalized = f64::from(sample.context("Failed to read WAV sample")?);
                 sum_square += normalized * normalized;
                 peak = peak.max(normalized.abs());
                 sample_count += 1;
@@ -41,7 +41,8 @@ pub fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
             if bits <= 16 {
                 let denom = max_int_amplitude(bits);
                 for sample in reader.samples::<i16>() {
-                    let normalized = sample.context("Failed to read WAV sample")? as f64 / denom;
+                    let normalized =
+                        f64::from(sample.context("Failed to read WAV sample")?) / denom;
                     sum_square += normalized * normalized;
                     peak = peak.max(normalized.abs());
                     sample_count += 1;
@@ -49,7 +50,8 @@ pub fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
             } else {
                 let denom = max_int_amplitude(bits);
                 for sample in reader.samples::<i32>() {
-                    let normalized = sample.context("Failed to read WAV sample")? as f64 / denom;
+                    let normalized =
+                        f64::from(sample.context("Failed to read WAV sample")?) / denom;
                     sum_square += normalized * normalized;
                     peak = peak.max(normalized.abs());
                     sample_count += 1;
@@ -64,7 +66,7 @@ pub fn inspect_wav_bytes(bytes: &[u8]) -> Result<WavMetrics> {
 
     let channels = spec.channels as usize;
     let frames = sample_count / channels;
-    let duration_seconds = frames as f64 / spec.sample_rate as f64;
+    let duration_seconds = frames as f64 / f64::from(spec.sample_rate);
 
     let rms = (sum_square / sample_count as f64).sqrt();
     let rms_dbfs = to_dbfs(rms);
@@ -88,7 +90,7 @@ fn max_int_amplitude(bits_per_sample: u16) -> f64 {
     }
 
     // Keep diagnostic normalization valid for 24/32-bit PCM and avoid shift overflow.
-    let shift = (bits_per_sample - 1).min(62) as u32;
+    let shift = u32::from((bits_per_sample - 1).min(62));
     ((1i64 << shift) - 1) as f64
 }
 

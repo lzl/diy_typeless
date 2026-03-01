@@ -43,7 +43,7 @@ struct GeminiPart {
 /// - HTTP 429 (Too Many Requests)
 /// - HTTP 5xx (Server Errors)
 /// - Network errors
-pub fn process_text_with_llm(
+pub(crate) fn process_text_with_llm(
     api_key: &SecretString,
     prompt: &str,
     system_instruction: Option<&str>,

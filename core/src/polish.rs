@@ -55,7 +55,7 @@ fn build_prompt(raw_text: &str, context: Option<&str>) -> String {
      )
 }
 
-pub fn polish_text(
+pub(crate) fn polish_text(
     api_key: &SecretString,
     raw_text: &str,
     context: Option<&str>,

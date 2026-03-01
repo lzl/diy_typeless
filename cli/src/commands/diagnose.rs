@@ -7,11 +7,14 @@ use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use crate::commands::utils::{format_duration, print_binary_status, print_key_status, resolve_output_dir, resolve_groq_key, resolve_gemini_key, timestamp};
+use crate::commands::utils::{
+    format_duration, print_binary_status, print_key_status, resolve_gemini_key, resolve_groq_key,
+    resolve_output_dir, timestamp,
+};
 use crate::commands::wav::inspect_wav_bytes;
 
 /// Run environment diagnostics
-pub fn run_diagnose_env() -> Result<()> {
+pub(crate) fn run_diagnose_env() -> Result<()> {
     println!("CLI diagnostics (environment)");
     println!(
         "- OS: {} ({})",
@@ -35,7 +38,7 @@ pub fn run_diagnose_env() -> Result<()> {
 }
 
 /// Run audio diagnostics
-pub fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>) -> Result<()> {
+pub(crate) fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>) -> Result<()> {
     if duration_seconds == 0 {
         return Err(anyhow!("--duration-seconds must be greater than 0"));
     }
@@ -87,7 +90,7 @@ pub fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>) -> Res
 
 /// Run pipeline diagnostics
 #[allow(clippy::too_many_arguments)]
-pub fn run_diagnose_pipeline(
+pub(crate) fn run_diagnose_pipeline(
     file: PathBuf,
     output_dir: Option<PathBuf>,
     groq_key: Option<String>,
@@ -120,9 +123,9 @@ pub fn run_diagnose_pipeline(
     let raw_text = diy_typeless_core::transcribe_audio_bytes(
         groq_key.expose_secret().to_string(),
         wav_bytes,
-        language
+        language,
     )
-        .context("Transcribe step failed")?;
+    .context("Transcribe step failed")?;
     let transcribe_elapsed = transcribe_start.elapsed();
     let raw_path = output_dir.join(format!("{}_raw.txt", base));
     fs::write(&raw_path, &raw_text)?;
