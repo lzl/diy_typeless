@@ -4,13 +4,13 @@ import Foundation
 /// Uses Double (not CGFloat) to maintain Domain layer purity
 protocol AudioLevelProviding: AnyObject, Sendable {
     /// Current audio levels as normalized values (0.0...1.0)
-    var levels: [Double] { get }
+    var levels: [Double] { get async }
 
     /// AsyncStream for real-time audio level updates
-    var levelsStream: AsyncStream<[Double]> { get }
+    var levelsStream: AsyncStream<[Double]> { get async }
 
     /// Start monitoring audio levels
-    func startMonitoring() throws
+    func startMonitoring() async throws
 
     /// Stop monitoring audio levels
     func stopMonitoring() async

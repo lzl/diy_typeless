@@ -5,16 +5,17 @@ import AVFoundation
 actor AudioLevelMonitor: AudioLevelProviding {
     private let audioEngine = AVAudioEngine()
     private var continuation: AsyncStream<[Double]>.Continuation?
+    private var currentLevels: [Double] = Array(repeating: 0.0, count: 20)
 
     /// Current audio levels as normalized values (0.0...1.0)
     /// For real-time updates, prefer `levelsStream`
-    nonisolated var levels: [Double] {
-        []
+    var levels: [Double] {
+        currentLevels
     }
 
     /// AsyncStream that emits audio levels - safe for SwiftUI observation
     /// Creates a new stream each time - consumer must call this before startMonitoring
-    nonisolated var levelsStream: AsyncStream<[Double]> {
+    var levelsStream: AsyncStream<[Double]> {
         AsyncStream { continuation in
             // Store continuation for audio tap to use
             Task {
@@ -28,7 +29,7 @@ actor AudioLevelMonitor: AudioLevelProviding {
     }
 
     /// Start monitoring audio levels
-    nonisolated func startMonitoring() throws {
+    func startMonitoring() async throws {
         // Stop any existing monitoring first
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
@@ -38,7 +39,7 @@ actor AudioLevelMonitor: AudioLevelProviding {
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
-            let levels = self.calculateLevels(from: buffer)
+            let levels = Self.calculateLevels(from: buffer)
             Task {
                 await self.yieldLevels(levels)
             }
@@ -48,11 +49,12 @@ actor AudioLevelMonitor: AudioLevelProviding {
     }
 
     private func yieldLevels(_ levels: [Double]) {
+        currentLevels = levels
         continuation?.yield(levels)
     }
 
     /// Stop monitoring audio levels
-    nonisolated func stopMonitoring() {
+    func stopMonitoring() async {
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         // Don't finish continuation - let the consumer control the stream lifecycle
@@ -60,7 +62,7 @@ actor AudioLevelMonitor: AudioLevelProviding {
 
     /// Calculate normalized audio levels from PCM buffer
     /// Returns array of 20 Double values (0.0...1.0)
-    nonisolated private func calculateLevels(from buffer: AVAudioPCMBuffer) -> [Double] {
+    private static func calculateLevels(from buffer: AVAudioPCMBuffer) -> [Double] {
         guard let channelData = buffer.floatChannelData?[0] else { return [] }
         let frameLength = Int(buffer.frameLength)
         let samples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))

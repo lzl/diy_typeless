@@ -145,7 +145,7 @@ struct CapsuleView: View {
         switch newState {
         case .recording:
             Task {
-                try? audioMonitor.startMonitoring()
+                try? await audioMonitor.startMonitoring()
             }
             progress = 0
 

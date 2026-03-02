@@ -6,16 +6,22 @@ import SwiftUI
 @MainActor
 @Observable
 final class MockAudioLevelProvider: AudioLevelProviding, @unchecked Sendable {
-    var levels: [Double] = Array(repeating: 0.1, count: 20)
+    private var currentLevels: [Double] = Array(repeating: 0.1, count: 20)
 
     private var timer: Timer?
     private let pattern: WaveformPattern
     private var continuation: AsyncStream<[Double]>.Continuation?
 
-    nonisolated var levelsStream: AsyncStream<[Double]> {
-        AsyncStream { continuation in
-            Task { @MainActor in
-                self.continuation = continuation
+    var levels: [Double] {
+        get async { currentLevels }
+    }
+
+    var levelsStream: AsyncStream<[Double]> {
+        get async {
+            AsyncStream { continuation in
+                Task { @MainActor in
+                    self.continuation = continuation
+                }
             }
         }
     }
@@ -47,12 +53,12 @@ final class MockAudioLevelProvider: AudioLevelProviding, @unchecked Sendable {
     func stop() {
         timer?.invalidate()
         timer = nil
-        levels = Array(repeating: 0.1, count: 20)
+        currentLevels = Array(repeating: 0.1, count: 20)
     }
 
     // MARK: AudioLevelProviding protocol conformance
 
-    func startMonitoring() throws {
+    func startMonitoring() async throws {
         start()
     }
 
@@ -80,13 +86,13 @@ final class MockAudioLevelProvider: AudioLevelProviding, @unchecked Sendable {
             newLevel = 0.3
         }
 
-        var newLevels = levels
+        var newLevels = currentLevels
         newLevels.removeFirst()
         newLevels.append(max(0.1, newLevel))
-        levels = newLevels
+        currentLevels = newLevels
 
         // Emit to AsyncStream
-        continuation?.yield(levels)
+        continuation?.yield(currentLevels)
     }
 }
 #endif
