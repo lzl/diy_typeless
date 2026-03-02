@@ -7,6 +7,7 @@ enum CapsuleState: Equatable {
     case transcribing(progress: Double)
     case polishing(progress: Double)
     case processingCommand(String, progress: Double)  // Shows voice command being processed
+    case canceled
     case done(OutputResult)
     case error(UserFacingError)
 }
@@ -52,6 +53,7 @@ final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
+    private let cancelFeedbackDuration: TimeInterval = 0.8
 
     init(
         permissionRepository: PermissionRepository,
@@ -146,9 +148,10 @@ final class RecordingState {
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
-            capsuleState = .hidden
+            capsuleState = .canceled
+            scheduleHide(after: cancelFeedbackDuration, expectedState: .canceled)
 
-        case .hidden, .done, .error:
+        case .hidden, .canceled, .done, .error:
             break
         }
     }
