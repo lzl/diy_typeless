@@ -63,7 +63,9 @@ final class RecordingState {
         transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = TranscribeAudioUseCaseImpl(),
         polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl(),
         // Voice command
-        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(),
+        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(
+            repository: AccessibilitySelectedTextRepository()
+        ),
         processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCaseImpl(),
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),

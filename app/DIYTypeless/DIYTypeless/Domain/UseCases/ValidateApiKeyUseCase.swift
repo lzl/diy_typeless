@@ -18,8 +18,8 @@ final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
     private let geminiRepository: ApiKeyValidationRepository
 
     init(
-        groqRepository: ApiKeyValidationRepository = GroqApiKeyValidationRepository(),
-        geminiRepository: ApiKeyValidationRepository = GeminiApiKeyValidationRepository()
+        groqRepository: ApiKeyValidationRepository,
+        geminiRepository: ApiKeyValidationRepository
     ) {
         self.groqRepository = groqRepository
         self.geminiRepository = geminiRepository

@@ -1,7 +1,7 @@
 import Foundation
 
 /// User-facing error types for display in the UI.
-/// These errors are mapped from technical CoreError and provide
+/// These errors are mapped from technical failures and provide
 /// user-friendly messages suitable for display in the capsule UI.
 enum UserFacingError: Error, Equatable {
     case invalidAPIKey

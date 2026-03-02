@@ -10,9 +10,9 @@ This file provides an index of all use case protocols in the Domain layer.
 | **PolishTextUseCase** | `PolishTextUseCase.swift` | `rawText: String, apiKey: String, context: String?` | `String` |
 | **ProcessVoiceCommandUseCase** | `ProcessVoiceCommandUseCase.swift` | `audioData: Data, selectedText: String?` | `VoiceCommandResult` |
 | **RecordingControlUseCase** | `RecordingControlUseCase.swift` | None | - |
-| **StopRecordingUseCase** | `StopRecordingUseCase.swift` | None | `AudioData` |
-| **TranscribeAudioUseCase** | `TranscribeAudioUseCase.swift` | `AudioData` | `String` |
-| **TranscriptionUseCase** | `TranscriptionUseCase.swift` | `AudioData, apiKey: String, context: String?` | `String` |
+| **StopRecordingUseCase** | `StopRecordingUseCase.swift` | None | `DomainAudioData` |
+| **TranscribeAudioUseCase** | `TranscribeAudioUseCase.swift` | `DomainAudioData` | `String` |
+| **TranscriptionUseCase** | `TranscriptionUseCase.swift` | `DomainAudioData, apiKey: String, context: String?` | `String` |
 | **ValidateApiKeyUseCase** | `ValidateApiKeyUseCase.swift` | `key: String, provider: ApiProvider` | `ValidationState` |
 
 ## Usage

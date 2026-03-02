@@ -79,7 +79,10 @@ final class OnboardingState {
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
         externalLinkRepository: ExternalLinkRepository = NSWorkspaceExternalLinkRepository(),
-        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = ValidateApiKeyUseCase()
+        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = ValidateApiKeyUseCase(
+            groqRepository: GroqApiKeyValidationRepository(),
+            geminiRepository: GeminiApiKeyValidationRepository()
+        )
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -288,4 +291,3 @@ final class OnboardingState {
         try await validateApiKeyUseCase.execute(key: key, for: .gemini)
     }
 }
-
