@@ -2,6 +2,9 @@ use reqwest::StatusCode;
 use std::thread::sleep;
 use std::time::Duration;
 
+const CANCELLED_MESSAGE: &str = "Operation cancelled";
+const RETRY_CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 /// The result of an HTTP request that includes the response status information.
 /// This allows the retry logic to distinguish between success, retryable errors,
 /// and non-retryable errors.
@@ -57,6 +60,22 @@ pub(crate) fn with_retry<T>(
     })
 }
 
+pub(crate) fn with_retry_cancellable<T>(
+    max_attempts: u32,
+    operation: impl FnMut() -> HttpResult<T>,
+    error_message: &str,
+    is_cancelled: impl FnMut() -> bool,
+) -> Result<T, String> {
+    with_retry_cancellable_impl(
+        max_attempts,
+        operation,
+        error_message,
+        is_cancelled,
+        RETRY_CANCELLATION_POLL_INTERVAL,
+        sleep,
+    )
+}
+
 fn with_retry_impl<T>(
     max_attempts: u32,
     mut operation: impl FnMut() -> HttpResult<T>,
@@ -84,6 +103,47 @@ fn with_retry_impl<T>(
     Err(format!("{}: retries exceeded", error_message))
 }
 
+fn with_retry_cancellable_impl<T>(
+    max_attempts: u32,
+    mut operation: impl FnMut() -> HttpResult<T>,
+    error_message: &str,
+    mut is_cancelled: impl FnMut() -> bool,
+    poll_interval: Duration,
+    mut sleep_fn: impl FnMut(Duration),
+) -> Result<T, String> {
+    if max_attempts == 0 {
+        return Err("max_attempts must be at least 1".to_string());
+    }
+
+    for attempt in 0..max_attempts {
+        if is_cancelled() {
+            return Err(CANCELLED_MESSAGE.to_string());
+        }
+
+        match operation() {
+            HttpResult::Success(value) => return Ok(value),
+            HttpResult::NonRetryable(msg) => return Err(msg),
+            HttpResult::Retryable => {
+                if attempt < max_attempts - 1 {
+                    let mut remaining = Duration::from_secs(2u64.pow(attempt));
+
+                    while remaining > Duration::ZERO {
+                        if is_cancelled() {
+                            return Err(CANCELLED_MESSAGE.to_string());
+                        }
+
+                        let sleep_for = remaining.min(poll_interval);
+                        sleep_fn(sleep_for);
+                        remaining -= sleep_for;
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!("{}: retries exceeded", error_message))
+}
+
 /// Checks if an HTTP status code indicates a retryable error.
 ///
 /// Retryable status codes:
@@ -96,7 +156,10 @@ pub(crate) fn is_retryable_status(status: StatusCode) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Instant;
 
     #[test]
     fn test_success_on_first_attempt() {
@@ -228,5 +291,82 @@ mod tests {
         assert_eq!(result, Ok("ok"));
         assert_eq!(attempts.load(Ordering::SeqCst), 4);
         assert_eq!(backoff_calls, vec![1, 2, 4]);
+    }
+
+    #[test]
+    fn test_with_retry_cancellable_aborts_before_first_attempt_when_cancelled() {
+        let cancelled = AtomicBool::new(true);
+        let attempts = AtomicU32::new(0);
+        let result = with_retry_cancellable(
+            3,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Success::<u32>(1)
+            },
+            "API call",
+            || cancelled.load(Ordering::SeqCst),
+        );
+
+        assert_eq!(result, Err("Operation cancelled".to_string()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn test_with_retry_cancellable_aborts_during_backoff() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_for_thread = Arc::clone(&cancelled);
+        let attempts = AtomicU32::new(0);
+        let canceller = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            cancelled_for_thread.store(true, Ordering::SeqCst);
+        });
+
+        let start = Instant::now();
+        let result = with_retry_cancellable(
+            3,
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Retryable::<u32>
+            },
+            "API call",
+            || cancelled.load(Ordering::SeqCst),
+        );
+        let elapsed = start.elapsed();
+        canceller
+            .join()
+            .expect("canceller thread should join cleanly");
+
+        assert_eq!(result, Err("Operation cancelled".to_string()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert!(elapsed < Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_with_retry_cancellable_impl_honors_custom_sleep_without_delay() {
+        let cancelled = AtomicBool::new(false);
+        let attempts = AtomicU32::new(0);
+        let mut sleeps = 0_u32;
+
+        let result = with_retry_cancellable_impl(
+            3,
+            || {
+                let current = attempts.fetch_add(1, Ordering::SeqCst);
+                if current == 1 {
+                    HttpResult::Success("ok")
+                } else {
+                    HttpResult::Retryable
+                }
+            },
+            "API call",
+            || cancelled.load(Ordering::SeqCst),
+            Duration::from_millis(10),
+            |_| {
+                sleeps += 1;
+            },
+        );
+
+        assert_eq!(result, Ok("ok"));
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert!(sleeps > 0);
     }
 }
