@@ -65,28 +65,35 @@ struct WaveformContainerView: View {
 // Simple mock for previews only
 @MainActor
 private final class PreviewAudioMonitor: AudioLevelProviding, @unchecked Sendable {
-    let levels: [Double] = []
-    nonisolated var levelsStream: AsyncStream<[Double]> {
-        AsyncStream { continuation in
-            // Simulate animated levels
-            Task {
-                var time: Double = 0
-                while !Task.isCancelled {
-                    var simulatedLevels: [Double] = []
-                    for i in 0..<20 {
-                        let phase = time + Double(i) * 0.3
-                        let level = (sin(phase) + 1) * 0.3 + 0.05
-                        simulatedLevels.append(min(level, 1.0))
+    private let currentLevels: [Double] = []
+
+    var levels: [Double] {
+        get async { currentLevels }
+    }
+
+    var levelsStream: AsyncStream<[Double]> {
+        get async {
+            AsyncStream { continuation in
+                // Simulate animated levels
+                Task {
+                    var time: Double = 0
+                    while !Task.isCancelled {
+                        var simulatedLevels: [Double] = []
+                        for i in 0..<20 {
+                            let phase = time + Double(i) * 0.3
+                            let level = (sin(phase) + 1) * 0.3 + 0.05
+                            simulatedLevels.append(min(level, 1.0))
+                        }
+                        continuation.yield(simulatedLevels)
+                        time += 0.1
+                        try? await Task.sleep(for: .milliseconds(50))
                     }
-                    continuation.yield(simulatedLevels)
-                    time += 0.1
-                    try? await Task.sleep(for: .milliseconds(50))
                 }
             }
         }
     }
 
-    func startMonitoring() throws {}
+    func startMonitoring() async throws {}
 
     func stopMonitoring() async {}
 }
