@@ -435,6 +435,30 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -490,6 +514,159 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
         writeBytes(&buf, value)
     }
 }
+
+
+
+
+/**
+ * Cooperative cancellation token for long-running operations.
+ */
+public protocol CancellationTokenProtocol: AnyObject, Sendable {
+    
+    /**
+     * Request cancellation.
+     */
+    func cancel() 
+    
+    /**
+     * Check whether cancellation has been requested.
+     */
+    func isCancelled()  -> Bool
+    
+}
+/**
+ * Cooperative cancellation token for long-running operations.
+ */
+open class CancellationToken: CancellationTokenProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_diy_typeless_core_fn_clone_cancellationtoken(self.handle, $0) }
+    }
+    /**
+     * Create a new token in non-cancelled state.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_diy_typeless_core_fn_constructor_cancellationtoken_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_diy_typeless_core_fn_free_cancellationtoken(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Request cancellation.
+     */
+open func cancel()  {try! rustCall() {
+    uniffi_diy_typeless_core_fn_method_cancellationtoken_cancel(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Check whether cancellation has been requested.
+     */
+open func isCancelled() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_diy_typeless_core_fn_method_cancellationtoken_is_cancelled(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCancellationToken: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = CancellationToken
+
+    public static func lift(_ handle: UInt64) throws -> CancellationToken {
+        return CancellationToken(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: CancellationToken) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CancellationToken {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: CancellationToken, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCancellationToken_lift(_ handle: UInt64) throws -> CancellationToken {
+    return try FfiConverterTypeCancellationToken.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCancellationToken_lower(_ value: CancellationToken) -> UInt64 {
+    return FfiConverterTypeCancellationToken.lower(value)
+}
+
+
 
 
 /**
@@ -623,6 +800,10 @@ public enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedErr
     
     
     /**
+     * Operation was cancelled by caller.
+     */
+    case Cancelled
+    /**
      * No default input audio device is available.
      */
     case AudioDeviceUnavailable
@@ -702,29 +883,30 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
         
 
         
-        case 1: return .AudioDeviceUnavailable
-        case 2: return .RecordingAlreadyActive
-        case 3: return .RecordingNotActive
-        case 4: return .AudioCapture(
+        case 1: return .Cancelled
+        case 2: return .AudioDeviceUnavailable
+        case 3: return .RecordingAlreadyActive
+        case 4: return .RecordingNotActive
+        case 5: return .AudioCapture(
             try FfiConverterString.read(from: &buf)
             )
-        case 5: return .AudioProcessing(
+        case 6: return .AudioProcessing(
             try FfiConverterString.read(from: &buf)
             )
-        case 6: return .Http(
+        case 7: return .Http(
             try FfiConverterString.read(from: &buf)
             )
-        case 7: return .Api(
+        case 8: return .Api(
             try FfiConverterString.read(from: &buf)
             )
-        case 8: return .Serialization(
+        case 9: return .Serialization(
             try FfiConverterString.read(from: &buf)
             )
-        case 9: return .EmptyResponse
-        case 10: return .Transcription(
+        case 10: return .EmptyResponse
+        case 11: return .Transcription(
             try FfiConverterString.read(from: &buf)
             )
-        case 11: return .Config(
+        case 12: return .Config(
             try FfiConverterString.read(from: &buf)
             )
 
@@ -739,54 +921,58 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
 
         
         
-        case .AudioDeviceUnavailable:
+        case .Cancelled:
             writeInt(&buf, Int32(1))
         
         
-        case .RecordingAlreadyActive:
+        case .AudioDeviceUnavailable:
             writeInt(&buf, Int32(2))
         
         
-        case .RecordingNotActive:
+        case .RecordingAlreadyActive:
             writeInt(&buf, Int32(3))
         
         
-        case let .AudioCapture(v1):
+        case .RecordingNotActive:
             writeInt(&buf, Int32(4))
-            FfiConverterString.write(v1, into: &buf)
-            
         
-        case let .AudioProcessing(v1):
+        
+        case let .AudioCapture(v1):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(v1, into: &buf)
             
         
-        case let .Http(v1):
+        case let .AudioProcessing(v1):
             writeInt(&buf, Int32(6))
             FfiConverterString.write(v1, into: &buf)
             
         
-        case let .Api(v1):
+        case let .Http(v1):
             writeInt(&buf, Int32(7))
             FfiConverterString.write(v1, into: &buf)
             
         
-        case let .Serialization(v1):
+        case let .Api(v1):
             writeInt(&buf, Int32(8))
             FfiConverterString.write(v1, into: &buf)
             
         
-        case .EmptyResponse:
+        case let .Serialization(v1):
             writeInt(&buf, Int32(9))
+            FfiConverterString.write(v1, into: &buf)
+            
+        
+        case .EmptyResponse:
+            writeInt(&buf, Int32(10))
         
         
         case let .Transcription(v1):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(v1, into: &buf)
             
         
         case let .Config(v1):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(v1, into: &buf)
             
         }
@@ -868,6 +1054,21 @@ public func polishText(apiKey: String, rawText: String, context: String?)throws 
 })
 }
 /**
+ * Polish raw transcript text with Gemini API.
+ *
+ * Supports cooperative cancellation using a shared cancellation token.
+ */
+public func polishTextCancellable(apiKey: String, rawText: String, context: String?, cancellationToken: CancellationToken)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_polish_text_cancellable(
+        FfiConverterString.lower(apiKey),
+        FfiConverterString.lower(rawText),
+        FfiConverterOptionString.lower(context),
+        FfiConverterTypeCancellationToken_lower(cancellationToken),$0
+    )
+})
+}
+/**
  * Process text with LLM (Gemini API)
  * Generic function for processing text with custom prompts
  * Process arbitrary text with Gemini API and optional system instruction.
@@ -912,6 +1113,21 @@ public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: Str
         FfiConverterString.lower(apiKey),
         FfiConverterData.lower(audioBytes),
         FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+/**
+ * Transcribe encoded audio bytes with Groq Whisper API.
+ *
+ * Supports cooperative cancellation using a shared cancellation token.
+ */
+public func transcribeAudioBytesCancellable(apiKey: String, audioBytes: Data, language: String?, cancellationToken: CancellationToken)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes_cancellable(
+        FfiConverterString.lower(apiKey),
+        FfiConverterData.lower(audioBytes),
+        FfiConverterOptionString.lower(language),
+        FfiConverterTypeCancellationToken_lower(cancellationToken),$0
     )
 })
 }
@@ -968,6 +1184,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 45710) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_polish_text_cancellable() != 31763) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 56597) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -980,10 +1199,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 3876) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes_cancellable() != 47248) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 13024) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 35656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_method_cancellationtoken_cancel() != 9674) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_method_cancellationtoken_is_cancelled() != 51790) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_constructor_cancellationtoken_new() != 61982) {
         return InitializationResult.apiChecksumMismatch
     }
 

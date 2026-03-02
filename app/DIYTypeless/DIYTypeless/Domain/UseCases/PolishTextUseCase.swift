@@ -7,9 +7,15 @@ protocol PolishTextUseCaseProtocol: Sendable {
     ///   - rawText: The raw text from transcription
     ///   - apiKey: Gemini API key
     ///   - context: Optional context about the active application
+    ///   - cancellationToken: Optional cancellation token for cooperative cancellation
     /// - Returns: Polished text
     /// - Throws: PolishingError if polishing fails
-    func execute(rawText: String, apiKey: String, context: String?) async throws -> String
+    func execute(
+        rawText: String,
+        apiKey: String,
+        context: String?,
+        cancellationToken: CancellationToken?
+    ) async throws -> String
 }
 
 enum PolishingError: Error, Equatable {

@@ -3,6 +3,7 @@
 //! This crate exposes UniFFI-compatible functions used by the macOS app and CLI.
 
 mod audio;
+mod cancellation;
 mod config;
 mod error;
 mod http_client;
@@ -13,9 +14,11 @@ mod retry;
 mod transcribe;
 
 pub use audio::AudioData;
+pub use cancellation::CancellationToken;
 pub use error::CoreError;
 
 use secrecy::SecretString;
+use std::sync::Arc;
 
 #[uniffi::export]
 /// Start microphone capture.
@@ -48,6 +51,24 @@ pub fn transcribe_audio_bytes(
 }
 
 #[uniffi::export]
+/// Transcribe encoded audio bytes with Groq Whisper API.
+///
+/// Supports cooperative cancellation using a shared cancellation token.
+pub fn transcribe_audio_bytes_cancellable(
+    api_key: String,
+    audio_bytes: Vec<u8>,
+    language: Option<String>,
+    cancellation_token: Arc<CancellationToken>,
+) -> Result<String, CoreError> {
+    transcribe::transcribe_audio_bytes_with_cancellation(
+        &SecretString::from(api_key),
+        &audio_bytes,
+        language.as_deref(),
+        Some(cancellation_token.as_ref()),
+    )
+}
+
+#[uniffi::export]
 /// Polish raw transcript text with Gemini API.
 pub fn polish_text(
     api_key: String,
@@ -55,6 +76,24 @@ pub fn polish_text(
     context: Option<String>,
 ) -> Result<String, CoreError> {
     polish::polish_text(&SecretString::from(api_key), &raw_text, context.as_deref())
+}
+
+#[uniffi::export]
+/// Polish raw transcript text with Gemini API.
+///
+/// Supports cooperative cancellation using a shared cancellation token.
+pub fn polish_text_cancellable(
+    api_key: String,
+    raw_text: String,
+    context: Option<String>,
+    cancellation_token: Arc<CancellationToken>,
+) -> Result<String, CoreError> {
+    polish::polish_text_with_cancellation(
+        &SecretString::from(api_key),
+        &raw_text,
+        context.as_deref(),
+        Some(cancellation_token.as_ref()),
+    )
 }
 
 /// Warm up TLS connection to Groq API

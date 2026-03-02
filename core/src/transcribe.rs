@@ -1,3 +1,4 @@
+use crate::cancellation::CancellationToken;
 use crate::config::{GROQ_TRANSCRIBE_URL, GROQ_WHISPER_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
@@ -6,7 +7,12 @@ use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 
 const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const CANCELLED_RESPONSE_MESSAGE: &str = "Operation cancelled";
 const TRANSCRIBE_MAX_RETRY_ATTEMPTS: u32 = 3;
+
+fn cancellation_requested(cancellation_token: Option<&CancellationToken>) -> bool {
+    cancellation_token.is_some_and(CancellationToken::is_cancelled)
+}
 
 fn normalize_language(language: Option<&str>) -> Option<String> {
     language.and_then(|value| {
@@ -37,6 +43,8 @@ fn classify_transcribe_status(status: StatusCode) -> HttpResult<()> {
 fn map_transcribe_error(msg: String) -> CoreError {
     if msg == EMPTY_RESPONSE_MESSAGE {
         CoreError::EmptyResponse
+    } else if msg == CANCELLED_RESPONSE_MESSAGE {
+        CoreError::Cancelled
     } else if msg.starts_with("Groq API error") {
         CoreError::Api(msg)
     } else {
@@ -55,10 +63,27 @@ pub(crate) fn transcribe_audio_bytes(
     audio_bytes: &[u8],
     language: Option<&str>,
 ) -> Result<String, CoreError> {
+    transcribe_audio_bytes_with_cancellation(api_key, audio_bytes, language, None)
+}
+
+pub(crate) fn transcribe_audio_bytes_with_cancellation(
+    api_key: &SecretString,
+    audio_bytes: &[u8],
+    language: Option<&str>,
+    cancellation_token: Option<&CancellationToken>,
+) -> Result<String, CoreError> {
+    if cancellation_requested(cancellation_token) {
+        return Err(CoreError::Cancelled);
+    }
+
     let client = get_http_client();
     let normalized_language = normalize_language(language);
 
     run_transcribe_with_retry(|| {
+        if cancellation_requested(cancellation_token) {
+            return HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string());
+        }
+
         let mut form = reqwest::blocking::multipart::Form::new()
             .text("model", GROQ_WHISPER_MODEL)
             .text("response_format", "text");
@@ -87,13 +112,25 @@ pub(crate) fn transcribe_audio_bytes(
         match response {
             Ok(resp) => match classify_transcribe_status(resp.status()) {
                 HttpResult::Success(()) => match resp.text() {
-                    Ok(text) => normalize_transcription_text(text),
+                    Ok(text) => {
+                        if cancellation_requested(cancellation_token) {
+                            HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string())
+                        } else {
+                            normalize_transcription_text(text)
+                        }
+                    }
                     Err(e) => HttpResult::NonRetryable(e.to_string()),
                 },
                 HttpResult::Retryable => HttpResult::Retryable,
                 HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
             },
-            Err(_) => HttpResult::Retryable,
+            Err(_) => {
+                if cancellation_requested(cancellation_token) {
+                    HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string())
+                } else {
+                    HttpResult::Retryable
+                }
+            }
         }
     })
 }
@@ -103,10 +140,13 @@ mod tests {
     use super::{
         classify_transcribe_status, map_transcribe_error, normalize_language,
         normalize_transcription_text, run_transcribe_with_retry,
+        transcribe_audio_bytes_with_cancellation,
     };
+    use crate::cancellation::CancellationToken;
     use crate::error::CoreError;
     use crate::retry::HttpResult;
     use reqwest::StatusCode;
+    use secrecy::SecretString;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
@@ -163,6 +203,12 @@ mod tests {
     }
 
     #[test]
+    fn map_transcribe_error_should_map_cancelled_variant() {
+        let result = map_transcribe_error("Operation cancelled".to_string());
+        assert!(matches!(result, CoreError::Cancelled));
+    }
+
+    #[test]
     fn map_transcribe_error_should_map_api_variant() {
         let result = map_transcribe_error("Groq API error: HTTP 401 Unauthorized".to_string());
         assert!(matches!(result, CoreError::Api(_)));
@@ -204,5 +250,20 @@ mod tests {
             matches!(result, Err(CoreError::Http(message)) if message == "Groq API: retries exceeded")
         );
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn transcribe_audio_bytes_with_cancellation_should_fail_fast_when_cancelled() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result = transcribe_audio_bytes_with_cancellation(
+            &SecretString::from("test-key".to_string()),
+            b"fake-audio",
+            None,
+            Some(token.as_ref()),
+        );
+
+        assert!(matches!(result, Err(CoreError::Cancelled)));
     }
 }
