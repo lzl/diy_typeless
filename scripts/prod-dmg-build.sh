@@ -2,7 +2,7 @@
 # Build DIYTypeless.app and package it as a DMG for distribution
 # Output: ~/Downloads/DIYTypeless.dmg
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -11,10 +11,33 @@ OUTPUT_DIR="$HOME/Downloads"
 ARCHIVE_PATH="$OUTPUT_DIR/DIYTypeless.xcarchive"
 APP_PATH="$OUTPUT_DIR/DIYTypeless.app"
 DMG_PATH="$OUTPUT_DIR/DIYTypeless.dmg"
-DMG_CONTENTS="$OUTPUT_DIR/DMG_Contents_tmp"
 
 echo "=== DIYTypeless DMG Builder ==="
 echo ""
+
+# Preflight: ensure create-dmg is available before expensive build steps.
+if ! command -v create-dmg >/dev/null 2>&1; then
+    echo "Error: 'create-dmg' is not installed or not in PATH." >&2
+    echo "Install it and retry." >&2
+    echo "  - Homebrew: brew install create-dmg" >&2
+    echo "  - npm:      npm install --global create-dmg" >&2
+    echo "Details: https://github.com/sindresorhus/create-dmg" >&2
+    exit 1
+fi
+
+if ! CREATE_DMG_HELP="$(create-dmg --help 2>&1)"; then
+    echo "Error: failed to execute 'create-dmg --help'." >&2
+    echo "Please reinstall the official tool from:" >&2
+    echo "  https://github.com/sindresorhus/create-dmg" >&2
+    exit 1
+fi
+
+if [[ "$CREATE_DMG_HELP" != *"--no-version-in-filename"* ]]; then
+    echo "Error: found an incompatible 'create-dmg' CLI in PATH." >&2
+    echo "This script requires sindresorhus/create-dmg." >&2
+    echo "Details: https://github.com/sindresorhus/create-dmg" >&2
+    exit 1
+fi
 
 # Step 1: Build Rust core library (universal binary)
 echo "[1/5] Building Rust core library (universal binary)..."
@@ -48,21 +71,18 @@ echo ""
 
 # Step 4: Create DMG
 echo "[4/5] Creating DMG..."
-rm -rf "$DMG_CONTENTS"
-mkdir -p "$DMG_CONTENTS"
-cp -R "$APP_PATH" "$DMG_CONTENTS/"
-ln -s /Applications "$DMG_CONTENTS/Applications"
+create-dmg \
+    --overwrite \
+    --no-version-in-filename \
+    --no-code-sign \
+    "$APP_PATH" \
+    "$OUTPUT_DIR"
 
-rm -f "$DMG_PATH"
-hdiutil create \
-    -volname "DIYTypeless" \
-    -srcfolder "$DMG_CONTENTS" \
-    -ov \
-    -format UDZO \
-    "$DMG_PATH" \
-    -quiet
+if [[ ! -f "$DMG_PATH" ]]; then
+    echo "Error: expected DMG was not created at $DMG_PATH" >&2
+    exit 1
+fi
 
-rm -rf "$DMG_CONTENTS"
 echo "      DMG created at: $DMG_PATH"
 echo ""
 
