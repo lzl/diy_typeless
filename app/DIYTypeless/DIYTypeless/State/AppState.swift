@@ -2,15 +2,6 @@ import AppKit
 import Foundation
 import Observation
 
-struct PermissionStatus: Sendable {
-    let accessibility: Bool
-    let microphone: Bool
-
-    var allGranted: Bool {
-        accessibility && microphone
-    }
-}
-
 @MainActor
 @Observable
 final class AppState {

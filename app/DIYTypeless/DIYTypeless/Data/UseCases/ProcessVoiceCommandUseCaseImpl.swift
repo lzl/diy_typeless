@@ -32,7 +32,17 @@ final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
                 action: .replaceSelection
             )
         } catch let coreError as CoreError {
-            throw CoreErrorMapper.toUserFacingError(coreError)
+            switch coreError {
+            case .Api(let message):
+                throw CoreErrorMapper.toUserFacingError(category: .api, message: message)
+            case .Http(let message):
+                throw CoreErrorMapper.toUserFacingError(category: .network, message: message)
+            default:
+                throw CoreErrorMapper.toUserFacingError(
+                    category: .unknown,
+                    message: coreError.localizedDescription
+                )
+            }
         } catch {
             throw UserFacingError.unknown(error.localizedDescription)
         }

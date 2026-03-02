@@ -9,7 +9,7 @@ protocol TranscribeAudioUseCaseProtocol: Sendable {
     ///   - language: Optional language hint (e.g., "zh", "en")
     /// - Returns: Raw transcribed text
     /// - Throws: TranscriptionError if transcription fails
-    func execute(audioData: AudioData, apiKey: String, language: String?) async throws -> String
+    func execute(audioData: DomainAudioData, apiKey: String, language: String?) async throws -> String
 }
 
 enum TranscriptionError: Error, Equatable {

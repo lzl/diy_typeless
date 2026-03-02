@@ -10,7 +10,7 @@ protocol GetSelectedTextUseCaseProtocol: Sendable {
 final class GetSelectedTextUseCase: GetSelectedTextUseCaseProtocol {
     private let repository: SelectedTextRepository
 
-    init(repository: SelectedTextRepository = AccessibilitySelectedTextRepository()) {
+    init(repository: SelectedTextRepository) {
         self.repository = repository
     }
 

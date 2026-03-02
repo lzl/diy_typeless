@@ -1,7 +1,7 @@
 import Foundation
 
 final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
-    func execute(audioData: AudioData, apiKey: String, language: String?) async throws -> String {
+    func execute(audioData: DomainAudioData, apiKey: String, language: String?) async throws -> String {
         guard !audioData.bytes.isEmpty else {
             throw TranscriptionError.emptyAudio
         }
@@ -16,7 +16,18 @@ final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
                     )
                     continuation.resume(returning: text)
                 } catch let coreError as CoreError {
-                    let userError = CoreErrorMapper.toUserFacingError(coreError)
+                    let userError: UserFacingError
+                    switch coreError {
+                    case .Api(let message):
+                        userError = CoreErrorMapper.toUserFacingError(category: .api, message: message)
+                    case .Http(let message):
+                        userError = CoreErrorMapper.toUserFacingError(category: .network, message: message)
+                    default:
+                        userError = CoreErrorMapper.toUserFacingError(
+                            category: .unknown,
+                            message: coreError.localizedDescription
+                        )
+                    }
                     continuation.resume(throwing: TranscriptionError.apiError(userError))
                 } catch {
                     let userError = UserFacingError.unknown(error.localizedDescription)

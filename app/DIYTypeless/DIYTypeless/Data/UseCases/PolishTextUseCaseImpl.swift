@@ -16,7 +16,18 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
                     )
                     continuation.resume(returning: polished)
                 } catch let coreError as CoreError {
-                    let userError = CoreErrorMapper.toUserFacingError(coreError)
+                    let userError: UserFacingError
+                    switch coreError {
+                    case .Api(let message):
+                        userError = CoreErrorMapper.toUserFacingError(category: .api, message: message)
+                    case .Http(let message):
+                        userError = CoreErrorMapper.toUserFacingError(category: .network, message: message)
+                    default:
+                        userError = CoreErrorMapper.toUserFacingError(
+                            category: .unknown,
+                            message: coreError.localizedDescription
+                        )
+                    }
                     continuation.resume(throwing: PolishingError.apiError(userError))
                 } catch {
                     let userError = UserFacingError.unknown(error.localizedDescription)

@@ -21,9 +21,9 @@ final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
     private let polishTextUseCase: PolishTextUseCaseProtocol
 
     init(
-        stopRecordingUseCase: StopRecordingUseCaseProtocol = StopRecordingUseCaseImpl(),
-        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = TranscribeAudioUseCaseImpl(),
-        polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl()
+        stopRecordingUseCase: StopRecordingUseCaseProtocol,
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol,
+        polishTextUseCase: PolishTextUseCaseProtocol
     ) {
         self.stopRecordingUseCase = stopRecordingUseCase
         self.transcribeAudioUseCase = transcribeAudioUseCase
