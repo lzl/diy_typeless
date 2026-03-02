@@ -7,6 +7,7 @@ enum CapsuleState: Equatable {
     case transcribing(progress: Double)
     case polishing(progress: Double)
     case processingCommand(String, progress: Double)  // Shows voice command being processed
+    case canceled
     case done(OutputResult)
     case error(UserFacingError)
 }
@@ -49,6 +50,10 @@ final class RecordingState {
     private var isProcessing = false
     private var capturedContext: String?
     private var currentGeneration: Int = 0
+    private var processingGeneration: Int?
+    private var processingTask: Task<Void, Never>?
+    private var processingCancellationToken: CancellationToken?
+    private let cancelFeedbackDuration: TimeInterval = 0.8
 
     init(
         permissionRepository: PermissionRepository,
@@ -111,6 +116,7 @@ final class RecordingState {
     func deactivate() {
         keyMonitoringRepository.stop()
         cleanupPrefetch()
+        cancelProcessingPipeline()
         if isRecording {
             Task {
                 _ = try? await stopRecordingUseCase.execute()
@@ -125,9 +131,10 @@ final class RecordingState {
 
     func handleCancel() {
         cleanupPrefetch()
+        cancelProcessingPipeline()
 
         switch capsuleState {
-        case .recording, .processingCommand:
+        case .recording:
             isRecording = false
             isProcessing = false
             currentGeneration += 1
@@ -137,13 +144,14 @@ final class RecordingState {
             }
             capsuleState = .hidden
 
-        case .transcribing, .polishing:
+        case .processingCommand, .transcribing, .polishing:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
-            capsuleState = .hidden
+            capsuleState = .canceled
+            scheduleHide(after: cancelFeedbackDuration, expectedState: .canceled)
 
-        case .hidden, .done, .error:
+        case .hidden, .canceled, .done, .error:
             break
         }
     }
@@ -212,62 +220,19 @@ final class RecordingState {
 
         currentGeneration += 1
         let gen = currentGeneration
+        let context = preselectedContext ?? .empty
+        preselectedContext = nil
 
-        do {
-            // Step 1: Use prefetched context or empty, and stop recording (PARALLEL)
-            let context = preselectedContext ?? .empty
-            preselectedContext = nil  // Clear after use
+        let cancellationToken = CancellationToken()
+        processingGeneration = gen
+        processingCancellationToken = cancellationToken
 
-            async let audioData = stopRecordingUseCase.execute()
-
-            // Await audio data
-            let audio = try await audioData
-
-            guard currentGeneration == gen else { return }
-
-            // Step 2: Transcribe audio
-            capsuleState = .transcribing(progress: 0)
-            let rawText = try await transcribeAudioUseCase.execute(
-                audioData: audio,
-                apiKey: groqKey,
-                language: nil
+        processingTask = Task { [weak self] in
+            await self?.runProcessingPipeline(
+                generation: gen,
+                context: context,
+                cancellationToken: cancellationToken
             )
-
-            guard currentGeneration == gen else { return }
-
-            // Step 3: Determine mode and process
-            if shouldUseVoiceCommandMode(context) {
-                try await handleVoiceCommandMode(
-                    transcription: rawText,
-                    selectedText: context.text!,
-                    geminiKey: geminiKey,
-                    generation: gen
-                )
-            } else {
-                try await handleTranscriptionMode(
-                    rawText: rawText,
-                    geminiKey: geminiKey,
-                    context: capturedContext,
-                    generation: gen
-                )
-            }
-
-        } catch let error as TranscriptionError {
-            guard currentGeneration == gen else { return }
-            handleTranscriptionError(error)
-            isProcessing = false
-        } catch let error as PolishingError {
-            guard currentGeneration == gen else { return }
-            handlePolishingError(error)
-            isProcessing = false
-        } catch let error as UserFacingError {
-            guard currentGeneration == gen else { return }
-            showError(error)
-            isProcessing = false
-        } catch {
-            guard currentGeneration == gen else { return }
-            showError(.unknown(error.localizedDescription))
-            isProcessing = false
         }
     }
 
@@ -306,14 +271,16 @@ final class RecordingState {
         transcription: String,
         selectedText: String,
         geminiKey: String,
-        generation: Int
+        generation: Int,
+        cancellationToken: CancellationToken
     ) async throws {
         capsuleState = .processingCommand(transcription, progress: 0)
 
         let result = try await processVoiceCommandUseCase.execute(
             transcription: transcription,
             selectedText: selectedText,
-            geminiKey: geminiKey
+            geminiKey: geminiKey,
+            cancellationToken: cancellationToken
         )
 
         guard currentGeneration == generation else { return }
@@ -333,14 +300,16 @@ final class RecordingState {
         rawText: String,
         geminiKey: String,
         context: String?,
-        generation: Int
+        generation: Int,
+        cancellationToken: CancellationToken
     ) async throws {
         capsuleState = .polishing(progress: 0)
 
         let polishedText = try await polishTextUseCase.execute(
             rawText: rawText,
             apiKey: geminiKey,
-            context: context
+            context: context,
+            cancellationToken: cancellationToken
         )
 
         guard currentGeneration == generation else { return }
@@ -383,5 +352,84 @@ final class RecordingState {
     private func cleanupPrefetch() {
         cancelPrefetchTask()
         preselectedContext = nil
+    }
+
+    private func cancelProcessingPipeline() {
+        processingCancellationToken?.cancel()
+        processingCancellationToken = nil
+        processingTask?.cancel()
+        processingTask = nil
+        processingGeneration = nil
+    }
+
+    private func runProcessingPipeline(
+        generation: Int,
+        context: SelectedTextContext,
+        cancellationToken: CancellationToken
+    ) async {
+        defer {
+            if processingGeneration == generation {
+                processingTask = nil
+                processingCancellationToken = nil
+                processingGeneration = nil
+            }
+        }
+
+        do {
+            // Step 1: Stop recording and obtain audio bytes.
+            let audio = try await stopRecordingUseCase.execute()
+
+            guard currentGeneration == generation else { return }
+
+            // Step 2: Transcribe audio with cooperative cancellation.
+            capsuleState = .transcribing(progress: 0)
+            let rawText = try await transcribeAudioUseCase.execute(
+                audioData: audio,
+                apiKey: groqKey,
+                language: nil,
+                cancellationToken: cancellationToken
+            )
+
+            guard currentGeneration == generation else { return }
+
+            // Step 3: Determine mode and process.
+            if shouldUseVoiceCommandMode(context) {
+                try await handleVoiceCommandMode(
+                    transcription: rawText,
+                    selectedText: context.text!,
+                    geminiKey: geminiKey,
+                    generation: generation,
+                    cancellationToken: cancellationToken
+                )
+            } else {
+                try await handleTranscriptionMode(
+                    rawText: rawText,
+                    geminiKey: geminiKey,
+                    context: capturedContext,
+                    generation: generation,
+                    cancellationToken: cancellationToken
+                )
+            }
+        } catch is CancellationError {
+            guard currentGeneration == generation else { return }
+            isProcessing = false
+            capsuleState = .hidden
+        } catch let error as TranscriptionError {
+            guard currentGeneration == generation else { return }
+            handleTranscriptionError(error)
+            isProcessing = false
+        } catch let error as PolishingError {
+            guard currentGeneration == generation else { return }
+            handlePolishingError(error)
+            isProcessing = false
+        } catch let error as UserFacingError {
+            guard currentGeneration == generation else { return }
+            showError(error)
+            isProcessing = false
+        } catch {
+            guard currentGeneration == generation else { return }
+            showError(.unknown(error.localizedDescription))
+            isProcessing = false
+        }
     }
 }

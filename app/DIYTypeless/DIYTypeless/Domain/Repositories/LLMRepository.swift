@@ -6,6 +6,7 @@ protocol LLMRepository: Sendable {
     func generate(
         apiKey: String,
         prompt: String,
-        temperature: Double?
+        temperature: Double?,
+        cancellationToken: CancellationToken?
     ) async throws -> String
 }

@@ -3,6 +3,9 @@ use thiserror::Error;
 #[derive(Debug, Error, uniffi::Error)]
 /// Unified error type returned by core operations.
 pub enum CoreError {
+    /// Operation was cancelled by caller.
+    #[error("Operation cancelled")]
+    Cancelled,
     /// No default input audio device is available.
     #[error("Audio device not available")]
     AudioDeviceUnavailable,
@@ -56,6 +59,7 @@ mod tests {
 
     #[test]
     fn core_error_display_messages_should_match_contract() {
+        assert_eq!(CoreError::Cancelled.to_string(), "Operation cancelled");
         assert_eq!(
             CoreError::AudioDeviceUnavailable.to_string(),
             "Audio device not available"

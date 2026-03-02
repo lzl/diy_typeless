@@ -1,12 +1,17 @@
+use crate::cancellation::{
+    cancellation_requested, run_with_cancellation, worker_disconnected_message,
+    CancellableOperationError, CancellationToken,
+};
 use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
-use crate::retry::{is_retryable_status, with_retry, HttpResult};
+use crate::retry::{is_retryable_status, with_retry, with_retry_cancellable, HttpResult};
 use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const CANCELLED_RESPONSE_MESSAGE: &str = "Operation cancelled";
 const POLISH_MAX_RETRY_ATTEMPTS: u32 = 3;
 
 #[derive(Deserialize)]
@@ -73,6 +78,8 @@ fn classify_gemini_status(status: StatusCode) -> HttpResult<()> {
 fn map_gemini_error(msg: String) -> CoreError {
     if msg == EMPTY_RESPONSE_MESSAGE {
         CoreError::EmptyResponse
+    } else if msg == CANCELLED_RESPONSE_MESSAGE {
+        CoreError::Cancelled
     } else if msg.starts_with("Gemini API error") {
         CoreError::Api(msg)
     } else {
@@ -82,8 +89,76 @@ fn map_gemini_error(msg: String) -> CoreError {
 
 fn run_polish_with_retry(
     operation: impl FnMut() -> HttpResult<String>,
+    cancellation_token: Option<&CancellationToken>,
 ) -> Result<String, CoreError> {
-    with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+    if let Some(token) = cancellation_token {
+        with_retry_cancellable(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API", || {
+            token.is_cancelled()
+        })
+        .map_err(map_gemini_error)
+    } else {
+        with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+    }
+}
+
+fn execute_polish_request(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    api_key: &str,
+    prompt: &str,
+) -> HttpResult<String> {
+    let body = build_polish_request_body(prompt);
+
+    let response = client
+        .post(url)
+        .header("x-goog-api-key", api_key)
+        .json(&body)
+        .send();
+
+    match response {
+        Ok(resp) => match classify_gemini_status(resp.status()) {
+            HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
+                Ok(payload) => extract_gemini_text(payload),
+                Err(e) => HttpResult::NonRetryable(e.to_string()),
+            },
+            HttpResult::Retryable => HttpResult::Retryable,
+            HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+        },
+        Err(_) => HttpResult::Retryable,
+    }
+}
+
+fn execute_polish_request_cancellable(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    api_key: &SecretString,
+    prompt: &str,
+    cancellation_token: Option<&CancellationToken>,
+) -> HttpResult<String> {
+    if cancellation_requested(cancellation_token) {
+        return HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string());
+    }
+
+    if cancellation_token.is_none() {
+        return execute_polish_request(client, url, api_key.expose_secret(), prompt);
+    }
+
+    let worker_client = client.clone();
+    let worker_url = url.to_string();
+    let worker_api_key = api_key.expose_secret().to_string();
+    let worker_prompt = prompt.to_string();
+
+    match run_with_cancellation(cancellation_token, move || {
+        execute_polish_request(&worker_client, &worker_url, &worker_api_key, &worker_prompt)
+    }) {
+        Ok(result) => result,
+        Err(CancellableOperationError::Cancelled) => {
+            HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string())
+        }
+        Err(CancellableOperationError::WorkerDisconnected) => {
+            HttpResult::NonRetryable(worker_disconnected_message().to_string())
+        }
+    }
 }
 
 /// Build the context section for the polishing prompt.
@@ -120,43 +195,42 @@ pub(crate) fn polish_text(
     raw_text: &str,
     context: Option<&str>,
 ) -> Result<String, CoreError> {
+    polish_text_with_cancellation(api_key, raw_text, context, None)
+}
+
+pub(crate) fn polish_text_with_cancellation(
+    api_key: &SecretString,
+    raw_text: &str,
+    context: Option<&str>,
+    cancellation_token: Option<&CancellationToken>,
+) -> Result<String, CoreError> {
+    if cancellation_requested(cancellation_token) {
+        return Err(CoreError::Cancelled);
+    }
+
     let prompt = build_prompt(raw_text, context);
 
     let client = get_http_client();
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
 
-    run_polish_with_retry(|| {
-        let body = build_polish_request_body(&prompt);
-
-        let response = client
-            .post(&url)
-            .header("x-goog-api-key", api_key.expose_secret())
-            .json(&body)
-            .send();
-
-        match response {
-            Ok(resp) => match classify_gemini_status(resp.status()) {
-                HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
-                    Ok(payload) => extract_gemini_text(payload),
-                    Err(e) => HttpResult::NonRetryable(e.to_string()),
-                },
-                HttpResult::Retryable => HttpResult::Retryable,
-                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
-            },
-            Err(_) => HttpResult::Retryable,
-        }
-    })
+    run_polish_with_retry(
+        || execute_polish_request_cancellable(client, &url, api_key, &prompt, cancellation_token),
+        cancellation_token,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         build_context_section, build_polish_request_body, build_prompt, classify_gemini_status,
-        extract_gemini_text, map_gemini_error, run_polish_with_retry, GeminiResponse,
+        extract_gemini_text, map_gemini_error, polish_text_with_cancellation,
+        run_polish_with_retry, GeminiResponse,
     };
+    use crate::cancellation::CancellationToken;
     use crate::error::CoreError;
     use crate::retry::HttpResult;
     use reqwest::StatusCode;
+    use secrecy::SecretString;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
@@ -247,6 +321,12 @@ mod tests {
     }
 
     #[test]
+    fn map_gemini_error_should_map_cancelled_variant() {
+        let result = map_gemini_error("Operation cancelled".to_string());
+        assert!(matches!(result, CoreError::Cancelled));
+    }
+
+    #[test]
     fn build_prompt_should_keep_transcript_and_output_boundary_stable() {
         let raw_text = "Test content";
         let prompt = build_prompt(raw_text, None);
@@ -328,14 +408,17 @@ mod tests {
     fn run_polish_with_retry_should_retry_until_third_attempt_success() {
         let attempts = AtomicU32::new(0);
 
-        let result = run_polish_with_retry(|| {
-            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
-            if attempt < 2 {
-                HttpResult::Retryable
-            } else {
-                HttpResult::Success("ok".to_string())
-            }
-        });
+        let result = run_polish_with_retry(
+            || {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                if attempt < 2 {
+                    HttpResult::Retryable
+                } else {
+                    HttpResult::Success("ok".to_string())
+                }
+            },
+            None,
+        );
 
         assert!(matches!(result, Ok(value) if value == "ok"));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
@@ -345,14 +428,32 @@ mod tests {
     fn run_polish_with_retry_should_fail_after_retry_budget_exhausted() {
         let attempts = AtomicU32::new(0);
 
-        let result = run_polish_with_retry(|| {
-            attempts.fetch_add(1, Ordering::SeqCst);
-            HttpResult::Retryable
-        });
+        let result = run_polish_with_retry(
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Retryable
+            },
+            None,
+        );
 
         assert!(
             matches!(result, Err(CoreError::Http(message)) if message == "Gemini API: retries exceeded")
         );
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn polish_text_with_cancellation_should_fail_fast_when_cancelled() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result = polish_text_with_cancellation(
+            &SecretString::from("test-key".to_string()),
+            "raw input",
+            None,
+            Some(token.as_ref()),
+        );
+
+        assert!(matches!(result, Err(CoreError::Cancelled)));
     }
 }

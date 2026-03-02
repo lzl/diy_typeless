@@ -1,12 +1,17 @@
+use crate::cancellation::{
+    cancellation_requested, run_with_cancellation, worker_disconnected_message,
+    CancellableOperationError, CancellationToken,
+};
 use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
-use crate::retry::{is_retryable_status, with_retry, HttpResult};
+use crate::retry::{is_retryable_status, with_retry, with_retry_cancellable, HttpResult};
 use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const CANCELLED_RESPONSE_MESSAGE: &str = "Operation cancelled";
 const LLM_MAX_RETRY_ATTEMPTS: u32 = 3;
 
 #[derive(Deserialize)]
@@ -91,6 +96,8 @@ fn classify_gemini_status(status: StatusCode) -> HttpResult<()> {
 fn map_gemini_error(msg: String) -> CoreError {
     if msg == EMPTY_RESPONSE_MESSAGE {
         CoreError::EmptyResponse
+    } else if msg == CANCELLED_RESPONSE_MESSAGE {
+        CoreError::Cancelled
     } else if msg.starts_with("Gemini API error") {
         CoreError::Api(msg)
     } else {
@@ -98,8 +105,76 @@ fn map_gemini_error(msg: String) -> CoreError {
     }
 }
 
-fn run_llm_with_retry(operation: impl FnMut() -> HttpResult<String>) -> Result<String, CoreError> {
-    with_retry(LLM_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+fn run_llm_with_retry(
+    operation: impl FnMut() -> HttpResult<String>,
+    cancellation_token: Option<&CancellationToken>,
+) -> Result<String, CoreError> {
+    if let Some(token) = cancellation_token {
+        with_retry_cancellable(LLM_MAX_RETRY_ATTEMPTS, operation, "Gemini API", || {
+            token.is_cancelled()
+        })
+        .map_err(map_gemini_error)
+    } else {
+        with_retry(LLM_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+    }
+}
+
+fn execute_llm_request(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    api_key: &str,
+    body: &serde_json::Value,
+) -> HttpResult<String> {
+    let response = client
+        .post(url)
+        .header("x-goog-api-key", api_key)
+        .json(body)
+        .send();
+
+    match response {
+        Ok(resp) => match classify_gemini_status(resp.status()) {
+            HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
+                Ok(payload) => extract_gemini_text(payload),
+                Err(e) => HttpResult::NonRetryable(e.to_string()),
+            },
+            HttpResult::Retryable => HttpResult::Retryable,
+            HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+        },
+        Err(_) => HttpResult::Retryable,
+    }
+}
+
+fn execute_llm_request_cancellable(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    api_key: &SecretString,
+    body: &serde_json::Value,
+    cancellation_token: Option<&CancellationToken>,
+) -> HttpResult<String> {
+    if cancellation_requested(cancellation_token) {
+        return HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string());
+    }
+
+    if cancellation_token.is_none() {
+        return execute_llm_request(client, url, api_key.expose_secret(), body);
+    }
+
+    let worker_client = client.clone();
+    let worker_url = url.to_string();
+    let worker_api_key = api_key.expose_secret().to_string();
+    let worker_body = body.clone();
+
+    match run_with_cancellation(cancellation_token, move || {
+        execute_llm_request(&worker_client, &worker_url, &worker_api_key, &worker_body)
+    }) {
+        Ok(result) => result,
+        Err(CancellableOperationError::Cancelled) => {
+            HttpResult::NonRetryable(CANCELLED_RESPONSE_MESSAGE.to_string())
+        }
+        Err(CancellableOperationError::WorkerDisconnected) => {
+            HttpResult::NonRetryable(worker_disconnected_message().to_string())
+        }
+    }
 }
 
 /// Generic LLM text processing function.
@@ -125,29 +200,28 @@ pub(crate) fn process_text_with_llm(
     system_instruction: Option<&str>,
     temperature: Option<f32>,
 ) -> Result<String, CoreError> {
+    process_text_with_llm_with_cancellation(api_key, prompt, system_instruction, temperature, None)
+}
+
+pub(crate) fn process_text_with_llm_with_cancellation(
+    api_key: &SecretString,
+    prompt: &str,
+    system_instruction: Option<&str>,
+    temperature: Option<f32>,
+    cancellation_token: Option<&CancellationToken>,
+) -> Result<String, CoreError> {
+    if cancellation_requested(cancellation_token) {
+        return Err(CoreError::Cancelled);
+    }
+
     let client = get_http_client();
     let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
     let body = build_llm_request_body(prompt, system_instruction, temperature);
 
-    run_llm_with_retry(|| {
-        let response = client
-            .post(&url)
-            .header("x-goog-api-key", api_key.expose_secret())
-            .json(&body)
-            .send();
-
-        match response {
-            Ok(resp) => match classify_gemini_status(resp.status()) {
-                HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
-                    Ok(payload) => extract_gemini_text(payload),
-                    Err(e) => HttpResult::NonRetryable(e.to_string()),
-                },
-                HttpResult::Retryable => HttpResult::Retryable,
-                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
-            },
-            Err(_) => HttpResult::Retryable,
-        }
-    })
+    run_llm_with_retry(
+        || execute_llm_request_cancellable(client, &url, api_key, &body, cancellation_token),
+        cancellation_token,
+    )
 }
 
 #[cfg(test)]
@@ -156,6 +230,7 @@ mod tests {
         build_llm_request_body, classify_gemini_status, extract_gemini_text, map_gemini_error,
         run_llm_with_retry, GeminiResponse,
     };
+    use crate::cancellation::CancellationToken;
     use crate::error::CoreError;
     use crate::retry::HttpResult;
     use reqwest::StatusCode;
@@ -253,17 +328,26 @@ mod tests {
     }
 
     #[test]
+    fn map_gemini_error_should_map_cancelled_variant() {
+        let error = map_gemini_error("Operation cancelled".to_string());
+        assert!(matches!(error, CoreError::Cancelled));
+    }
+
+    #[test]
     fn run_llm_with_retry_should_retry_until_third_attempt_success() {
         let attempts = AtomicU32::new(0);
 
-        let result = run_llm_with_retry(|| {
-            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
-            if attempt < 2 {
-                HttpResult::Retryable
-            } else {
-                HttpResult::Success("ok".to_string())
-            }
-        });
+        let result = run_llm_with_retry(
+            || {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                if attempt < 2 {
+                    HttpResult::Retryable
+                } else {
+                    HttpResult::Success("ok".to_string())
+                }
+            },
+            None,
+        );
 
         assert!(matches!(result, Ok(value) if value == "ok"));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
@@ -273,14 +357,35 @@ mod tests {
     fn run_llm_with_retry_should_fail_after_retry_budget_exhausted() {
         let attempts = AtomicU32::new(0);
 
-        let result = run_llm_with_retry(|| {
-            attempts.fetch_add(1, Ordering::SeqCst);
-            HttpResult::Retryable
-        });
+        let result = run_llm_with_retry(
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Retryable
+            },
+            None,
+        );
 
         assert!(
             matches!(result, Err(CoreError::Http(message)) if message == "Gemini API: retries exceeded")
         );
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn run_llm_with_retry_should_return_cancelled_before_first_attempt() {
+        let token = CancellationToken::new();
+        token.cancel();
+        let attempts = AtomicU32::new(0);
+
+        let result = run_llm_with_retry(
+            || {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                HttpResult::Success("ok".to_string())
+            },
+            Some(token.as_ref()),
+        );
+
+        assert!(matches!(result, Err(CoreError::Cancelled)));
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
     }
 }

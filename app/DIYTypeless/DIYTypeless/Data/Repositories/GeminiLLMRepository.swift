@@ -9,26 +9,44 @@ final class GeminiLLMRepository: LLMRepository {
     func generate(
         apiKey: String,
         prompt: String,
-        temperature: Double?
+        temperature: Double?,
+        cancellationToken: CancellationToken?
     ) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let result = try processTextWithLlm(
-                        apiKey: apiKey,
-                        prompt: prompt,
-                        systemInstruction: nil,
-                        temperature: Float(temperature ?? 0.3)
-                    )
-                    continuation.resume(returning: result)
-                } catch let coreError as CoreError {
-                    // Pass through CoreError directly - UseCase will map to UserFacingError
-                    continuation.resume(throwing: coreError)
-                } catch {
-                    // Wrap unknown errors in CoreError.Api
-                    continuation.resume(throwing: CoreError.Api(error.localizedDescription))
+        let effectiveToken = cancellationToken ?? CancellationToken()
+
+        if effectiveToken.isCancelled() {
+            throw CancellationError()
+        }
+        try Task.checkCancellation()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        let result = try processTextWithLlmCancellable(
+                            apiKey: apiKey,
+                            prompt: prompt,
+                            systemInstruction: nil,
+                            temperature: Float(temperature ?? 0.3),
+                            cancellationToken: effectiveToken
+                        )
+                        continuation.resume(returning: result)
+                    } catch let coreError as CoreError {
+                        if case .Cancelled = coreError {
+                            continuation.resume(throwing: CancellationError())
+                            return
+                        }
+
+                        // Pass through CoreError directly - UseCase will map to UserFacingError
+                        continuation.resume(throwing: coreError)
+                    } catch {
+                        // Wrap unknown errors in CoreError.Api
+                        continuation.resume(throwing: CoreError.Api(error.localizedDescription))
+                    }
                 }
             }
+        } onCancel: {
+            effectiveToken.cancel()
         }
     }
 

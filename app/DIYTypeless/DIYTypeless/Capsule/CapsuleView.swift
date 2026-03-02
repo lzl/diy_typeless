@@ -102,6 +102,12 @@ struct CapsuleView: View {
                 .foregroundColor(.white.opacity(0.9))
                 .padding(.horizontal, Self.contentPadding)
 
+        case .canceled:
+            Text("Canceled")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, Self.contentPadding)
+
         case .done(let result):
             Text(result == .pasted ? "Pasted" : "Copied")
                 .font(.system(size: 13, weight: .medium))
@@ -158,13 +164,11 @@ struct CapsuleView: View {
         case .polishing, .processingCommand:
             startProgressAnimation(duration: 2.0)
 
-        case .done, .error:
+        case .canceled, .done, .error:
             Task {
                 await audioMonitor.stopMonitoring()
             }
-            withAnimation(.easeOut(duration: 0.2)) {
-                progress = 1.0
-            }
+            progress = 0
 
         case .hidden:
             Task {

@@ -88,14 +88,22 @@ final class CapsuleWindowController {
         }
         panel.alphaValue = 1.0
 
-        switch state {
-        case .recording, .transcribing, .polishing:
+        if shouldPanelBeKey(for: state) {
             panel.ignoresMouseEvents = true
             panel.orderFrontRegardless()
             panel.makeKey()
-        default:
+        } else {
             panel.resignKey()
             panel.orderFrontRegardless()
+        }
+    }
+
+    private func shouldPanelBeKey(for state: CapsuleState) -> Bool {
+        switch state {
+        case .recording, .transcribing, .polishing, .processingCommand:
+            return true
+        default:
+            return false
         }
     }
 
