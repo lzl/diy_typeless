@@ -9,7 +9,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 mod commands;
-use commands::diagnose::{run_diagnose_audio, run_diagnose_env, run_diagnose_pipeline};
+use commands::diagnose::{
+    run_diagnose_audio, run_diagnose_env, run_diagnose_llm, run_diagnose_pipeline,
+};
 use commands::utils::{
     copy_to_clipboard, ensure_flac_bytes, read_stdin, resolve_gemini_key, resolve_groq_key,
     resolve_output_dir, timestamp, wait_for_enter,
@@ -75,6 +77,18 @@ enum DiagnoseCommands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    Llm {
+        #[arg(long)]
+        gemini_key: Option<String>,
+        #[arg(long)]
+        prompt: String,
+        #[arg(long)]
+        system_instruction: Option<String>,
+        #[arg(long)]
+        temperature: Option<f32>,
+        #[arg(long)]
+        cancel_immediately: bool,
+    },
     Pipeline {
         file: PathBuf,
         #[arg(long)]
@@ -132,6 +146,19 @@ fn main() -> Result<()> {
                 duration_seconds,
                 output,
             } => run_diagnose_audio(duration_seconds, output),
+            DiagnoseCommands::Llm {
+                gemini_key,
+                prompt,
+                system_instruction,
+                temperature,
+                cancel_immediately,
+            } => run_diagnose_llm(
+                prompt,
+                gemini_key,
+                system_instruction,
+                temperature,
+                cancel_immediately,
+            ),
             DiagnoseCommands::Pipeline {
                 file,
                 output_dir,

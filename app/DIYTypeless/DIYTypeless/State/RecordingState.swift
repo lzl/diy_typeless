@@ -268,14 +268,16 @@ final class RecordingState {
         transcription: String,
         selectedText: String,
         geminiKey: String,
-        generation: Int
+        generation: Int,
+        cancellationToken: CancellationToken
     ) async throws {
         capsuleState = .processingCommand(transcription, progress: 0)
 
         let result = try await processVoiceCommandUseCase.execute(
             transcription: transcription,
             selectedText: selectedText,
-            geminiKey: geminiKey
+            geminiKey: geminiKey,
+            cancellationToken: cancellationToken
         )
 
         guard currentGeneration == generation else { return }
@@ -393,7 +395,8 @@ final class RecordingState {
                     transcription: rawText,
                     selectedText: context.text!,
                     geminiKey: geminiKey,
-                    generation: generation
+                    generation: generation,
+                    cancellationToken: cancellationToken
                 )
             } else {
                 try await handleTranscriptionMode(

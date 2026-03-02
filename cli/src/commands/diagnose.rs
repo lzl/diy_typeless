@@ -1,7 +1,7 @@
 //! Diagnostic commands for CLI
 
 use anyhow::{anyhow, Context, Result};
-use diy_typeless_core::{start_recording, stop_recording};
+use diy_typeless_core::{start_recording, stop_recording, CancellationToken, CoreError};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
@@ -73,6 +73,61 @@ pub(crate) fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>)
     println!("- output: {}", output_path.display());
 
     Ok(())
+}
+
+/// Run LLM diagnostics
+pub(crate) fn run_diagnose_llm(
+    prompt: String,
+    gemini_key: Option<String>,
+    system_instruction: Option<String>,
+    temperature: Option<f32>,
+    cancel_immediately: bool,
+) -> Result<()> {
+    let use_placeholder_key = cancel_immediately
+        && match gemini_key.as_deref().map(str::trim) {
+            Some(value) => value.is_empty(),
+            None => true,
+        };
+
+    let api_key = if use_placeholder_key {
+        "cancelled-before-request".to_string()
+    } else {
+        use secrecy::ExposeSecret;
+        resolve_gemini_key(gemini_key)?.expose_secret().to_string()
+    };
+
+    let token = CancellationToken::new();
+    if cancel_immediately {
+        token.cancel();
+    }
+
+    println!("CLI diagnostics (llm)");
+    println!("- cancel_immediately: {cancel_immediately}");
+
+    let start = Instant::now();
+    let result = diy_typeless_core::process_text_with_llm_cancellable(
+        api_key,
+        prompt,
+        system_instruction,
+        temperature,
+        token,
+    );
+    let elapsed = start.elapsed();
+
+    println!("- llm wall time: {}", format_duration(elapsed));
+
+    match result {
+        Ok(text) => {
+            println!("- status: success");
+            println!("- response chars: {}", text.chars().count());
+            Ok(())
+        }
+        Err(CoreError::Cancelled) => {
+            println!("- status: cancelled");
+            Ok(())
+        }
+        Err(error) => Err(anyhow!("LLM step failed: {error}")),
+    }
 }
 
 /// Run pipeline diagnostics

@@ -1084,6 +1084,22 @@ public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction
 })
 }
 /**
+ * Process arbitrary text with Gemini API and optional system instruction.
+ *
+ * Supports cooperative cancellation using a shared cancellation token.
+ */
+public func processTextWithLlmCancellable(apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?, cancellationToken: CancellationToken)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_process_text_with_llm_cancellable(
+        FfiConverterString.lower(apiKey),
+        FfiConverterString.lower(prompt),
+        FfiConverterOptionString.lower(systemInstruction),
+        FfiConverterOptionFloat.lower(temperature),
+        FfiConverterTypeCancellationToken_lower(cancellationToken),$0
+    )
+})
+}
+/**
  * Start microphone capture.
  *
  * Returns an error if input audio device is unavailable or recording is already active.
@@ -1188,6 +1204,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 56597) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm_cancellable() != 41013) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 20492) {

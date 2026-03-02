@@ -13,8 +13,14 @@ final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
     func execute(
         transcription: String,
         selectedText: String,
-        geminiKey: String
+        geminiKey: String,
+        cancellationToken: CancellationToken?
     ) async throws -> VoiceCommandResult {
+        if cancellationToken?.isCancelled() == true {
+            throw CancellationError()
+        }
+        try Task.checkCancellation()
+
         // Build prompt combining command and selected text
         let prompt = buildPrompt(command: transcription, selectedText: selectedText)
 
@@ -23,7 +29,8 @@ final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
             let response = try await llmRepository.generate(
                 apiKey: geminiKey,
                 prompt: prompt,
-                temperature: 0.3
+                temperature: 0.3,
+                cancellationToken: cancellationToken
             )
 
             // Return result with recommended action
@@ -31,8 +38,12 @@ final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
                 processedText: response,
                 action: .replaceSelection
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let coreError as CoreError {
             switch coreError {
+            case .Cancelled:
+                throw CancellationError()
             case .Api(let message):
                 throw CoreErrorMapper.toUserFacingError(category: .api, message: message)
             case .Http(let message):

@@ -144,4 +144,24 @@ pub fn process_text_with_llm(
     )
 }
 
+#[uniffi::export]
+/// Process arbitrary text with Gemini API and optional system instruction.
+///
+/// Supports cooperative cancellation using a shared cancellation token.
+pub fn process_text_with_llm_cancellable(
+    api_key: String,
+    prompt: String,
+    system_instruction: Option<String>,
+    temperature: Option<f32>,
+    cancellation_token: Arc<CancellationToken>,
+) -> Result<String, CoreError> {
+    llm_processor::process_text_with_llm_with_cancellation(
+        &SecretString::from(api_key),
+        &prompt,
+        system_instruction.as_deref(),
+        temperature,
+        Some(cancellation_token.as_ref()),
+    )
+}
+
 uniffi::setup_scaffolding!();
