@@ -1,3 +1,4 @@
+use crate::async_executor::run_blocking;
 use crate::config::GEMINI_API_URL;
 use crate::error::CoreError;
 use reqwest::{blocking::Client as BlockingClient, Client as AsyncClient};
@@ -135,11 +136,15 @@ pub(crate) fn warmup_connection(url: &str) -> Result<(), CoreError> {
 }
 
 fn warmup_connection_with_label(url: &str, label: &str) -> Result<(), CoreError> {
-    let client = get_http_client();
-
-    let _ = client.get(url).send().map_err(|e| warmup_error(label, e))?;
-
-    Ok(())
+    let client = get_async_http_client();
+    run_blocking(async {
+        client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| warmup_error(label, e))?;
+        Ok(())
+    })
 }
 
 #[cfg(test)]
