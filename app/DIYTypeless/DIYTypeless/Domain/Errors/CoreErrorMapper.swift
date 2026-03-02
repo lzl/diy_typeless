@@ -10,6 +10,17 @@ enum TechnicalErrorCategory: Sendable {
 /// Maps technical failures to user-facing errors.
 /// Shared across all UseCase implementations to avoid code duplication.
 enum CoreErrorMapper {
+    static func toUserFacingError(_ coreError: CoreError) -> UserFacingError {
+        switch coreError {
+        case .Api(let message):
+            return toUserFacingError(category: .api, message: message)
+        case .Http(let message):
+            return toUserFacingError(category: .network, message: message)
+        default:
+            return toUserFacingError(category: .unknown, message: coreError.localizedDescription)
+        }
+    }
+
     static func toUserFacingError(category: TechnicalErrorCategory, message: String) -> UserFacingError {
         switch category {
         case .api:
