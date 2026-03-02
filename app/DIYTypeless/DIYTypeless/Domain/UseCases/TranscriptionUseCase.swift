@@ -38,14 +38,16 @@ final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
         let rawText = try await transcribeAudioUseCase.execute(
             audioData: audioData,
             apiKey: groqKey,
-            language: nil
+            language: nil,
+            cancellationToken: nil
         )
 
         // Step 3: Polish text
         let polishedText = try await polishTextUseCase.execute(
             rawText: rawText,
             apiKey: geminiKey,
-            context: context
+            context: context,
+            cancellationToken: nil
         )
 
         // Step 4: Return result (output delivery handled by caller)

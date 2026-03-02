@@ -1,39 +1,55 @@
 import Foundation
 
 final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
-    func execute(audioData: DomainAudioData, apiKey: String, language: String?) async throws -> String {
+    func execute(
+        audioData: DomainAudioData,
+        apiKey: String,
+        language: String?,
+        cancellationToken: CoreCancellationToken?
+    ) async throws -> String {
         guard !audioData.bytes.isEmpty else {
             throw TranscriptionError.emptyAudio
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let text = try transcribeAudioBytes(
-                        apiKey: apiKey,
-                        audioBytes: audioData.bytes,
-                        language: language
-                    )
-                    continuation.resume(returning: text)
-                } catch let coreError as CoreError {
-                    let userError: UserFacingError
-                    switch coreError {
-                    case .Api(let message):
-                        userError = CoreErrorMapper.toUserFacingError(category: .api, message: message)
-                    case .Http(let message):
-                        userError = CoreErrorMapper.toUserFacingError(category: .network, message: message)
-                    default:
-                        userError = CoreErrorMapper.toUserFacingError(
-                            category: .unknown,
-                            message: coreError.localizedDescription
-                        )
+        let token = cancellationToken ?? CoreCancellationToken()
+
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+
+            return try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    if token.isCancelled() {
+                        continuation.resume(throwing: TranscriptionError.cancelled)
+                        return
                     }
-                    continuation.resume(throwing: TranscriptionError.apiError(userError))
-                } catch {
-                    let userError = UserFacingError.unknown(error.localizedDescription)
-                    continuation.resume(throwing: TranscriptionError.apiError(userError))
+
+                    do {
+                        let text = try transcribeAudioBytesCancellable(
+                            apiKey: apiKey,
+                            audioBytes: audioData.bytes,
+                            language: language,
+                            cancellationToken: token
+                        )
+                        if token.isCancelled() {
+                            continuation.resume(throwing: TranscriptionError.cancelled)
+                        } else {
+                            continuation.resume(returning: text)
+                        }
+                    } catch let coreError as CoreError {
+                        if case .Cancelled = coreError {
+                            continuation.resume(throwing: TranscriptionError.cancelled)
+                        } else {
+                            let userError = CoreErrorMapper.toUserFacingError(coreError)
+                            continuation.resume(throwing: TranscriptionError.apiError(userError))
+                        }
+                    } catch {
+                        let userError = UserFacingError.unknown(error.localizedDescription)
+                        continuation.resume(throwing: TranscriptionError.apiError(userError))
+                    }
                 }
             }
+        } onCancel: {
+            token.cancel()
         }
     }
 

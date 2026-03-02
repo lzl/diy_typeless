@@ -1,6 +1,6 @@
 use crate::config::GEMINI_API_URL;
 use crate::error::CoreError;
-use reqwest::blocking::Client;
+use reqwest::{blocking::Client as BlockingClient, Client as AsyncClient};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -8,7 +8,8 @@ const GROQ_MODELS_URL: &str = "https://api.groq.com/openai/v1/models";
 
 /// Global HTTP client with connection pooling
 /// Initialized lazily on first use
-static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<BlockingClient> = OnceLock::new();
+static ASYNC_HTTP_CLIENT: OnceLock<AsyncClient> = OnceLock::new();
 
 fn gemini_models_url() -> String {
     format!("{GEMINI_API_URL}/models")
@@ -24,14 +25,26 @@ fn warmup_error(target: &str, detail: impl std::fmt::Display) -> CoreError {
 /// - pool_idle_timeout: 300s (keep connections alive for 5 minutes)
 /// - pool_max_idle_per_host: 2 (allow 2 idle connections per host)
 /// - timeout: 90s for request timeout
-pub(crate) fn get_http_client() -> &'static Client {
+pub(crate) fn get_http_client() -> &'static BlockingClient {
     HTTP_CLIENT.get_or_init(|| {
-        Client::builder()
+        BlockingClient::builder()
             .timeout(Duration::from_secs(90))
             .pool_idle_timeout(Duration::from_secs(300))
             .pool_max_idle_per_host(2)
             .build()
             .expect("Failed to create HTTP client")
+    })
+}
+
+/// Get or initialize the global async HTTP client.
+pub(crate) fn get_async_http_client() -> &'static AsyncClient {
+    ASYNC_HTTP_CLIENT.get_or_init(|| {
+        AsyncClient::builder()
+            .timeout(Duration::from_secs(90))
+            .pool_idle_timeout(Duration::from_secs(300))
+            .pool_max_idle_per_host(2)
+            .build()
+            .expect("Failed to create async HTTP client")
     })
 }
 

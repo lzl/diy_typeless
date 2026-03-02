@@ -1,11 +1,17 @@
+use crate::async_executor::run_blocking;
+use crate::cancellation::CoreCancellationToken;
 use crate::config::{GROQ_TRANSCRIBE_URL, GROQ_WHISPER_MODEL};
 use crate::error::CoreError;
-use crate::http_client::get_http_client;
-use crate::retry::{is_retryable_status, with_retry, HttpResult};
+use crate::http_client::get_async_http_client;
+#[cfg(test)]
+use crate::retry::with_retry;
+use crate::retry::{is_retryable_status, HttpResult};
 use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
+use std::time::Duration;
 
 const EMPTY_RESPONSE_MESSAGE: &str = "Empty response";
+const CANCELLATION_MESSAGE: &str = "Operation cancelled";
 const TRANSCRIBE_MAX_RETRY_ATTEMPTS: u32 = 3;
 
 fn normalize_language(language: Option<&str>) -> Option<String> {
@@ -37,6 +43,8 @@ fn classify_transcribe_status(status: StatusCode) -> HttpResult<()> {
 fn map_transcribe_error(msg: String) -> CoreError {
     if msg == EMPTY_RESPONSE_MESSAGE {
         CoreError::EmptyResponse
+    } else if msg == CANCELLATION_MESSAGE {
+        CoreError::Cancelled
     } else if msg.starts_with("Groq API error") {
         CoreError::Api(msg)
     } else {
@@ -44,6 +52,7 @@ fn map_transcribe_error(msg: String) -> CoreError {
     }
 }
 
+#[cfg(test)]
 fn run_transcribe_with_retry(
     operation: impl FnMut() -> HttpResult<String>,
 ) -> Result<String, CoreError> {
@@ -54,48 +63,97 @@ pub(crate) fn transcribe_audio_bytes(
     api_key: &SecretString,
     audio_bytes: &[u8],
     language: Option<&str>,
+    cancellation_token: &CoreCancellationToken,
 ) -> Result<String, CoreError> {
-    let client = get_http_client();
     let normalized_language = normalize_language(language);
+    if cancellation_token.is_cancelled() {
+        return Err(CoreError::Cancelled);
+    }
 
-    run_transcribe_with_retry(|| {
-        let mut form = reqwest::blocking::multipart::Form::new()
-            .text("model", GROQ_WHISPER_MODEL)
-            .text("response_format", "text");
+    run_blocking(async {
+        let client = get_async_http_client();
 
-        if let Some(language) = normalized_language.as_deref() {
-            form = form.text("language", language.to_string());
+        for attempt in 0..TRANSCRIBE_MAX_RETRY_ATTEMPTS {
+            if cancellation_token.is_cancelled() {
+                return Err(CoreError::Cancelled);
+            }
+
+            let outcome = transcribe_once(
+                client,
+                api_key,
+                audio_bytes,
+                normalized_language.as_deref(),
+                cancellation_token,
+            )
+            .await;
+
+            match outcome {
+                HttpResult::Success(text) => return Ok(text),
+                HttpResult::NonRetryable(message) => return Err(map_transcribe_error(message)),
+                HttpResult::Retryable => {
+                    if attempt < TRANSCRIBE_MAX_RETRY_ATTEMPTS - 1 {
+                        let backoff_seconds = 2u64.pow(attempt);
+                        tokio::select! {
+                            _ = cancellation_token.cancelled() => return Err(CoreError::Cancelled),
+                            _ = tokio::time::sleep(Duration::from_secs(backoff_seconds)) => {}
+                        }
+                    }
+                }
+            }
         }
 
-        // Audio bytes are FLAC format (compressed, ~50-70% smaller)
-        let part = match reqwest::blocking::multipart::Part::bytes(audio_bytes.to_vec())
-            .file_name("audio.flac")
-            .mime_str("audio/flac")
-        {
-            Ok(p) => p,
-            Err(e) => return HttpResult::NonRetryable(e.to_string()),
-        };
-
-        form = form.part("file", part);
-
-        let response = client
-            .post(GROQ_TRANSCRIBE_URL)
-            .bearer_auth(api_key.expose_secret())
-            .multipart(form)
-            .send();
-
-        match response {
-            Ok(resp) => match classify_transcribe_status(resp.status()) {
-                HttpResult::Success(()) => match resp.text() {
-                    Ok(text) => normalize_transcription_text(text),
-                    Err(e) => HttpResult::NonRetryable(e.to_string()),
-                },
-                HttpResult::Retryable => HttpResult::Retryable,
-                HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
-            },
-            Err(_) => HttpResult::Retryable,
-        }
+        Err(CoreError::Http("Groq API: retries exceeded".to_string()))
     })
+}
+
+async fn transcribe_once(
+    client: &reqwest::Client,
+    api_key: &SecretString,
+    audio_bytes: &[u8],
+    language: Option<&str>,
+    cancellation_token: &CoreCancellationToken,
+) -> HttpResult<String> {
+    let mut form = reqwest::multipart::Form::new()
+        .text("model", GROQ_WHISPER_MODEL)
+        .text("response_format", "text");
+
+    if let Some(language) = language {
+        form = form.text("language", language.to_string());
+    }
+
+    let part = match reqwest::multipart::Part::bytes(audio_bytes.to_vec())
+        .file_name("audio.flac")
+        .mime_str("audio/flac")
+    {
+        Ok(p) => p,
+        Err(e) => return HttpResult::NonRetryable(e.to_string()),
+    };
+    form = form.part("file", part);
+
+    let request = client
+        .post(GROQ_TRANSCRIBE_URL)
+        .bearer_auth(api_key.expose_secret())
+        .multipart(form)
+        .send();
+
+    let response = tokio::select! {
+        _ = cancellation_token.cancelled() => {
+            return HttpResult::NonRetryable(CANCELLATION_MESSAGE.to_string());
+        }
+        response = request => response
+    };
+
+    match response {
+        Ok(resp) => match classify_transcribe_status(resp.status()) {
+            HttpResult::Success(()) => match resp.text().await {
+                Ok(text) => normalize_transcription_text(text),
+                Err(e) => HttpResult::NonRetryable(e.to_string()),
+            },
+            HttpResult::Retryable => HttpResult::Retryable,
+            HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
+        },
+        Err(_) => HttpResult::Retryable,
+    }
 }
 
 #[cfg(test)]
@@ -104,9 +162,11 @@ mod tests {
         classify_transcribe_status, map_transcribe_error, normalize_language,
         normalize_transcription_text, run_transcribe_with_retry,
     };
+    use crate::cancellation::CoreCancellationToken;
     use crate::error::CoreError;
     use crate::retry::HttpResult;
     use reqwest::StatusCode;
+    use secrecy::SecretString;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
@@ -175,6 +235,12 @@ mod tests {
     }
 
     #[test]
+    fn map_transcribe_error_should_map_cancelled_variant() {
+        let result = map_transcribe_error("Operation cancelled".to_string());
+        assert!(matches!(result, CoreError::Cancelled));
+    }
+
+    #[test]
     fn run_transcribe_with_retry_should_retry_until_third_attempt_success() {
         let attempts = AtomicU32::new(0);
 
@@ -204,5 +270,20 @@ mod tests {
             matches!(result, Err(CoreError::Http(message)) if message == "Groq API: retries exceeded")
         );
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn transcribe_audio_bytes_should_return_cancelled_when_token_is_already_cancelled() {
+        let token = CoreCancellationToken::new();
+        token.cancel();
+
+        let result = super::transcribe_audio_bytes(
+            &SecretString::from("test-key".to_string()),
+            b"flac-bytes",
+            None,
+            token.as_ref(),
+        );
+
+        assert!(matches!(result, Err(CoreError::Cancelled)));
     }
 }

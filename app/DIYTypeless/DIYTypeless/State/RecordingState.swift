@@ -49,6 +49,7 @@ final class RecordingState {
     private var isProcessing = false
     private var capturedContext: String?
     private var currentGeneration: Int = 0
+    private var activeCancellationToken: CoreCancellationToken?
 
     init(
         permissionRepository: PermissionRepository,
@@ -111,6 +112,7 @@ final class RecordingState {
     func deactivate() {
         keyMonitoringRepository.stop()
         cleanupPrefetch()
+        cancelActiveCancellationToken()
         if isRecording {
             Task {
                 _ = try? await stopRecordingUseCase.execute()
@@ -130,6 +132,7 @@ final class RecordingState {
         case .recording, .processingCommand:
             isRecording = false
             isProcessing = false
+            cancelActiveCancellationToken()
             currentGeneration += 1
             capturedContext = nil
             Task {
@@ -138,6 +141,7 @@ final class RecordingState {
             capsuleState = .hidden
 
         case .transcribing, .polishing:
+            cancelActiveCancellationToken()
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
@@ -212,6 +216,12 @@ final class RecordingState {
 
         currentGeneration += 1
         let gen = currentGeneration
+        let cancellationToken = CoreCancellationToken()
+        activeCancellationToken = cancellationToken
+
+        defer {
+            clearActiveCancellationToken(ifMatching: cancellationToken)
+        }
 
         do {
             // Step 1: Use prefetched context or empty, and stop recording (PARALLEL)
@@ -230,7 +240,8 @@ final class RecordingState {
             let rawText = try await transcribeAudioUseCase.execute(
                 audioData: audio,
                 apiKey: groqKey,
-                language: nil
+                language: nil,
+                cancellationToken: cancellationToken
             )
 
             guard currentGeneration == gen else { return }
@@ -248,6 +259,7 @@ final class RecordingState {
                     rawText: rawText,
                     geminiKey: geminiKey,
                     context: capturedContext,
+                    cancellationToken: cancellationToken,
                     generation: gen
                 )
             }
@@ -275,6 +287,8 @@ final class RecordingState {
 
     private func handleTranscriptionError(_ error: TranscriptionError) {
         switch error {
+        case .cancelled:
+            break
         case .apiError(let userError):
             showError(userError)
         case .emptyAudio, .decodingFailed:
@@ -284,6 +298,8 @@ final class RecordingState {
 
     private func handlePolishingError(_ error: PolishingError) {
         switch error {
+        case .cancelled:
+            break
         case .apiError(let userError):
             showError(userError)
         case .emptyInput, .invalidResponse:
@@ -333,6 +349,7 @@ final class RecordingState {
         rawText: String,
         geminiKey: String,
         context: String?,
+        cancellationToken: CoreCancellationToken,
         generation: Int
     ) async throws {
         capsuleState = .polishing(progress: 0)
@@ -340,7 +357,8 @@ final class RecordingState {
         let polishedText = try await polishTextUseCase.execute(
             rawText: rawText,
             apiKey: geminiKey,
-            context: context
+            context: context,
+            cancellationToken: cancellationToken
         )
 
         guard currentGeneration == generation else { return }
@@ -371,6 +389,17 @@ final class RecordingState {
     private func refreshKeys() {
         groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func cancelActiveCancellationToken() {
+        activeCancellationToken?.cancel()
+        activeCancellationToken = nil
+    }
+
+    private func clearActiveCancellationToken(ifMatching token: CoreCancellationToken) {
+        if activeCancellationToken === token {
+            activeCancellationToken = nil
+        }
     }
 
     private func cancelPrefetchTask() {

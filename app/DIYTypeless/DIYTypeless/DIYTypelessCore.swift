@@ -435,6 +435,30 @@ fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -490,6 +514,159 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
         writeBytes(&buf, value)
     }
 }
+
+
+
+
+/**
+ * Cooperative cancellation token shared between Swift and Rust.
+ */
+public protocol CoreCancellationTokenProtocol: AnyObject, Sendable {
+    
+    /**
+     * Mark this token as cancelled and wake any blocked waiters.
+     */
+    func cancel() 
+    
+    /**
+     * Returns true if cancellation has been requested.
+     */
+    func isCancelled()  -> Bool
+    
+}
+/**
+ * Cooperative cancellation token shared between Swift and Rust.
+ */
+open class CoreCancellationToken: CoreCancellationTokenProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_diy_typeless_core_fn_clone_corecancellationtoken(self.handle, $0) }
+    }
+    /**
+     * Create a fresh token in the active (not-cancelled) state.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_diy_typeless_core_fn_constructor_corecancellationtoken_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_diy_typeless_core_fn_free_corecancellationtoken(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Mark this token as cancelled and wake any blocked waiters.
+     */
+open func cancel()  {try! rustCall() {
+    uniffi_diy_typeless_core_fn_method_corecancellationtoken_cancel(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Returns true if cancellation has been requested.
+     */
+open func isCancelled() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_diy_typeless_core_fn_method_corecancellationtoken_is_cancelled(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCoreCancellationToken: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = CoreCancellationToken
+
+    public static func lift(_ handle: UInt64) throws -> CoreCancellationToken {
+        return CoreCancellationToken(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: CoreCancellationToken) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CoreCancellationToken {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: CoreCancellationToken, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCoreCancellationToken_lift(_ handle: UInt64) throws -> CoreCancellationToken {
+    return try FfiConverterTypeCoreCancellationToken.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCoreCancellationToken_lower(_ value: CoreCancellationToken) -> UInt64 {
+    return FfiConverterTypeCoreCancellationToken.lower(value)
+}
+
+
 
 
 /**
@@ -664,6 +841,10 @@ public enum CoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedErr
      */
     case EmptyResponse
     /**
+     * Operation was cancelled by caller.
+     */
+    case Cancelled
+    /**
      * Transcription operation failed.
      */
     case Transcription(String
@@ -721,10 +902,11 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             try FfiConverterString.read(from: &buf)
             )
         case 9: return .EmptyResponse
-        case 10: return .Transcription(
+        case 10: return .Cancelled
+        case 11: return .Transcription(
             try FfiConverterString.read(from: &buf)
             )
-        case 11: return .Config(
+        case 12: return .Config(
             try FfiConverterString.read(from: &buf)
             )
 
@@ -780,13 +962,17 @@ public struct FfiConverterTypeCoreError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(9))
         
         
-        case let .Transcription(v1):
+        case .Cancelled:
             writeInt(&buf, Int32(10))
+        
+        
+        case let .Transcription(v1):
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(v1, into: &buf)
             
         
         case let .Config(v1):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(v1, into: &buf)
             
         }
@@ -868,6 +1054,19 @@ public func polishText(apiKey: String, rawText: String, context: String?)throws 
 })
 }
 /**
+ * Polish raw transcript text with Gemini API, supporting cancellation.
+ */
+public func polishTextCancellable(apiKey: String, rawText: String, context: String?, cancellationToken: CoreCancellationToken)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_polish_text_cancellable(
+        FfiConverterString.lower(apiKey),
+        FfiConverterString.lower(rawText),
+        FfiConverterOptionString.lower(context),
+        FfiConverterTypeCoreCancellationToken_lower(cancellationToken),$0
+    )
+})
+}
+/**
  * Process text with LLM (Gemini API)
  * Generic function for processing text with custom prompts
  * Process arbitrary text with Gemini API and optional system instruction.
@@ -912,6 +1111,19 @@ public func transcribeAudioBytes(apiKey: String, audioBytes: Data, language: Str
         FfiConverterString.lower(apiKey),
         FfiConverterData.lower(audioBytes),
         FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+/**
+ * Transcribe encoded audio bytes with Groq Whisper API, supporting cancellation.
+ */
+public func transcribeAudioBytesCancellable(apiKey: String, audioBytes: Data, language: String?, cancellationToken: CoreCancellationToken)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes_cancellable(
+        FfiConverterString.lower(apiKey),
+        FfiConverterData.lower(audioBytes),
+        FfiConverterOptionString.lower(language),
+        FfiConverterTypeCoreCancellationToken_lower(cancellationToken),$0
     )
 })
 }
@@ -968,6 +1180,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_polish_text() != 45710) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_polish_text_cancellable() != 58900) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 56597) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -980,10 +1195,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes() != 3876) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes_cancellable() != 36042) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 13024) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 35656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_method_corecancellationtoken_cancel() != 4727) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_method_corecancellationtoken_is_cancelled() != 261) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_diy_typeless_core_checksum_constructor_corecancellationtoken_new() != 62059) {
         return InitializationResult.apiChecksumMismatch
     }
 

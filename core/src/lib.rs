@@ -2,7 +2,9 @@
 //!
 //! This crate exposes UniFFI-compatible functions used by the macOS app and CLI.
 
+mod async_executor;
 mod audio;
+mod cancellation;
 mod config;
 mod error;
 mod http_client;
@@ -13,9 +15,11 @@ mod retry;
 mod transcribe;
 
 pub use audio::AudioData;
+pub use cancellation::CoreCancellationToken;
 pub use error::CoreError;
 
 use secrecy::SecretString;
+use std::sync::Arc;
 
 #[uniffi::export]
 /// Start microphone capture.
@@ -40,10 +44,28 @@ pub fn transcribe_audio_bytes(
     audio_bytes: Vec<u8>,
     language: Option<String>,
 ) -> Result<String, CoreError> {
+    let cancellation_token = CoreCancellationToken::new();
     transcribe::transcribe_audio_bytes(
         &SecretString::from(api_key),
         &audio_bytes,
         language.as_deref(),
+        cancellation_token.as_ref(),
+    )
+}
+
+#[uniffi::export]
+/// Transcribe encoded audio bytes with Groq Whisper API, supporting cancellation.
+pub fn transcribe_audio_bytes_cancellable(
+    api_key: String,
+    audio_bytes: Vec<u8>,
+    language: Option<String>,
+    cancellation_token: Arc<CoreCancellationToken>,
+) -> Result<String, CoreError> {
+    transcribe::transcribe_audio_bytes(
+        &SecretString::from(api_key),
+        &audio_bytes,
+        language.as_deref(),
+        cancellation_token.as_ref(),
     )
 }
 
@@ -54,7 +76,29 @@ pub fn polish_text(
     raw_text: String,
     context: Option<String>,
 ) -> Result<String, CoreError> {
-    polish::polish_text(&SecretString::from(api_key), &raw_text, context.as_deref())
+    let cancellation_token = CoreCancellationToken::new();
+    polish::polish_text(
+        &SecretString::from(api_key),
+        &raw_text,
+        context.as_deref(),
+        cancellation_token.as_ref(),
+    )
+}
+
+#[uniffi::export]
+/// Polish raw transcript text with Gemini API, supporting cancellation.
+pub fn polish_text_cancellable(
+    api_key: String,
+    raw_text: String,
+    context: Option<String>,
+    cancellation_token: Arc<CoreCancellationToken>,
+) -> Result<String, CoreError> {
+    polish::polish_text(
+        &SecretString::from(api_key),
+        &raw_text,
+        context.as_deref(),
+        cancellation_token.as_ref(),
+    )
 }
 
 /// Warm up TLS connection to Groq API

@@ -30,6 +30,9 @@ pub enum CoreError {
     /// API returned no usable content.
     #[error("Unexpected empty response")]
     EmptyResponse,
+    /// Operation was cancelled by caller.
+    #[error("Operation cancelled")]
+    Cancelled,
     /// Transcription operation failed.
     #[error("Transcription failed: {0}")]
     Transcription(String),
@@ -89,6 +92,7 @@ mod tests {
             CoreError::EmptyResponse.to_string(),
             "Unexpected empty response"
         );
+        assert_eq!(CoreError::Cancelled.to_string(), "Operation cancelled");
         assert_eq!(
             CoreError::Transcription("x".to_string()).to_string(),
             "Transcription failed: x"
