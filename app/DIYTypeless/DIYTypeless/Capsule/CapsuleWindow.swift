@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Observation
 import SwiftUI
 
@@ -31,6 +32,10 @@ private class CapsulePanel: NSPanel {
         let disallowedFlags: NSEvent.ModifierFlags = [.command, .option, .control]
         guard significantFlags.intersection(disallowedFlags).isEmpty else {
             return false
+        }
+        // Prefer physical key matching so the shortcut works across keyboard layouts/IMEs.
+        if event.keyCode == UInt16(kVK_ANSI_C) {
+            return true
         }
         return event.charactersIgnoringModifiers?.lowercased() == "c"
     }
