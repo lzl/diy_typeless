@@ -3,7 +3,7 @@ import AVFoundation
 /// Actor-isolated audio level monitor that bridges AVAudioEngine to SwiftUI
 /// Uses AsyncStream for safe cross-actor communication
 actor AudioLevelMonitor: AudioLevelProviding {
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine: AVAudioEngine?
     private var continuation: AsyncStream<[Double]>.Continuation?
     private var currentLevels: [Double] = Array(repeating: 0.0, count: 20)
 
@@ -30,6 +30,8 @@ actor AudioLevelMonitor: AudioLevelProviding {
 
     /// Start monitoring audio levels
     func startMonitoring() async throws {
+        let audioEngine = ensureAudioEngine()
+
         // Stop any existing monitoring first
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
@@ -55,9 +57,19 @@ actor AudioLevelMonitor: AudioLevelProviding {
 
     /// Stop monitoring audio levels
     func stopMonitoring() async {
+        guard let audioEngine else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         // Don't finish continuation - let the consumer control the stream lifecycle
+    }
+
+    private func ensureAudioEngine() -> AVAudioEngine {
+        if let audioEngine {
+            return audioEngine
+        }
+        let engine = AVAudioEngine()
+        audioEngine = engine
+        return engine
     }
 
     /// Calculate normalized audio levels from PCM buffer
