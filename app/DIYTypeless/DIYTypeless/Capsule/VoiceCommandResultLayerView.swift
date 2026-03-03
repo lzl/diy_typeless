@@ -68,14 +68,14 @@ struct VoiceCommandResultLayerView: View {
 
     private var actionRow: some View {
         HStack(spacing: .sm) {
-            Button(layer.didCopy ? "Copied" : "Copy") {
+            Button(layer.didCopy ? "Copied (C)" : "Copy (C)") {
                 state.copyVoiceCommandResultLayerText()
             }
             .buttonStyle(CapsuleLayerButtonStyle(isAccent: layer.didCopy))
 
             Spacer()
 
-            Button("Close") {
+            Button("Close (Esc)") {
                 state.closeVoiceCommandResultLayer()
             }
             .buttonStyle(CapsuleLayerButtonStyle(isAccent: false))

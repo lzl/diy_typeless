@@ -4,6 +4,7 @@ import SwiftUI
 
 private class CapsulePanel: NSPanel {
     var onEscDown: (() -> Void)?
+    var onCopyDown: (() -> Void)?
     var captureNonEscKeyDown: Bool = true
 
     override var canBecomeKey: Bool { true }
@@ -14,11 +15,24 @@ private class CapsulePanel: NSPanel {
                 onEscDown?()
                 return
             }
+            if !captureNonEscKeyDown, isCopyKeyDown(event) {
+                onCopyDown?()
+                return
+            }
             if captureNonEscKeyDown {
                 return
             }
         }
         super.sendEvent(event)
+    }
+
+    private func isCopyKeyDown(_ event: NSEvent) -> Bool {
+        let significantFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let disallowedFlags: NSEvent.ModifierFlags = [.command, .option, .control]
+        guard significantFlags.intersection(disallowedFlags).isEmpty else {
+            return false
+        }
+        return event.charactersIgnoringModifiers?.lowercased() == "c"
     }
 }
 
@@ -54,6 +68,9 @@ final class CapsuleWindowController {
 
         panel.onEscDown = { [weak self] in
             self?.state.handleCancel()
+        }
+        panel.onCopyDown = { [weak self] in
+            self?.state.copyVoiceCommandResultLayerText()
         }
 
         state.onWillDeliverText = { [weak panel] in
