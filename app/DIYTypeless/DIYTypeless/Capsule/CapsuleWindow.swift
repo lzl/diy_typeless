@@ -69,14 +69,26 @@ final class CapsuleWindowController {
 
     private func startObserving() {
         // withObservationTracking is one-shot, need to recursively re-register
+        @MainActor
         func observe() {
-            _ = withObservationTracking {
+            withObservationTracking {
                 _ = state.capsuleState
                 _ = state.voiceCommandResultLayer
             } onChange: { [weak self] in
-                DispatchQueue.main.async { [weak self] in
-                    self?.updateVisibility()
-                    observe() // Re-register for next change
+                guard let self else { return }
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated {
+                        self.updateVisibility()
+                        observe() // Re-register for next change
+                    }
+                } else {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        MainActor.assumeIsolated {
+                            self.updateVisibility()
+                            observe() // Re-register for next change
+                        }
+                    }
                 }
             }
         }
