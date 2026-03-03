@@ -16,6 +16,7 @@ enum CapsuleState: Equatable {
 @Observable
 final class RecordingState {
     private(set) var capsuleState: CapsuleState = .hidden
+    private(set) var voiceCommandResultLayer: VoiceCommandResultLayerState?
 
     var onRequireOnboarding: (() -> Void)?
     var onWillDeliverText: (() -> Void)?
@@ -126,12 +127,17 @@ final class RecordingState {
         currentGeneration += 1
         isProcessing = false
         capturedContext = nil
+        voiceCommandResultLayer = nil
         capsuleState = .hidden
     }
 
     func handleCancel() {
         cleanupPrefetch()
         cancelProcessingPipeline()
+        if voiceCommandResultLayer != nil {
+            closeVoiceCommandResultLayer()
+            return
+        }
 
         switch capsuleState {
         case .recording:
@@ -194,6 +200,7 @@ final class RecordingState {
         do {
             try await recordingControlUseCase.startRecording()
             isRecording = true
+            voiceCommandResultLayer = nil
             capsuleState = .recording
             capturedContext = appContextRepository.captureContext().formatted
 
@@ -234,6 +241,16 @@ final class RecordingState {
                 cancellationToken: cancellationToken
             )
         }
+    }
+
+    func copyVoiceCommandResultLayerText() {
+        guard let layer = voiceCommandResultLayer else { return }
+        textOutputRepository.copyToClipboard(text: layer.text)
+        voiceCommandResultLayer = VoiceCommandResultLayerState(text: layer.text, didCopy: true)
+    }
+
+    func closeVoiceCommandResultLayer() {
+        voiceCommandResultLayer = nil
     }
 
     // MARK: - Error Handling
@@ -285,13 +302,12 @@ final class RecordingState {
 
         guard currentGeneration == generation else { return }
 
-        onWillDeliverText?()
-        let outputResult = textOutputRepository.deliver(text: result.processedText)
-
-        capsuleState = .done(outputResult)
+        voiceCommandResultLayer = VoiceCommandResultLayerState(
+            text: result.processedText,
+            didCopy: false
+        )
+        capsuleState = .hidden
         isProcessing = false
-
-        scheduleHide(after: 1.2, expectedState: .done(outputResult))
     }
 
     // MARK: - Transcription Mode (Fallback)
