@@ -28,34 +28,43 @@ struct CapsuleView: View {
         }
     }
 
+    private var isHiddenState: Bool {
+        if case .hidden = state.capsuleState {
+            return true
+        }
+        return false
+    }
+
     var body: some View {
         ZStack {
-            // Subtle gradient background for depth
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(white: 0.18),
-                            Color(white: 0.12),
-                            Color(white: 0.10)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+            if !isHiddenState {
+                // Subtle gradient background for depth
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.18),
+                                Color(white: 0.12),
+                                Color(white: 0.10)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
 
-            // Subtle top edge highlight
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                .padding(0.5)
+                // Subtle top edge highlight
+                Capsule(style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                    .padding(0.5)
 
-            // Progress overlay for processing states
-            if shouldShowProgress {
-                progressOverlay
+                // Progress overlay for processing states
+                if shouldShowProgress {
+                    progressOverlay
+                }
+
+                // Content
+                content
             }
-
-            // Content
-            content
         }
         .frame(minWidth: Self.minCapsuleWidth)
         .frame(height: Self.capsuleHeight)
