@@ -2,7 +2,7 @@ import AppKit
 
 final class SystemTextOutputRepository: TextOutputRepository {
     func deliver(text: String) -> OutputResult {
-        copyToClipboard(text)
+        copyToClipboard(text: text)
         if let element = focusedTextElement(), isEditableTextElement(element) {
             if sendPasteCommand() {
                 return .pasted
@@ -11,7 +11,7 @@ final class SystemTextOutputRepository: TextOutputRepository {
         return .copied
     }
 
-    private func copyToClipboard(_ text: String) {
+    func copyToClipboard(text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
