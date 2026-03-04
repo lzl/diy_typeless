@@ -78,11 +78,8 @@ final class OnboardingState {
     init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
-        externalLinkRepository: ExternalLinkRepository = NSWorkspaceExternalLinkRepository(),
-        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = ValidateApiKeyUseCase(
-            groqRepository: GroqApiKeyValidationRepository(),
-            geminiRepository: GeminiApiKeyValidationRepository()
-        )
+        externalLinkRepository: ExternalLinkRepository = OnboardingState.defaultExternalLinkRepository(),
+        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = OnboardingState.defaultValidateApiKeyUseCase()
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -90,6 +87,25 @@ final class OnboardingState {
         self.validateApiKeyUseCase = validateApiKeyUseCase
         refreshPermissions()
         refresh()
+    }
+
+    nonisolated private static func defaultExternalLinkRepository() -> ExternalLinkRepository {
+        #if SWIFT_PACKAGE
+        fatalError("Default external-link repository is unavailable in Swift Package tests.")
+        #else
+        NSWorkspaceExternalLinkRepository()
+        #endif
+    }
+
+    nonisolated private static func defaultValidateApiKeyUseCase() -> ValidateApiKeyUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default validation use case is unavailable in Swift Package tests.")
+        #else
+        ValidateApiKeyUseCase(
+            groqRepository: GroqApiKeyValidationRepository(),
+            geminiRepository: GeminiApiKeyValidationRepository()
+        )
+        #endif
     }
 
     func refresh() {

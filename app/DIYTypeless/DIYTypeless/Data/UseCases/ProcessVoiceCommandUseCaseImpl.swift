@@ -6,8 +6,16 @@ import Foundation
 final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
     private let llmRepository: LLMRepository
 
-    init(llmRepository: LLMRepository = GeminiLLMRepository()) {
+    init(llmRepository: LLMRepository = ProcessVoiceCommandUseCaseImpl.defaultLLMRepository()) {
         self.llmRepository = llmRepository
+    }
+
+    private static func defaultLLMRepository() -> LLMRepository {
+        #if SWIFT_PACKAGE
+        fatalError("Default LLM repository is unavailable in Swift Package tests.")
+        #else
+        GeminiLLMRepository()
+        #endif
     }
 
     func execute(

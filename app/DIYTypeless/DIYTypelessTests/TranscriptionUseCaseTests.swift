@@ -1,5 +1,9 @@
 import XCTest
+#if canImport(DIYTypeless)
 @testable import DIYTypeless
+#elseif canImport(DIYTypelessHeadlessCore)
+@testable import DIYTypelessHeadlessCore
+#endif
 
 final class TranscriptionUseCaseTests: XCTestCase {
     func testExecute_happyPath_composesStopTranscribePolishAndReturnsResult() async throws {

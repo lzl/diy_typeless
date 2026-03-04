@@ -1,6 +1,10 @@
 import Foundation
 import XCTest
+#if canImport(DIYTypeless)
 @testable import DIYTypeless
+#elseif canImport(DIYTypelessHeadlessCore)
+@testable import DIYTypelessHeadlessCore
+#endif
 
 @MainActor
 extension XCTestCase {

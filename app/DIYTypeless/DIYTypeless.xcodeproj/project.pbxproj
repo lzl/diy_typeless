@@ -431,7 +431,7 @@
 		D823442F526B2800B71725EE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
+				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -446,7 +446,6 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				TEST_TARGET_NAME = DIYTypeless;
 			};
 			name = Debug;
@@ -454,7 +453,7 @@
 		929F381D6B006D0527C51976 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
+				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -469,7 +468,6 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				TEST_TARGET_NAME = DIYTypeless;
 			};
 			name = Release;

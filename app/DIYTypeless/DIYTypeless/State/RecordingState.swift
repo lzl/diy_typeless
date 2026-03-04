@@ -61,18 +61,16 @@ final class RecordingState {
         apiKeyRepository: ApiKeyRepository,
         keyMonitoringRepository: KeyMonitoringRepository,
         textOutputRepository: TextOutputRepository,
-        appContextRepository: AppContextRepository = DefaultAppContextRepository(),
+        appContextRepository: AppContextRepository = RecordingState.defaultAppContextRepository(),
         // Recording control
-        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingControlUseCaseImpl(),
-        stopRecordingUseCase: StopRecordingUseCaseProtocol = StopRecordingUseCaseImpl(),
+        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingState.defaultRecordingControlUseCase(),
+        stopRecordingUseCase: StopRecordingUseCaseProtocol = RecordingState.defaultStopRecordingUseCase(),
         // Transcription pipeline
-        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = TranscribeAudioUseCaseImpl(),
-        polishTextUseCase: PolishTextUseCaseProtocol = PolishTextUseCaseImpl(),
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = RecordingState.defaultTranscribeAudioUseCase(),
+        polishTextUseCase: PolishTextUseCaseProtocol = RecordingState.defaultPolishTextUseCase(),
         // Voice command
-        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = GetSelectedTextUseCase(
-            repository: AccessibilitySelectedTextRepository()
-        ),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = ProcessVoiceCommandUseCaseImpl(),
+        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = RecordingState.defaultGetSelectedTextUseCase(),
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = RecordingState.defaultProcessVoiceCommandUseCase(),
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
         prefetchDelay: Duration = .milliseconds(300)
@@ -101,6 +99,62 @@ final class RecordingState {
                 await self?.handleKeyUp()
             }
         }
+    }
+
+    nonisolated private static func defaultAppContextRepository() -> AppContextRepository {
+        #if SWIFT_PACKAGE
+        fatalError("Default app context repository is unavailable in Swift Package tests.")
+        #else
+        DefaultAppContextRepository()
+        #endif
+    }
+
+    nonisolated private static func defaultRecordingControlUseCase() -> RecordingControlUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default recording control use case is unavailable in Swift Package tests.")
+        #else
+        RecordingControlUseCaseImpl()
+        #endif
+    }
+
+    nonisolated private static func defaultStopRecordingUseCase() -> StopRecordingUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default stop recording use case is unavailable in Swift Package tests.")
+        #else
+        StopRecordingUseCaseImpl()
+        #endif
+    }
+
+    nonisolated private static func defaultTranscribeAudioUseCase() -> TranscribeAudioUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default transcribe use case is unavailable in Swift Package tests.")
+        #else
+        TranscribeAudioUseCaseImpl()
+        #endif
+    }
+
+    nonisolated private static func defaultPolishTextUseCase() -> PolishTextUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default polish use case is unavailable in Swift Package tests.")
+        #else
+        PolishTextUseCaseImpl()
+        #endif
+    }
+
+    nonisolated private static func defaultGetSelectedTextUseCase() -> GetSelectedTextUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default selected-text use case is unavailable in Swift Package tests.")
+        #else
+        GetSelectedTextUseCase(repository: AccessibilitySelectedTextRepository())
+        #endif
+    }
+
+    nonisolated private static func defaultProcessVoiceCommandUseCase() -> ProcessVoiceCommandUseCaseProtocol {
+        #if SWIFT_PACKAGE
+        fatalError("Default voice-command use case is unavailable in Swift Package tests.")
+        #else
+        ProcessVoiceCommandUseCaseImpl()
+        #endif
     }
 
     func activate() {
@@ -209,7 +263,7 @@ final class RecordingState {
                 guard let self else { return }
                 let context = await self.getSelectedTextUseCase.execute()
                 guard !Task.isCancelled else { return }
-                self.preselectedContext = context
+                await self.setPreselectedContext(context)
             }
         } catch {
             showError(.unknown(error.localizedDescription))
@@ -376,6 +430,10 @@ final class RecordingState {
         processingTask?.cancel()
         processingTask = nil
         processingGeneration = nil
+    }
+
+    private func setPreselectedContext(_ context: SelectedTextContext) {
+        preselectedContext = context
     }
 
     private func runProcessingPipeline(
