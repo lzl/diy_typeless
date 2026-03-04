@@ -15,22 +15,39 @@ Test-driven iterative optimization of the polish prompt in `core/src/polish.rs`.
 - **Evolution log**: `tests/polish-prompt/evolution-log.md`
 - **Evaluation criteria**: Load `references/evaluation-criteria.md` before scoring
 
+## Pre-flight Checks
+
+Before running any workflow, verify required environment variables:
+
+```bash
+# Check if GEMINI_API_KEY is set
+if [ -z "$GEMINI_API_KEY" ]; then
+  echo "Error: GEMINI_API_KEY environment variable is not set"
+  echo "Please set it with: export GEMINI_API_KEY='your_key_here'"
+  echo "Or create a .env file with: echo 'GEMINI_API_KEY=your_key' > .env"
+  exit 1
+fi
+```
+
+If the key is missing, stop and ask the user to provide it before proceeding.
+
 ## Workflow 1: Add Test Case
 
 When the user wants to add a new regression test case.
 
 ### Steps
 
-1. Read `tests/polish-prompt/suite.json` to determine the next case number
-2. Ask the user for:
+1. **Check environment** - Verify GEMINI_API_KEY is set (see Pre-flight Checks)
+2. Read `tests/polish-prompt/suite.json` to determine the next case number
+3. Ask the user for:
    - The raw speech transcript (input)
    - The expected polished output
    - Optional: context parameter
-3. Create the case directory `tests/polish-prompt/cases/NNN-slug/` with:
+4. Create the case directory `tests/polish-prompt/cases/NNN-slug/` with:
    - `input.txt` — raw transcript
    - `expected.txt` — expected output
    - `context.txt` — context parameter (only if provided)
-4. Add the case entry to `suite.json`:
+5. Add the case entry to `suite.json`:
    ```json
    {
      "id": "NNN-slug",
@@ -39,7 +56,7 @@ When the user wants to add a new regression test case.
      "scores": []
    }
    ```
-5. Run the new case through CLI to establish a baseline score:
+6. Run the new case through CLI to establish a baseline score:
    ```bash
    cat tests/polish-prompt/cases/NNN-slug/input.txt | cargo run -p diy_typeless_cli -- polish
    ```
@@ -47,8 +64,8 @@ When the user wants to add a new regression test case.
    ```bash
    cat tests/polish-prompt/cases/NNN-slug/input.txt | cargo run -p diy_typeless_cli -- polish --context "$(cat tests/polish-prompt/cases/NNN-slug/context.txt)"
    ```
-6. Score the output against `expected.txt` using `references/evaluation-criteria.md`
-7. Record the baseline score in `suite.json`
+7. Score the output against `expected.txt` using `references/evaluation-criteria.md`
+8. Record the baseline score in `suite.json`
 
 ## Workflow 2: Run Regression Tests
 
@@ -56,9 +73,10 @@ Run all test cases against the current prompt and report results.
 
 ### Steps
 
-1. Read `tests/polish-prompt/suite.json` to get all cases
-2. Load `references/evaluation-criteria.md` for scoring criteria
-3. For each case:
+1. **Check environment** - Verify GEMINI_API_KEY is set (see Pre-flight Checks)
+2. Read `tests/polish-prompt/suite.json` to get all cases
+3. Load `references/evaluation-criteria.md` for scoring criteria (if exists)
+4. For each case:
    a. Read `input.txt` (and `context.txt` if `has_context` is true)
    b. Run through CLI:
       ```bash
@@ -71,13 +89,13 @@ Run all test cases against the current prompt and report results.
    c. Read `expected.txt`
    d. Score the actual output against expected using evaluation criteria
    e. Compare with the last score in the case's `scores` array
-4. Report results as a table:
+5. Report results as a table:
    ```
    | Case | Description | Score | Previous | Delta |
    |------|-------------|-------|----------|-------|
    | 001  | ...         | 8/10  | 7/10     | +1    |
    ```
-5. Flag any regressions (score dropped by 2+ or human-unacceptable quality change)
+6. Flag any regressions (score dropped by 2+ or human-unacceptable quality change)
 
 ## Workflow 3: Optimize Prompt
 
@@ -85,15 +103,16 @@ The core iterative loop. Modify the polish prompt to improve quality.
 
 ### Steps
 
-1. **Identify target**: Ask the user what to improve, or run Workflow 2 to find weak spots
-2. **Diagnose**: Analyze why the current prompt produces suboptimal results for the target cases. Read the current prompt in `core/src/polish.rs`
-3. **Propose changes**: Draft specific prompt modifications. Explain the rationale. Present to user for approval — do NOT modify without confirmation
-4. **Apply**: After user approval, edit `core/src/polish.rs` with the prompt changes
-5. **Verify**: Run Workflow 2 (full regression suite)
-6. **Evaluate results**:
+1. **Check environment** - Verify GEMINI_API_KEY is set (see Pre-flight Checks)
+2. **Identify target**: Ask the user what to improve, or run Workflow 2 to find weak spots
+3. **Diagnose**: Analyze why the current prompt produces suboptimal results for the target cases. Read the current prompt in `core/src/polish.rs`
+4. **Propose changes**: Draft specific prompt modifications. Explain the rationale. Present to user for approval — do NOT modify without confirmation
+5. **Apply**: After user approval, edit `core/src/polish.rs` with the prompt changes
+6. **Verify**: Run Workflow 2 (full regression suite)
+7. **Evaluate results**:
    - If any case regresses significantly (score drop 2+ or human-unacceptable): **rollback** the change via `git checkout core/src/polish.rs` and report failure
    - If target cases improve without regression: proceed
-7. **Record**: Append to `tests/polish-prompt/evolution-log.md`:
+8. **Record**: Append to `tests/polish-prompt/evolution-log.md`:
    ```markdown
    ## [Date] — Brief title
 
@@ -102,7 +121,7 @@ The core iterative loop. Modify the polish prompt to improve quality.
    **Result**: Score changes summary
    **Constraint discovered**: Any new insight about what the prompt must preserve
    ```
-8. Update `suite.json` with new scores for all cases
+9. Update `suite.json` with new scores for all cases
 
 ### Rollback Protocol
 
@@ -131,3 +150,4 @@ Review the prompt evolution trajectory.
 - **LLM output variance**: Score fluctuations of 1 point that remain human-acceptable are NOT regressions. Only flag drops of 2+ or quality changes a human would reject.
 - **Human in the loop**: Always get user confirmation before modifying `core/src/polish.rs`.
 - **Close the loop**: Always verify via CLI, never assume a prompt change works based on reasoning alone.
+- **Environment required**: This skill requires GEMINI_API_KEY to be set in the environment or .env file. Always run Pre-flight Checks before executing workflows.
