@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0445F1602F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */; };
 		0445F1622F2C8E4900B25EC2 /* libdiy_typeless_core.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E1B0A5A6F35A4EC5A66A0002 /* DIYTypelessCore in Frameworks */ = {isa = PBXBuildFile; productRef = E1B0A5A7F35A4EC5A66A0003 /* DIYTypelessCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1B0A5A6F35A4EC5A66A0002 /* DIYTypelessCore in Frameworks */,
 				0445F1602F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -127,6 +129,7 @@
 			);
 			name = DIYTypeless;
 			packageProductDependencies = (
+				E1B0A5A7F35A4EC5A66A0003 /* DIYTypelessCore */,
 			);
 			productName = DIYTypeless;
 			productReference = 0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */;
@@ -183,6 +186,9 @@
 			);
 			mainGroup = 0445F1152F2C8CB800B25EC2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0445F11F2F2C8CB800B25EC2 /* Products */;
 			projectDirPath = "";
@@ -235,6 +241,13 @@
 			targetProxy = DA30EE9ACAB553F3CC71DD7F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCBuildConfiguration section */
 		0445F13D2F2C8CB900B25EC2 /* Debug */ = {
@@ -480,6 +493,14 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E1B0A5A7F35A4EC5A66A0003 /* DIYTypelessCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */;
+			productName = DIYTypelessCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		0445F1192F2C8CB800B25EC2 /* Build configuration list for PBXProject "DIYTypeless" */ = {

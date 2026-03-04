@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Observable settings for waveform visualization
 /// Uses computed properties with get/set (NOT didSet) for UserDefaults persistence

@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import DIYTypelessCore
 
 @MainActor
 @Observable
@@ -39,12 +40,31 @@ final class AppState {
         self.keyMonitoringRepository = keyMonitoringRepository ?? SystemKeyMonitoringRepository()
         self.textOutputRepository = textOutputRepository ?? SystemTextOutputRepository()
 
-        onboarding = OnboardingState(permissionRepository: self.permissionRepository, apiKeyRepository: repository)
+        onboarding = OnboardingState(
+            permissionRepository: self.permissionRepository,
+            apiKeyRepository: repository,
+            externalLinkRepository: NSWorkspaceExternalLinkRepository(),
+            validateApiKeyUseCase: ValidateApiKeyUseCase(
+                groqRepository: GroqApiKeyValidationRepository(),
+                geminiRepository: GeminiApiKeyValidationRepository()
+            )
+        )
         recording = RecordingState(
             permissionRepository: self.permissionRepository,
             apiKeyRepository: repository,
             keyMonitoringRepository: self.keyMonitoringRepository,
-            textOutputRepository: self.textOutputRepository
+            textOutputRepository: self.textOutputRepository,
+            appContextRepository: DefaultAppContextRepository(),
+            recordingControlUseCase: RecordingControlUseCaseImpl(),
+            stopRecordingUseCase: StopRecordingUseCaseImpl(),
+            transcribeAudioUseCase: TranscribeAudioUseCaseImpl(),
+            polishTextUseCase: PolishTextUseCaseImpl(),
+            getSelectedTextUseCase: GetSelectedTextUseCase(
+                repository: AccessibilitySelectedTextRepository()
+            ),
+            processVoiceCommandUseCase: ProcessVoiceCommandUseCaseImpl(
+                llmRepository: GeminiLLMRepository()
+            )
         )
 
         onboarding.onCompletion = { [weak self] in

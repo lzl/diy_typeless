@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 /// Repository implementation that calls Gemini API via Rust FFI.
 /// Wraps synchronous FFI calls in async continuations on background thread.

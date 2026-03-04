@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 final class StopRecordingUseCaseImpl: StopRecordingUseCaseProtocol {
     func execute() async throws -> DomainAudioData {

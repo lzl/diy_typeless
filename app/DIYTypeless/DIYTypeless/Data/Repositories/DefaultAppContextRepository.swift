@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import DIYTypelessCore
 
 /// Repository implementation for capturing application context using system APIs.
 final class DefaultAppContextRepository: AppContextRepository {

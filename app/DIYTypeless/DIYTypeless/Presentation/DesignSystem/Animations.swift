@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 // MARK: - Animation Constants
 // Pure presentation layer - animation curves and timing

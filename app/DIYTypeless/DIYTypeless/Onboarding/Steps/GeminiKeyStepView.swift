@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 struct GeminiKeyStepView: View {
     @Bindable var state: OnboardingState

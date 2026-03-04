@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
     func execute(

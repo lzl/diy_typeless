@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 // MARK: - Spacing System
 // Consistent spacing values throughout the app

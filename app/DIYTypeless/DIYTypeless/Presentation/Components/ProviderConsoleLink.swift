@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import DIYTypelessCore
 
 struct ProviderConsoleLink: View {
     let action: () -> Void

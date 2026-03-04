@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import DIYTypelessCore
 
 final class SystemPermissionRepository: PermissionRepository {
     var currentStatus: PermissionStatus {

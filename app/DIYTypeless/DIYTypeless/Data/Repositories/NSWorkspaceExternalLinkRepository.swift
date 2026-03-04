@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import DIYTypelessCore
 
 final class NSWorkspaceExternalLinkRepository: ExternalLinkRepository {
     func openConsole(for provider: ApiProvider) {

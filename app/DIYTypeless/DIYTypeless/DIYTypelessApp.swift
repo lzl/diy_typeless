@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 @main
 struct DIYTypelessApp: App {

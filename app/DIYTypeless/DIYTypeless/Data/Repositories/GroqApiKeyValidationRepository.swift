@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 /// Repository implementation for validating Groq API keys.
 final class GroqApiKeyValidationRepository: ApiKeyValidationRepository {

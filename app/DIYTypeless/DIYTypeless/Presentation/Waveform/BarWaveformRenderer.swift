@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Renders a discrete bar-style waveform visualization
 /// Matches the original WaveformView implementation exactly

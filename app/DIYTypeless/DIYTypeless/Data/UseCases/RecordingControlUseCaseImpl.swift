@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 final class RecordingControlUseCaseImpl: RecordingControlUseCaseProtocol {
     func startRecording() async throws {

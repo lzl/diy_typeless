@@ -1,4 +1,5 @@
 import AppKit
+import DIYTypelessCore
 
 final class SystemTextOutputRepository: TextOutputRepository {
     func deliver(text: String) -> OutputResult {
