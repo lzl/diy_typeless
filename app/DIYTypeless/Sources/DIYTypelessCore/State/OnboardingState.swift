@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-enum OnboardingStep: Int, CaseIterable {
+public enum OnboardingStep: Int, CaseIterable {
     case welcome
     case microphone
     case accessibility
@@ -9,41 +9,41 @@ enum OnboardingStep: Int, CaseIterable {
     case geminiKey
     case completion
 
-    var next: OnboardingStep? {
+    public var next: OnboardingStep? {
         OnboardingStep(rawValue: rawValue + 1)
     }
 
-    var previous: OnboardingStep? {
+    public var previous: OnboardingStep? {
         OnboardingStep(rawValue: rawValue - 1)
     }
 }
 
 @MainActor
 @Observable
-final class OnboardingState {
-    var step: OnboardingStep = .welcome
-    var permissions = PermissionStatus(accessibility: false, microphone: false)
-    var groqKey: String = "" {
+public final class OnboardingState {
+    public var step: OnboardingStep = .welcome
+    public var permissions = PermissionStatus(accessibility: false, microphone: false)
+    public var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
                 groqValidation = .idle
             }
         }
     }
-    var geminiKey: String = "" {
+    public var geminiKey: String = "" {
         didSet {
             if geminiKey != oldValue {
                 geminiValidation = .idle
             }
         }
     }
-    var groqValidation: ValidationState = .idle
-    var geminiValidation: ValidationState = .idle
+    public var groqValidation: ValidationState = .idle
+    public var geminiValidation: ValidationState = .idle
 
-    var onCompletion: (() -> Void)?
-    var onRequestRestart: (() -> Void)?
+    public var onCompletion: (() -> Void)?
+    public var onRequestRestart: (() -> Void)?
 
-    var canProceed: Bool {
+    public var canProceed: Bool {
         switch step {
         case .welcome:
             return true
@@ -75,11 +75,11 @@ final class OnboardingState {
         set { UserDefaults.standard.set(newValue, forKey: Self.hasCompletedWelcomeKey) }
     }
 
-    init(
+    public init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
-        externalLinkRepository: ExternalLinkRepository = OnboardingState.defaultExternalLinkRepository(),
-        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol = OnboardingState.defaultValidateApiKeyUseCase()
+        externalLinkRepository: ExternalLinkRepository,
+        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -89,26 +89,7 @@ final class OnboardingState {
         refresh()
     }
 
-    nonisolated private static func defaultExternalLinkRepository() -> ExternalLinkRepository {
-        #if SWIFT_PACKAGE
-        fatalError("Default external-link repository is unavailable in Swift Package tests.")
-        #else
-        NSWorkspaceExternalLinkRepository()
-        #endif
-    }
-
-    nonisolated private static func defaultValidateApiKeyUseCase() -> ValidateApiKeyUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default validation use case is unavailable in Swift Package tests.")
-        #else
-        ValidateApiKeyUseCase(
-            groqRepository: GroqApiKeyValidationRepository(),
-            geminiRepository: GeminiApiKeyValidationRepository()
-        )
-        #endif
-    }
-
-    func refresh() {
+    public func refresh() {
         groqKey = apiKeyRepository.loadKey(for: .groq) ?? ""
         geminiKey = apiKeyRepository.loadKey(for: .gemini) ?? ""
         groqValidation = groqKey.isEmpty ? .idle : .success
@@ -146,7 +127,7 @@ final class OnboardingState {
         }
     }
 
-    func startPolling() {
+    public func startPolling() {
         permissionTimer?.invalidate()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -155,12 +136,12 @@ final class OnboardingState {
         }
     }
 
-    func stopPolling() {
+    public func stopPolling() {
         permissionTimer?.invalidate()
         permissionTimer = nil
     }
 
-    func goNext() {
+    public func goNext() {
         if step == .welcome {
             hasCompletedWelcome = true
         }
@@ -169,25 +150,25 @@ final class OnboardingState {
         }
     }
 
-    func goBack() {
+    public func goBack() {
         if let previous = step.previous {
             step = previous
         }
     }
 
-    func complete() {
+    public func complete() {
         onCompletion?()
     }
 
-    func showCompletion() {
+    public func showCompletion() {
         step = .completion
     }
 
-    func requestRestart() {
+    public func requestRestart() {
         onRequestRestart?()
     }
 
-    func requestMicrophonePermission() {
+    public func requestMicrophonePermission() {
         Task {
             _ = await permissionRepository.requestMicrophone()
             await MainActor.run {
@@ -196,24 +177,24 @@ final class OnboardingState {
         }
     }
 
-    func requestAccessibilityPermission() {
+    public func requestAccessibilityPermission() {
         _ = permissionRepository.requestAccessibility()
         refreshPermissions()
     }
 
-    func openAccessibilitySettings() {
+    public func openAccessibilitySettings() {
         permissionRepository.openAccessibilitySettings()
     }
 
-    func openMicrophoneSettings() {
+    public func openMicrophoneSettings() {
         permissionRepository.openMicrophoneSettings()
     }
 
-    func openProviderConsole(for provider: ApiProvider) {
+    public func openProviderConsole(for provider: ApiProvider) {
         externalLinkRepository.openConsole(for: provider)
     }
 
-    func validateGroqKey() {
+    public func validateGroqKey() {
         let trimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             groqValidation = .failure("Enter your Groq API key to continue.")
@@ -236,7 +217,7 @@ final class OnboardingState {
         }
     }
 
-    func validateGeminiKey() {
+    public func validateGeminiKey() {
         let trimmed = geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             geminiValidation = .failure("Enter your Gemini API key to continue.")

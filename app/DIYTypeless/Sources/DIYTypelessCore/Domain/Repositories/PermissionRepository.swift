@@ -1,6 +1,6 @@
 import Foundation
 
-protocol PermissionRepository: Sendable {
+public protocol PermissionRepository: Sendable {
     /// Current app permission status from the domain entity.
     var currentStatus: PermissionStatus { get }
     func requestAccessibility() -> Bool

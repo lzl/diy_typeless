@@ -1,7 +1,7 @@
 import Foundation
 
 /// Protocol for polishing transcribed text
-protocol PolishTextUseCaseProtocol: Sendable {
+public protocol PolishTextUseCaseProtocol: Sendable {
     /// Polishes raw transcribed text using LLM
     /// - Parameters:
     ///   - rawText: The raw text from transcription
@@ -18,7 +18,7 @@ protocol PolishTextUseCaseProtocol: Sendable {
     ) async throws -> String
 }
 
-enum PolishingError: Error, Equatable {
+public enum PolishingError: Error, Equatable {
     case emptyInput
     case apiError(UserFacingError)
     case invalidResponse

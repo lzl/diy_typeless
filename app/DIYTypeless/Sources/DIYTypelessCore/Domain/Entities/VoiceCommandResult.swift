@@ -1,13 +1,18 @@
 import Foundation
 
 /// Entity representing the result of processing a voice command.
-struct VoiceCommandResult: Sendable {
-    let processedText: String
-    let action: CommandAction
+public struct VoiceCommandResult: Sendable {
+    public let processedText: String
+    public let action: CommandAction
+
+    public init(processedText: String, action: CommandAction) {
+        self.processedText = processedText
+        self.action = action
+    }
 }
 
 /// Enum representing possible actions to take with the processed text.
-enum CommandAction: Sendable {
+public enum CommandAction: Sendable {
     case replaceSelection
     case insertAtCursor
     case copyToClipboard

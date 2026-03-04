@@ -1,11 +1,16 @@
 import Foundation
 
 /// Entity representing required macOS permissions.
-struct PermissionStatus: Sendable {
-    let accessibility: Bool
-    let microphone: Bool
+public struct PermissionStatus: Sendable {
+    public let accessibility: Bool
+    public let microphone: Bool
 
-    var allGranted: Bool {
+    public init(accessibility: Bool, microphone: Bool) {
+        self.accessibility = accessibility
+        self.microphone = microphone
+    }
+
+    public var allGranted: Bool {
         accessibility && microphone
     }
 }

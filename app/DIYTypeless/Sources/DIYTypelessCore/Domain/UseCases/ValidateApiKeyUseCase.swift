@@ -1,7 +1,7 @@
 import Foundation
 
 /// Protocol for validating API keys.
-protocol ValidateApiKeyUseCaseProtocol: Sendable {
+public protocol ValidateApiKeyUseCaseProtocol: Sendable {
     /// Validates an API key for the specified provider.
     /// - Parameters:
     ///   - key: The API key to validate
@@ -13,11 +13,11 @@ protocol ValidateApiKeyUseCaseProtocol: Sendable {
 /// Use case for validating API keys.
 /// This use case encapsulates the business logic of validating API keys
 /// by delegating to the appropriate repository implementation.
-final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
+public final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
     private let groqRepository: ApiKeyValidationRepository
     private let geminiRepository: ApiKeyValidationRepository
 
-    init(
+    public init(
         groqRepository: ApiKeyValidationRepository,
         geminiRepository: ApiKeyValidationRepository
     ) {
@@ -25,7 +25,7 @@ final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
         self.geminiRepository = geminiRepository
     }
 
-    func execute(key: String, for provider: ApiProvider) async throws {
+    public func execute(key: String, for provider: ApiProvider) async throws {
         switch provider {
         case .groq:
             try await groqRepository.validate(key: key)

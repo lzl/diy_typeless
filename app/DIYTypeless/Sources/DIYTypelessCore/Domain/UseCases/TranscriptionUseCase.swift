@@ -2,7 +2,7 @@ import Foundation
 
 /// Protocol for the complete transcription pipeline
 /// This is a facade that composes the individual use cases
-protocol TranscriptionUseCaseProtocol: Sendable {
+public protocol TranscriptionUseCaseProtocol: Sendable {
     /// Executes the complete transcription pipeline
     /// - Parameters:
     ///   - groqKey: Groq API key for transcription
@@ -15,12 +15,12 @@ protocol TranscriptionUseCaseProtocol: Sendable {
 
 /// Facade use case that composes the individual transcription steps
 /// This maintains backward compatibility while using the new granular use cases internally
-final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
+public final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
     private let stopRecordingUseCase: StopRecordingUseCaseProtocol
     private let transcribeAudioUseCase: TranscribeAudioUseCaseProtocol
     private let polishTextUseCase: PolishTextUseCaseProtocol
 
-    init(
+    public init(
         stopRecordingUseCase: StopRecordingUseCaseProtocol,
         transcribeAudioUseCase: TranscribeAudioUseCaseProtocol,
         polishTextUseCase: PolishTextUseCaseProtocol
@@ -30,7 +30,7 @@ final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
         self.polishTextUseCase = polishTextUseCase
     }
 
-    func execute(groqKey: String, geminiKey: String, context: String?) async throws -> TranscriptionResult {
+    public func execute(groqKey: String, geminiKey: String, context: String?) async throws -> TranscriptionResult {
         // Step 1: Stop recording and get audio data
         let audioData = try await stopRecordingUseCase.execute()
 

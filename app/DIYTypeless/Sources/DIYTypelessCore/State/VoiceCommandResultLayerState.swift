@@ -1,6 +1,6 @@
 import Foundation
 
-struct VoiceCommandResultLayerState: Equatable, Sendable {
-    let text: String
-    var didCopy: Bool
+public struct VoiceCommandResultLayerState: Equatable, Sendable {
+    public let text: String
+    public var didCopy: Bool
 }

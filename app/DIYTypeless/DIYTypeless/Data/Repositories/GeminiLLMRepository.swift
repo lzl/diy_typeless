@@ -11,17 +11,32 @@ final class GeminiLLMRepository: LLMRepository {
         apiKey: String,
         prompt: String,
         temperature: Double?,
-        cancellationToken: CancellationToken?
+        cancellationToken: DIYTypelessCore.CancellationToken?
     ) async throws -> String {
-        let effectiveToken = cancellationToken ?? CancellationToken()
+        let ffiCancellationToken = await MainActor.run { CancellationToken() }
+        let cancellationPropagationTask = Task.detached(priority: .userInitiated) { [cancellationToken] in
+            guard let cancellationToken else { return }
+            while !Task.isCancelled {
+                if cancellationToken.isCancelled() {
+                    await MainActor.run {
+                        ffiCancellationToken.cancel()
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
 
-        if effectiveToken.isCancelled() {
+        if cancellationToken?.isCancelled() == true {
+            cancellationPropagationTask.cancel()
             throw CancellationError()
         }
         try Task.checkCancellation()
 
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            defer { cancellationPropagationTask.cancel() }
+
+            return try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
                         let result = try processTextWithLlmCancellable(
@@ -29,7 +44,7 @@ final class GeminiLLMRepository: LLMRepository {
                             prompt: prompt,
                             systemInstruction: nil,
                             temperature: Float(temperature ?? 0.3),
-                            cancellationToken: effectiveToken
+                            cancellationToken: ffiCancellationToken
                         )
                         continuation.resume(returning: result)
                     } catch let coreError as CoreError {
@@ -47,7 +62,10 @@ final class GeminiLLMRepository: LLMRepository {
                 }
             }
         } onCancel: {
-            effectiveToken.cancel()
+            cancellationPropagationTask.cancel()
+            Task { @MainActor in
+                ffiCancellationToken.cancel()
+            }
         }
     }
 

@@ -1,9 +1,13 @@
 import Foundation
 
-struct ValidationError: LocalizedError, Equatable {
-    let message: String
+public struct ValidationError: LocalizedError, Equatable {
+    public let message: String
 
-    var errorDescription: String? {
+    public init(message: String) {
+        self.message = message
+    }
+
+    public var errorDescription: String? {
         message
     }
 }

@@ -1,10 +1,10 @@
 import Foundation
 
-enum ApiProvider: String, Sendable, CaseIterable {
+public enum ApiProvider: String, Sendable, CaseIterable {
     case groq
     case gemini
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .groq:
             return "Groq"
@@ -13,7 +13,7 @@ enum ApiProvider: String, Sendable, CaseIterable {
         }
     }
 
-    var consoleURL: String {
+    public var consoleURL: String {
         switch self {
         case .groq:
             return "https://console.groq.com/keys"

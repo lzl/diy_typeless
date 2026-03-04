@@ -1,5 +1,5 @@
 import Foundation
 
-protocol ExternalLinkRepository: Sendable {
+public protocol ExternalLinkRepository: Sendable {
     func openConsole(for provider: ApiProvider)
 }

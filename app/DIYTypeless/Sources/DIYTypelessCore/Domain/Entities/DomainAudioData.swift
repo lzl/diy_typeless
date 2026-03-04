@@ -1,7 +1,12 @@
 import Foundation
 
 /// Domain-owned audio payload used by transcription use cases.
-struct DomainAudioData: Sendable {
-    let bytes: Data
-    let durationSeconds: Float
+public struct DomainAudioData: Sendable {
+    public let bytes: Data
+    public let durationSeconds: Float
+
+    public init(bytes: Data, durationSeconds: Float) {
+        self.bytes = bytes
+        self.durationSeconds = durationSeconds
+    }
 }

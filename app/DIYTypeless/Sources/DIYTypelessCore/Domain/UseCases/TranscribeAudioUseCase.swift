@@ -1,7 +1,7 @@
 import Foundation
 
 /// Protocol for transcribing audio to text
-protocol TranscribeAudioUseCaseProtocol: Sendable {
+public protocol TranscribeAudioUseCaseProtocol: Sendable {
     /// Transcribes audio data to raw text
     /// - Parameters:
     ///   - audioData: The audio data to transcribe (FLAC format)
@@ -18,7 +18,7 @@ protocol TranscribeAudioUseCaseProtocol: Sendable {
     ) async throws -> String
 }
 
-enum TranscriptionError: Error, Equatable {
+public enum TranscriptionError: Error, Equatable {
     case emptyAudio
     case apiError(UserFacingError)
     case decodingFailed

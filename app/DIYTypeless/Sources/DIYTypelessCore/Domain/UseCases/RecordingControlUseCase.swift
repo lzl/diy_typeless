@@ -1,6 +1,6 @@
 import Foundation
 
-protocol RecordingControlUseCaseProtocol: Sendable {
+public protocol RecordingControlUseCaseProtocol: Sendable {
     func startRecording() async throws
     func warmupConnections() async
 }

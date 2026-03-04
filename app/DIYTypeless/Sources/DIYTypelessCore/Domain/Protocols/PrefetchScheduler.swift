@@ -1,4 +1,4 @@
-protocol PrefetchScheduler: Sendable {
+public protocol PrefetchScheduler: Sendable {
     func schedule(
         delay: Duration,
         operation: @escaping @Sendable () async -> Void

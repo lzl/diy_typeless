@@ -1,17 +1,17 @@
 import Foundation
 
-enum ValidationState: Equatable, Sendable {
+public enum ValidationState: Equatable, Sendable {
     case idle
     case validating
     case success
     case failure(String)
 
-    var isSuccess: Bool {
+    public var isSuccess: Bool {
         if case .success = self { return true }
         return false
     }
 
-    var message: String? {
+    public var message: String? {
         switch self {
         case .idle, .success:
             return nil

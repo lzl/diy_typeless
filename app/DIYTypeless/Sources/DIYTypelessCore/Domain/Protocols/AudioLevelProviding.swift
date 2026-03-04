@@ -2,7 +2,7 @@ import Foundation
 
 /// Protocol for providing audio level data to waveform visualizations
 /// Uses Double (not CGFloat) to maintain Domain layer purity
-protocol AudioLevelProviding: AnyObject, Sendable {
+public protocol AudioLevelProviding: AnyObject, Sendable {
     /// Current audio levels as normalized values (0.0...1.0)
     var levels: [Double] { get async }
 

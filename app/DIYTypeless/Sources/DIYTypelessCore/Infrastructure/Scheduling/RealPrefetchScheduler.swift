@@ -1,5 +1,7 @@
-final class RealPrefetchScheduler: PrefetchScheduler {
-    func schedule(
+public final class RealPrefetchScheduler: PrefetchScheduler {
+    public init() {}
+
+    public func schedule(
         delay: Duration,
         operation: @escaping @Sendable () async -> Void
     ) -> Task<Void, Never> {
@@ -10,7 +12,7 @@ final class RealPrefetchScheduler: PrefetchScheduler {
         }
     }
 
-    func cancel(_ task: Task<Void, Never>) {
+    public func cancel(_ task: Task<Void, Never>) {
         task.cancel()
     }
 }

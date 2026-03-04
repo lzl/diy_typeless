@@ -125,7 +125,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
-				E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */,
 			);
 			name = DIYTypeless;
 			packageProductDependencies = (

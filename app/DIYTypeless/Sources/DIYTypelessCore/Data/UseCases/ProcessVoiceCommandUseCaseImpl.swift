@@ -3,22 +3,14 @@ import Foundation
 /// Use case for processing voice commands with selected text.
 /// Single Responsibility: Processes voice command and returns result.
 /// Does not handle output delivery (paste/copy) - that is the caller's responsibility.
-final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
+public final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCaseProtocol {
     private let llmRepository: LLMRepository
 
-    init(llmRepository: LLMRepository = ProcessVoiceCommandUseCaseImpl.defaultLLMRepository()) {
+    public init(llmRepository: LLMRepository) {
         self.llmRepository = llmRepository
     }
 
-    private static func defaultLLMRepository() -> LLMRepository {
-        #if SWIFT_PACKAGE
-        fatalError("Default LLM repository is unavailable in Swift Package tests.")
-        #else
-        GeminiLLMRepository()
-        #endif
-    }
-
-    func execute(
+    public func execute(
         transcription: String,
         selectedText: String,
         geminiKey: String,

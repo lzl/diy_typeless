@@ -1,7 +1,7 @@
 import Foundation
 
 /// Domain-level categories for technical failures from outer layers.
-enum TechnicalErrorCategory: Sendable {
+public enum TechnicalErrorCategory: Sendable {
     case api
     case network
     case unknown
@@ -9,8 +9,8 @@ enum TechnicalErrorCategory: Sendable {
 
 /// Maps technical failures to user-facing errors.
 /// Shared across all UseCase implementations to avoid code duplication.
-enum CoreErrorMapper {
-    static func toUserFacingError(category: TechnicalErrorCategory, message: String) -> UserFacingError {
+public enum CoreErrorMapper {
+    public static func toUserFacingError(category: TechnicalErrorCategory, message: String) -> UserFacingError {
         switch category {
         case .api:
             let lowercased = message.lowercased()

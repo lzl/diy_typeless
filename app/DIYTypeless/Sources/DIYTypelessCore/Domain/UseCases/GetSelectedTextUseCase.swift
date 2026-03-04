@@ -1,20 +1,20 @@
 import Foundation
 
 /// Protocol for GetSelectedTextUseCase.
-protocol GetSelectedTextUseCaseProtocol: Sendable {
+public protocol GetSelectedTextUseCaseProtocol: Sendable {
     func execute() async -> SelectedTextContext
 }
 
 /// Use case for retrieving selected text from the active application.
 /// Single Responsibility: Only retrieves selected text, nothing else.
-final class GetSelectedTextUseCase: GetSelectedTextUseCaseProtocol {
+public final class GetSelectedTextUseCase: GetSelectedTextUseCaseProtocol {
     private let repository: SelectedTextRepository
 
-    init(repository: SelectedTextRepository) {
+    public init(repository: SelectedTextRepository) {
         self.repository = repository
     }
 
-    func execute() async -> SelectedTextContext {
+    public func execute() async -> SelectedTextContext {
         await repository.getSelectedText()
     }
 }

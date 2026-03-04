@@ -1,10 +1,16 @@
 import Foundation
 
 /// Entity representing the current application context.
-struct AppContext: Sendable {
-    let appName: String
-    let bundleIdentifier: String?
-    let url: String?
+public struct AppContext: Sendable {
+    public let appName: String
+    public let bundleIdentifier: String?
+    public let url: String?
+
+    public init(appName: String, bundleIdentifier: String?, url: String?) {
+        self.appName = appName
+        self.bundleIdentifier = bundleIdentifier
+        self.url = url
+    }
 
     var formatted: String {
         var parts = ["app=\(appName)"]
@@ -16,7 +22,7 @@ struct AppContext: Sendable {
 }
 
 /// Repository protocol for capturing the current application context.
-protocol AppContextRepository: Sendable {
+public protocol AppContextRepository: Sendable {
     /// Captures the current application context (frontmost app, URL, etc.)
     /// - Returns: The current AppContext
     func captureContext() -> AppContext

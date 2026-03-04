@@ -3,7 +3,7 @@ import Foundation
 /// User-facing error types for display in the UI.
 /// These errors are mapped from technical failures and provide
 /// user-friendly messages suitable for display in the capsule UI.
-enum UserFacingError: Error, Equatable {
+public enum UserFacingError: Error, Equatable {
     case invalidAPIKey
     case regionBlocked
     case rateLimited
@@ -15,7 +15,7 @@ enum UserFacingError: Error, Equatable {
 extension UserFacingError {
     /// The user-friendly error message for display.
     /// Messages are kept concise to fit in the capsule UI (~160px width).
-    var message: String {
+    public var message: String {
         switch self {
         case .invalidAPIKey:
             return "Invalid API key"
@@ -37,7 +37,7 @@ extension UserFacingError {
     }
 
     /// The severity level of the error, used to determine display color.
-    var severity: ErrorSeverity {
+    public var severity: ErrorSeverity {
         switch self {
         case .invalidAPIKey, .rateLimited:
             return .warning
@@ -48,7 +48,7 @@ extension UserFacingError {
 }
 
 /// Error severity levels for UI color selection.
-enum ErrorSeverity: Equatable {
+public enum ErrorSeverity: Equatable {
     case warning     // User-fixable issues
     case critical    // External/system issues
 }

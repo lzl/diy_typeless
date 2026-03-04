@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-enum CapsuleState: Equatable {
+public enum CapsuleState: Equatable {
     case hidden
     case recording
     case transcribing(progress: Double)
@@ -14,12 +14,12 @@ enum CapsuleState: Equatable {
 
 @MainActor
 @Observable
-final class RecordingState {
-    private(set) var capsuleState: CapsuleState = .hidden
-    private(set) var voiceCommandResultLayer: VoiceCommandResultLayerState?
+public final class RecordingState {
+    public private(set) var capsuleState: CapsuleState = .hidden
+    public private(set) var voiceCommandResultLayer: VoiceCommandResultLayerState?
 
-    var onRequireOnboarding: (() -> Void)?
-    var onWillDeliverText: (() -> Void)?
+    public var onRequireOnboarding: (() -> Void)?
+    public var onWillDeliverText: (() -> Void)?
 
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
@@ -56,21 +56,21 @@ final class RecordingState {
     private var processingCancellationToken: CancellationToken?
     private let cancelFeedbackDuration: TimeInterval = 0.8
 
-    init(
+    public init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
         keyMonitoringRepository: KeyMonitoringRepository,
         textOutputRepository: TextOutputRepository,
-        appContextRepository: AppContextRepository = RecordingState.defaultAppContextRepository(),
+        appContextRepository: AppContextRepository,
         // Recording control
-        recordingControlUseCase: RecordingControlUseCaseProtocol = RecordingState.defaultRecordingControlUseCase(),
-        stopRecordingUseCase: StopRecordingUseCaseProtocol = RecordingState.defaultStopRecordingUseCase(),
+        recordingControlUseCase: RecordingControlUseCaseProtocol,
+        stopRecordingUseCase: StopRecordingUseCaseProtocol,
         // Transcription pipeline
-        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol = RecordingState.defaultTranscribeAudioUseCase(),
-        polishTextUseCase: PolishTextUseCaseProtocol = RecordingState.defaultPolishTextUseCase(),
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol,
+        polishTextUseCase: PolishTextUseCaseProtocol,
         // Voice command
-        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol = RecordingState.defaultGetSelectedTextUseCase(),
-        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol = RecordingState.defaultProcessVoiceCommandUseCase(),
+        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol,
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol,
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
         prefetchDelay: Duration = .milliseconds(300)
@@ -101,63 +101,7 @@ final class RecordingState {
         }
     }
 
-    nonisolated private static func defaultAppContextRepository() -> AppContextRepository {
-        #if SWIFT_PACKAGE
-        fatalError("Default app context repository is unavailable in Swift Package tests.")
-        #else
-        DefaultAppContextRepository()
-        #endif
-    }
-
-    nonisolated private static func defaultRecordingControlUseCase() -> RecordingControlUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default recording control use case is unavailable in Swift Package tests.")
-        #else
-        RecordingControlUseCaseImpl()
-        #endif
-    }
-
-    nonisolated private static func defaultStopRecordingUseCase() -> StopRecordingUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default stop recording use case is unavailable in Swift Package tests.")
-        #else
-        StopRecordingUseCaseImpl()
-        #endif
-    }
-
-    nonisolated private static func defaultTranscribeAudioUseCase() -> TranscribeAudioUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default transcribe use case is unavailable in Swift Package tests.")
-        #else
-        TranscribeAudioUseCaseImpl()
-        #endif
-    }
-
-    nonisolated private static func defaultPolishTextUseCase() -> PolishTextUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default polish use case is unavailable in Swift Package tests.")
-        #else
-        PolishTextUseCaseImpl()
-        #endif
-    }
-
-    nonisolated private static func defaultGetSelectedTextUseCase() -> GetSelectedTextUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default selected-text use case is unavailable in Swift Package tests.")
-        #else
-        GetSelectedTextUseCase(repository: AccessibilitySelectedTextRepository())
-        #endif
-    }
-
-    nonisolated private static func defaultProcessVoiceCommandUseCase() -> ProcessVoiceCommandUseCaseProtocol {
-        #if SWIFT_PACKAGE
-        fatalError("Default voice-command use case is unavailable in Swift Package tests.")
-        #else
-        ProcessVoiceCommandUseCaseImpl()
-        #endif
-    }
-
-    func activate() {
+    public func activate() {
         refreshKeys()
         let status = permissionRepository.currentStatus
         if status.allGranted {
@@ -168,7 +112,7 @@ final class RecordingState {
         }
     }
 
-    func deactivate() {
+    public func deactivate() {
         keyMonitoringRepository.stop()
         cleanupPrefetch()
         cancelProcessingPipeline()
@@ -185,7 +129,7 @@ final class RecordingState {
         capsuleState = .hidden
     }
 
-    func handleCancel() {
+    public func handleCancel() {
         cleanupPrefetch()
         cancelProcessingPipeline()
         if voiceCommandResultLayer != nil {
@@ -218,7 +162,7 @@ final class RecordingState {
 
     // MARK: - Key Event Handlers (Internal for Testing)
 
-    func handleKeyDown() async {
+    public func handleKeyDown() async {
         if isProcessing, !isRecording {
             handleCancel()
             return
@@ -270,7 +214,7 @@ final class RecordingState {
         }
     }
 
-    func handleKeyUp() async {
+    public func handleKeyUp() async {
         guard isRecording else { return }
 
         cancelPrefetchTask()  // Cancel any pending prefetch task, but keep preselectedContext
@@ -297,13 +241,13 @@ final class RecordingState {
         }
     }
 
-    func copyVoiceCommandResultLayerText() {
+    public func copyVoiceCommandResultLayerText() {
         guard let layer = voiceCommandResultLayer else { return }
         textOutputRepository.copyToClipboard(text: layer.text)
         voiceCommandResultLayer = VoiceCommandResultLayerState(text: layer.text, didCopy: true)
     }
 
-    func closeVoiceCommandResultLayer() {
+    public func closeVoiceCommandResultLayer() {
         voiceCommandResultLayer = nil
     }
 
