@@ -39,7 +39,7 @@ swift test
 ```
 
 - FFI-backed types required only for compilation in package context are provided by package-only shims:
-  - `DIYTypeless/Infrastructure/Headless/SwiftPackageShims.swift`
+  - `Sources/DIYTypelessCore/Infrastructure/Headless/SwiftPackageShims.swift`
 
 ## Migration Checklist (App -> Core Module Dependency)
 

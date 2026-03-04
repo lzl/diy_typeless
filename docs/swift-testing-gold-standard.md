@@ -161,17 +161,17 @@ Next migration phase:
 
 ## Files Under Test
 
-- `app/DIYTypeless/DIYTypeless/State/RecordingState.swift`
-- `app/DIYTypeless/DIYTypeless/State/OnboardingState.swift`
-- `app/DIYTypeless/DIYTypeless/Data/UseCases/ProcessVoiceCommandUseCaseImpl.swift`
-- `app/DIYTypeless/DIYTypeless/Domain/Errors/CoreErrorMapper.swift`
-- `app/DIYTypeless/DIYTypeless/Domain/UseCases/TranscriptionUseCase.swift`
+- `app/DIYTypeless/Sources/DIYTypelessCore/State/RecordingState.swift`
+- `app/DIYTypeless/Sources/DIYTypelessCore/State/OnboardingState.swift`
+- `app/DIYTypeless/Sources/DIYTypelessCore/Data/UseCases/ProcessVoiceCommandUseCaseImpl.swift`
+- `app/DIYTypeless/Sources/DIYTypelessCore/Domain/Errors/CoreErrorMapper.swift`
+- `app/DIYTypeless/Sources/DIYTypelessCore/Domain/UseCases/TranscriptionUseCase.swift`
 
 ## Test Suite Files
 
-- `app/DIYTypeless/DIYTypelessTests/RecordingStateTests.swift`
-- `app/DIYTypeless/DIYTypelessTests/OnboardingStateTests.swift`
-- `app/DIYTypeless/DIYTypelessTests/ProcessVoiceCommandUseCaseImplTests.swift`
-- `app/DIYTypeless/DIYTypelessTests/CoreErrorMapperTests.swift`
-- `app/DIYTypeless/DIYTypelessTests/TranscriptionUseCaseTests.swift`
-- `app/DIYTypeless/DIYTypelessTests/TestDoubles.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/RecordingStateTests.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/OnboardingStateTests.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/ProcessVoiceCommandUseCaseImplTests.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/CoreErrorMapperTests.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/TranscriptionUseCaseTests.swift`
+- `app/DIYTypeless/Tests/DIYTypelessCoreTests/TestDoubles.swift`

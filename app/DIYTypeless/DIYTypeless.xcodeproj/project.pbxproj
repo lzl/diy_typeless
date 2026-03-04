@@ -46,9 +46,14 @@
 			path = DIYTypeless;
 			sourceTree = "<group>";
 		};
+		E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/DIYTypelessCore;
+			sourceTree = "<group>";
+		};
 		193431A1680610C673B7D837 /* DIYTypelessTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DIYTypelessTests;
+			path = Tests/DIYTypelessCoreTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -76,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
+				E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */,
 				193431A1680610C673B7D837 /* DIYTypelessTests */,
 				0445F15E2F2C8DFE00B25EC2 /* Frameworks */,
 				0445F11F2F2C8CB800B25EC2 /* Products */,
@@ -117,6 +123,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
+				E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */,
 			);
 			name = DIYTypeless;
 			packageProductDependencies = (
