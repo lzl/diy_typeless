@@ -11,6 +11,7 @@ open class CancellationToken: CancellationTokenProtocol, @unchecked Sendable {
         public init() {}
     }
 
+    private let lock = NSLock()
     private var cancelled = false
 
     required public init(unsafeFromHandle handle: UInt64) {
@@ -26,11 +27,16 @@ open class CancellationToken: CancellationTokenProtocol, @unchecked Sendable {
     }
 
     open func cancel() {
+        lock.lock()
         cancelled = true
+        lock.unlock()
     }
 
     open func isCancelled() -> Bool {
-        cancelled
+        lock.lock()
+        let value = cancelled
+        lock.unlock()
+        return value
     }
 }
 

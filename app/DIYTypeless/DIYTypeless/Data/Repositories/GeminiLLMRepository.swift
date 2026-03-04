@@ -47,17 +47,20 @@ final class GeminiLLMRepository: LLMRepository {
                             cancellationToken: ffiCancellationToken
                         )
                         continuation.resume(returning: result)
-                    } catch let coreError as CoreError {
+                    } catch let ffiError as CoreError {
+                        let coreError = FFICoreErrorBridge.toCoreModuleError(ffiError)
                         if case .Cancelled = coreError {
                             continuation.resume(throwing: CancellationError())
                             return
                         }
 
-                        // Pass through CoreError directly - UseCase will map to UserFacingError
+                        // Pass through DIYTypelessCore.CoreError - UseCase maps to UserFacingError.
                         continuation.resume(throwing: coreError)
                     } catch {
-                        // Wrap unknown errors in CoreError.Api
-                        continuation.resume(throwing: CoreError.Api(error.localizedDescription))
+                        // Wrap unknown errors using the core module's error type.
+                        continuation.resume(
+                            throwing: DIYTypelessCore.CoreError.Api(error.localizedDescription)
+                        )
                     }
                 }
             }

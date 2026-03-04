@@ -12,7 +12,7 @@ public struct AppContext: Sendable {
         self.url = url
     }
 
-    var formatted: String {
+    public var formatted: String {
         var parts = ["app=\(appName)"]
         if let url {
             parts.append("url=\(url)")

@@ -1,9 +1,9 @@
 import Foundation
 import XCTest
-#if canImport(DIYTypeless)
+#if canImport(DIYTypelessCore)
+import DIYTypelessCore
+#elseif canImport(DIYTypeless)
 @testable import DIYTypeless
-#elseif canImport(DIYTypelessCore)
-@testable import DIYTypelessCore
 #endif
 
 @MainActor
@@ -35,15 +35,15 @@ final class FakeCancellationToken: CancellationToken, @unchecked Sendable {
         super.init(noHandle: CancellationToken.NoHandle())
     }
 
-    required init(unsafeFromHandle handle: UInt64) {
+    nonisolated required init(unsafeFromHandle handle: UInt64) {
         fatalError("unsafeFromHandle is unsupported in tests")
     }
 
-    override func cancel() {
+    nonisolated override func cancel() {
         cancelled = true
     }
 
-    override func isCancelled() -> Bool {
+    nonisolated override func isCancelled() -> Bool {
         cancelled
     }
 }

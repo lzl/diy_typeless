@@ -1,8 +1,8 @@
 import XCTest
-#if canImport(DIYTypeless)
+#if canImport(DIYTypelessCore)
+import DIYTypelessCore
+#elseif canImport(DIYTypeless)
 @testable import DIYTypeless
-#elseif canImport(DIYTypelessCore)
-@testable import DIYTypelessCore
 #endif
 
 final class CoreErrorMapperTests: XCTestCase {
