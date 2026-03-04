@@ -1,4 +1,5 @@
 import Foundation
+import DIYTypelessCore
 
 /// Repository implementation for validating Gemini API keys.
 final class GeminiApiKeyValidationRepository: ApiKeyValidationRepository {

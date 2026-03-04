@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import DIYTypelessCore
 
 enum ApiKeyRepositoryError: Error {
     case saveFailed(OSStatus)

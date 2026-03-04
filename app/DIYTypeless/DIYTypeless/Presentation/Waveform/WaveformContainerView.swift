@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Container view for waveform visualization using TimelineView + Canvas
 /// Provides 60fps GPU-accelerated rendering with stateful renderer caching

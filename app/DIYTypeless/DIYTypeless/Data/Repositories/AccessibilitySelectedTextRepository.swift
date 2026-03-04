@@ -1,4 +1,5 @@
 import AppKit
+import DIYTypelessCore
 
 /// Repository implementation that retrieves selected text using macOS Accessibility API.
 ///

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import DIYTypelessCore
 
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {

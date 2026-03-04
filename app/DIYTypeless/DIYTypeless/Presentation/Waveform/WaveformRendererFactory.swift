@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Factory for creating waveform renderer instances based on style
 /// Returns appropriate renderer for each WaveformStyle enum case

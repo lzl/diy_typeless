@@ -1,0 +1,453 @@
+import Foundation
+import Observation
+
+public enum CapsuleState: Equatable {
+    case hidden
+    case recording
+    case transcribing(progress: Double)
+    case polishing(progress: Double)
+    case processingCommand(String, progress: Double)  // Shows voice command being processed
+    case canceled
+    case done(OutputResult)
+    case error(UserFacingError)
+}
+
+@MainActor
+@Observable
+public final class RecordingState {
+    public private(set) var capsuleState: CapsuleState = .hidden
+    public private(set) var voiceCommandResultLayer: VoiceCommandResultLayerState?
+
+    public var onRequireOnboarding: (() -> Void)?
+    public var onWillDeliverText: (() -> Void)?
+
+    private let permissionRepository: PermissionRepository
+    private let apiKeyRepository: ApiKeyRepository
+    private var keyMonitoringRepository: KeyMonitoringRepository
+    private let textOutputRepository: TextOutputRepository
+    private let appContextRepository: AppContextRepository
+
+    // Recording control
+    private let recordingControlUseCase: RecordingControlUseCaseProtocol
+    private let stopRecordingUseCase: StopRecordingUseCaseProtocol
+
+    // Transcription pipeline
+    private let transcribeAudioUseCase: TranscribeAudioUseCaseProtocol
+    private let polishTextUseCase: PolishTextUseCaseProtocol
+
+    // Voice command
+    private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
+    private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
+
+    // Prefetch
+    private var preselectedContext: SelectedTextContext?
+    private var prefetchTask: Task<Void, Never>?
+    private let prefetchScheduler: PrefetchScheduler
+    private let prefetchDelay: Duration
+
+    private var groqKey: String = ""
+    private var geminiKey: String = ""
+    private var isRecording = false
+    private var isProcessing = false
+    private var capturedContext: String?
+    private var currentGeneration: Int = 0
+    private var processingGeneration: Int?
+    private var processingTask: Task<Void, Never>?
+    private var processingCancellationToken: CancellationToken?
+    private let cancelFeedbackDuration: TimeInterval = 0.8
+
+    public init(
+        permissionRepository: PermissionRepository,
+        apiKeyRepository: ApiKeyRepository,
+        keyMonitoringRepository: KeyMonitoringRepository,
+        textOutputRepository: TextOutputRepository,
+        appContextRepository: AppContextRepository,
+        // Recording control
+        recordingControlUseCase: RecordingControlUseCaseProtocol,
+        stopRecordingUseCase: StopRecordingUseCaseProtocol,
+        // Transcription pipeline
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol,
+        polishTextUseCase: PolishTextUseCaseProtocol,
+        // Voice command
+        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol,
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol,
+        // Prefetch
+        prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
+        prefetchDelay: Duration = .milliseconds(300)
+    ) {
+        self.permissionRepository = permissionRepository
+        self.apiKeyRepository = apiKeyRepository
+        self.keyMonitoringRepository = keyMonitoringRepository
+        self.textOutputRepository = textOutputRepository
+        self.appContextRepository = appContextRepository
+        self.recordingControlUseCase = recordingControlUseCase
+        self.stopRecordingUseCase = stopRecordingUseCase
+        self.transcribeAudioUseCase = transcribeAudioUseCase
+        self.polishTextUseCase = polishTextUseCase
+        self.getSelectedTextUseCase = getSelectedTextUseCase
+        self.processVoiceCommandUseCase = processVoiceCommandUseCase
+        self.prefetchScheduler = prefetchScheduler
+        self.prefetchDelay = prefetchDelay
+
+        keyMonitoringRepository.onFnDown = { [weak self] in
+            Task { @MainActor in
+                await self?.handleKeyDown()
+            }
+        }
+        keyMonitoringRepository.onFnUp = { [weak self] in
+            Task { @MainActor in
+                await self?.handleKeyUp()
+            }
+        }
+    }
+
+    public func activate() {
+        refreshKeys()
+        let status = permissionRepository.currentStatus
+        if status.allGranted {
+            _ = keyMonitoringRepository.start()
+        } else {
+            keyMonitoringRepository.stop()
+            onRequireOnboarding?()
+        }
+    }
+
+    public func deactivate() {
+        keyMonitoringRepository.stop()
+        cleanupPrefetch()
+        cancelProcessingPipeline()
+        if isRecording {
+            Task {
+                _ = try? await stopRecordingUseCase.execute()
+            }
+            isRecording = false
+        }
+        currentGeneration += 1
+        isProcessing = false
+        capturedContext = nil
+        voiceCommandResultLayer = nil
+        capsuleState = .hidden
+    }
+
+    public func handleCancel() {
+        cleanupPrefetch()
+        cancelProcessingPipeline()
+        if voiceCommandResultLayer != nil {
+            closeVoiceCommandResultLayer()
+            return
+        }
+
+        switch capsuleState {
+        case .recording:
+            isRecording = false
+            isProcessing = false
+            currentGeneration += 1
+            capturedContext = nil
+            Task {
+                _ = try? await stopRecordingUseCase.execute()
+            }
+            capsuleState = .hidden
+
+        case .processingCommand, .transcribing, .polishing:
+            currentGeneration += 1
+            isProcessing = false
+            capturedContext = nil
+            capsuleState = .canceled
+            scheduleHide(after: cancelFeedbackDuration, expectedState: .canceled)
+
+        case .hidden, .canceled, .done, .error:
+            break
+        }
+    }
+
+    // MARK: - Key Event Handlers (Internal for Testing)
+
+    public func handleKeyDown() async {
+        if isProcessing, !isRecording {
+            handleCancel()
+            return
+        }
+
+        let status = permissionRepository.currentStatus
+        guard status.allGranted else {
+            showError(.invalidAPIKey)
+            onRequireOnboarding?()
+            return
+        }
+
+        guard !isRecording, !isProcessing else { return }
+
+        refreshKeys()
+
+        if groqKey.isEmpty {
+            showError(.invalidAPIKey)
+            onRequireOnboarding?()
+            return
+        }
+
+        if geminiKey.isEmpty {
+            showError(.invalidAPIKey)
+            onRequireOnboarding?()
+            return
+        }
+
+        Task {
+            await recordingControlUseCase.warmupConnections()
+        }
+
+        do {
+            try await recordingControlUseCase.startRecording()
+            isRecording = true
+            voiceCommandResultLayer = nil
+            capsuleState = .recording
+            capturedContext = appContextRepository.captureContext().formatted
+
+            // Schedule prefetch of selected text after delay
+            prefetchTask = prefetchScheduler.schedule(delay: prefetchDelay) { [weak self] in
+                guard let self else { return }
+                let context = await self.getSelectedTextUseCase.execute()
+                guard !Task.isCancelled else { return }
+                await self.setPreselectedContext(context)
+            }
+        } catch {
+            showError(.unknown(error.localizedDescription))
+        }
+    }
+
+    public func handleKeyUp() async {
+        guard isRecording else { return }
+
+        cancelPrefetchTask()  // Cancel any pending prefetch task, but keep preselectedContext
+
+        guard !isProcessing else { return }
+        isRecording = false
+        isProcessing = true
+
+        currentGeneration += 1
+        let gen = currentGeneration
+        let context = preselectedContext ?? .empty
+        preselectedContext = nil
+
+        let cancellationToken = CancellationToken()
+        processingGeneration = gen
+        processingCancellationToken = cancellationToken
+
+        processingTask = Task { [weak self] in
+            await self?.runProcessingPipeline(
+                generation: gen,
+                context: context,
+                cancellationToken: cancellationToken
+            )
+        }
+    }
+
+    public func copyVoiceCommandResultLayerText() {
+        guard let layer = voiceCommandResultLayer else { return }
+        textOutputRepository.copyToClipboard(text: layer.text)
+        voiceCommandResultLayer = VoiceCommandResultLayerState(text: layer.text, didCopy: true)
+    }
+
+    public func closeVoiceCommandResultLayer() {
+        voiceCommandResultLayer = nil
+    }
+
+    // MARK: - Error Handling
+
+    private func handleTranscriptionError(_ error: TranscriptionError) {
+        switch error {
+        case .apiError(let userError):
+            showError(userError)
+        case .emptyAudio, .decodingFailed:
+            showError(.unknown("Transcription failed"))
+        }
+    }
+
+    private func handlePolishingError(_ error: PolishingError) {
+        switch error {
+        case .apiError(let userError):
+            showError(userError)
+        case .emptyInput, .invalidResponse:
+            showError(.unknown("Polishing failed"))
+        }
+    }
+
+    // MARK: - Business Logic
+
+    private func shouldUseVoiceCommandMode(_ context: SelectedTextContext) -> Bool {
+        // Note: isEditable is not required for voice command mode
+        // Some apps (like Chrome) may report isEditable=false even when text is selected
+        // We only care about: hasSelection and !isSecure
+        context.hasSelection && !context.isSecure
+    }
+
+    // MARK: - Voice Command Mode
+
+    private func handleVoiceCommandMode(
+        transcription: String,
+        selectedText: String,
+        geminiKey: String,
+        generation: Int,
+        cancellationToken: CancellationToken
+    ) async throws {
+        capsuleState = .processingCommand(transcription, progress: 0)
+
+        let result = try await processVoiceCommandUseCase.execute(
+            transcription: transcription,
+            selectedText: selectedText,
+            geminiKey: geminiKey,
+            cancellationToken: cancellationToken
+        )
+
+        guard currentGeneration == generation else { return }
+
+        voiceCommandResultLayer = VoiceCommandResultLayerState(
+            text: result.processedText,
+            didCopy: false
+        )
+        capsuleState = .hidden
+        isProcessing = false
+    }
+
+    // MARK: - Transcription Mode (Fallback)
+
+    private func handleTranscriptionMode(
+        rawText: String,
+        geminiKey: String,
+        context: String?,
+        generation: Int,
+        cancellationToken: CancellationToken
+    ) async throws {
+        capsuleState = .polishing(progress: 0)
+
+        let polishedText = try await polishTextUseCase.execute(
+            rawText: rawText,
+            apiKey: geminiKey,
+            context: context,
+            cancellationToken: cancellationToken
+        )
+
+        guard currentGeneration == generation else { return }
+
+        onWillDeliverText?()
+        let outputResult = textOutputRepository.deliver(text: polishedText)
+
+        capsuleState = .done(outputResult)
+        isProcessing = false
+
+        scheduleHide(after: 1.2, expectedState: .done(outputResult))
+    }
+
+    private func showError(_ error: UserFacingError) {
+        capsuleState = .error(error)
+        isRecording = false
+        isProcessing = false
+        scheduleHide(after: 2.0, expectedState: .error(error))
+    }
+
+    private func scheduleHide(after delay: TimeInterval, expectedState: CapsuleState) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.capsuleState == expectedState else { return }
+            self.capsuleState = .hidden
+        }
+    }
+
+    private func refreshKeys() {
+        groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func cancelPrefetchTask() {
+        if let task = prefetchTask {
+            prefetchScheduler.cancel(task)
+        }
+        prefetchTask = nil
+    }
+
+    private func cleanupPrefetch() {
+        cancelPrefetchTask()
+        preselectedContext = nil
+    }
+
+    private func cancelProcessingPipeline() {
+        processingCancellationToken?.cancel()
+        processingCancellationToken = nil
+        processingTask?.cancel()
+        processingTask = nil
+        processingGeneration = nil
+    }
+
+    private func setPreselectedContext(_ context: SelectedTextContext) {
+        preselectedContext = context
+    }
+
+    private func runProcessingPipeline(
+        generation: Int,
+        context: SelectedTextContext,
+        cancellationToken: CancellationToken
+    ) async {
+        defer {
+            if processingGeneration == generation {
+                processingTask = nil
+                processingCancellationToken = nil
+                processingGeneration = nil
+            }
+        }
+
+        do {
+            // Step 1: Stop recording and obtain audio bytes.
+            let audio = try await stopRecordingUseCase.execute()
+
+            guard currentGeneration == generation else { return }
+
+            // Step 2: Transcribe audio with cooperative cancellation.
+            capsuleState = .transcribing(progress: 0)
+            let rawText = try await transcribeAudioUseCase.execute(
+                audioData: audio,
+                apiKey: groqKey,
+                language: nil,
+                cancellationToken: cancellationToken
+            )
+
+            guard currentGeneration == generation else { return }
+
+            // Step 3: Determine mode and process.
+            if shouldUseVoiceCommandMode(context) {
+                try await handleVoiceCommandMode(
+                    transcription: rawText,
+                    selectedText: context.text!,
+                    geminiKey: geminiKey,
+                    generation: generation,
+                    cancellationToken: cancellationToken
+                )
+            } else {
+                try await handleTranscriptionMode(
+                    rawText: rawText,
+                    geminiKey: geminiKey,
+                    context: capturedContext,
+                    generation: generation,
+                    cancellationToken: cancellationToken
+                )
+            }
+        } catch is CancellationError {
+            guard currentGeneration == generation else { return }
+            isProcessing = false
+            capsuleState = .hidden
+        } catch let error as TranscriptionError {
+            guard currentGeneration == generation else { return }
+            handleTranscriptionError(error)
+            isProcessing = false
+        } catch let error as PolishingError {
+            guard currentGeneration == generation else { return }
+            handlePolishingError(error)
+            isProcessing = false
+        } catch let error as UserFacingError {
+            guard currentGeneration == generation else { return }
+            showError(error)
+            isProcessing = false
+        } catch {
+            guard currentGeneration == generation else { return }
+            showError(.unknown(error.localizedDescription))
+            isProcessing = false
+        }
+    }
+}

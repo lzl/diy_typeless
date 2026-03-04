@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Protocol for rendering waveform visualizations using SwiftUI GraphicsContext
 /// Implementations must be @MainActor as GraphicsContext is a MainActor-bound type

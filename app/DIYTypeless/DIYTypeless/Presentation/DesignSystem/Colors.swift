@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 // MARK: - App Color System
 // Pure presentation layer - no business logic

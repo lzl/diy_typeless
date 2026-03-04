@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import DIYTypelessCore
 
 @MainActor
 @Observable
@@ -31,20 +32,56 @@ final class AppState {
         apiKeyRepository: ApiKeyRepository? = nil,
         permissionRepository: PermissionRepository? = nil,
         keyMonitoringRepository: KeyMonitoringRepository? = nil,
-        textOutputRepository: TextOutputRepository? = nil
+        textOutputRepository: TextOutputRepository? = nil,
+        externalLinkRepository: ExternalLinkRepository? = nil,
+        validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol? = nil,
+        appContextRepository: AppContextRepository? = nil,
+        recordingControlUseCase: RecordingControlUseCaseProtocol? = nil,
+        stopRecordingUseCase: StopRecordingUseCaseProtocol? = nil,
+        transcribeAudioUseCase: TranscribeAudioUseCaseProtocol? = nil,
+        polishTextUseCase: PolishTextUseCaseProtocol? = nil,
+        getSelectedTextUseCase: GetSelectedTextUseCaseProtocol? = nil,
+        processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol? = nil
     ) {
         let repository = apiKeyRepository ?? KeychainApiKeyRepository()
         self.apiKeyRepository = repository
         self.permissionRepository = permissionRepository ?? SystemPermissionRepository()
         self.keyMonitoringRepository = keyMonitoringRepository ?? SystemKeyMonitoringRepository()
         self.textOutputRepository = textOutputRepository ?? SystemTextOutputRepository()
+        let resolvedExternalLinkRepository = externalLinkRepository ?? NSWorkspaceExternalLinkRepository()
+        let resolvedValidateApiKeyUseCase = validateApiKeyUseCase ?? ValidateApiKeyUseCase(
+            groqRepository: GroqApiKeyValidationRepository(),
+            geminiRepository: GeminiApiKeyValidationRepository()
+        )
+        let resolvedAppContextRepository = appContextRepository ?? DefaultAppContextRepository()
+        let resolvedRecordingControlUseCase = recordingControlUseCase ?? RecordingControlUseCaseImpl()
+        let resolvedStopRecordingUseCase = stopRecordingUseCase ?? StopRecordingUseCaseImpl()
+        let resolvedTranscribeAudioUseCase = transcribeAudioUseCase ?? TranscribeAudioUseCaseImpl()
+        let resolvedPolishTextUseCase = polishTextUseCase ?? PolishTextUseCaseImpl()
+        let resolvedGetSelectedTextUseCase = getSelectedTextUseCase ?? GetSelectedTextUseCase(
+            repository: AccessibilitySelectedTextRepository()
+        )
+        let resolvedProcessVoiceCommandUseCase = processVoiceCommandUseCase
+            ?? ProcessVoiceCommandUseCaseImpl(llmRepository: GeminiLLMRepository())
 
-        onboarding = OnboardingState(permissionRepository: self.permissionRepository, apiKeyRepository: repository)
+        onboarding = OnboardingState(
+            permissionRepository: self.permissionRepository,
+            apiKeyRepository: repository,
+            externalLinkRepository: resolvedExternalLinkRepository,
+            validateApiKeyUseCase: resolvedValidateApiKeyUseCase
+        )
         recording = RecordingState(
             permissionRepository: self.permissionRepository,
             apiKeyRepository: repository,
             keyMonitoringRepository: self.keyMonitoringRepository,
-            textOutputRepository: self.textOutputRepository
+            textOutputRepository: self.textOutputRepository,
+            appContextRepository: resolvedAppContextRepository,
+            recordingControlUseCase: resolvedRecordingControlUseCase,
+            stopRecordingUseCase: resolvedStopRecordingUseCase,
+            transcribeAudioUseCase: resolvedTranscribeAudioUseCase,
+            polishTextUseCase: resolvedPolishTextUseCase,
+            getSelectedTextUseCase: resolvedGetSelectedTextUseCase,
+            processVoiceCommandUseCase: resolvedProcessVoiceCommandUseCase
         )
 
         onboarding.onCompletion = { [weak self] in

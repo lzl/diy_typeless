@@ -1,4 +1,5 @@
 import AVFoundation
+import DIYTypelessCore
 
 /// Actor-isolated audio level monitor that bridges AVAudioEngine to SwiftUI
 /// Uses AsyncStream for safe cross-actor communication

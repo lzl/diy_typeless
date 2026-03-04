@@ -1,4 +1,5 @@
 import AppKit
+import DIYTypelessCore
 
 final class SystemKeyMonitoringRepository: KeyMonitoringRepository {
     var onFnDown: (() -> Void)?

@@ -1,32 +1,49 @@
 import Foundation
+import DIYTypelessCore
 
 final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
     func execute(
         rawText: String,
         apiKey: String,
         context: String?,
-        cancellationToken: CancellationToken?
+        cancellationToken: DIYTypelessCore.CancellationToken?
     ) async throws -> String {
+        let ffiCancellationToken = await MainActor.run { CancellationToken() }
+        let cancellationPropagationTask = Task.detached(priority: .userInitiated) { [cancellationToken] in
+            guard let cancellationToken else { return }
+            while !Task.isCancelled {
+                if cancellationToken.isCancelled() {
+                    await MainActor.run {
+                        ffiCancellationToken.cancel()
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
+
         guard !rawText.isEmpty else {
+            cancellationPropagationTask.cancel()
             throw PolishingError.emptyInput
         }
 
-        let effectiveToken = cancellationToken ?? CancellationToken()
-
-        if effectiveToken.isCancelled() {
+        if cancellationToken?.isCancelled() == true {
+            cancellationPropagationTask.cancel()
             throw CancellationError()
         }
         try Task.checkCancellation()
 
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            defer { cancellationPropagationTask.cancel() }
+
+            return try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
                         let polished = try polishTextCancellable(
                             apiKey: apiKey,
                             rawText: rawText,
                             context: context,
-                            cancellationToken: effectiveToken
+                            cancellationToken: ffiCancellationToken
                         )
                         continuation.resume(returning: polished)
                     } catch let coreError as CoreError {
@@ -55,7 +72,10 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
                 }
             }
         } onCancel: {
-            effectiveToken.cancel()
+            cancellationPropagationTask.cancel()
+            Task { @MainActor in
+                ffiCancellationToken.cancel()
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 struct CapsuleLayerRootView: View {
     let state: RecordingState

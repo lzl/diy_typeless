@@ -2,6 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import Observation
 import SwiftUI
+import DIYTypelessCore
 
 private class CapsulePanel: NSPanel {
     var onEscDown: (() -> Void)?

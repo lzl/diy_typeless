@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import DIYTypelessCore
 
 struct MenuBarView: View {
     @Environment(AppState.self) private var appState

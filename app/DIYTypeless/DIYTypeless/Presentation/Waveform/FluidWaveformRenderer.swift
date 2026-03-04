@@ -1,4 +1,5 @@
 import SwiftUI
+import DIYTypelessCore
 
 /// Renders a fluid, organic waveform using layered sine waves
 /// Produces a smooth, wave-like visualization that responds to audio levels
