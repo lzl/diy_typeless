@@ -21,6 +21,20 @@
                ReferencedContainer = "container:DIYTypeless.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4C1802A5CD2D8723A2D3C658"
+               BuildableName = "DIYTypelessTests.xctest"
+               BlueprintName = "DIYTypelessTests"
+               ReferencedContainer = "container:DIYTypeless.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -30,6 +44,17 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4C1802A5CD2D8723A2D3C658"
+               BuildableName = "DIYTypelessTests.xctest"
+               BlueprintName = "DIYTypelessTests"
+               ReferencedContainer = "container:DIYTypeless.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

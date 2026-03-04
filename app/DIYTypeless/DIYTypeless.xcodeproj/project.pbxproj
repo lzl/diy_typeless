@@ -12,6 +12,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		DA30EE9ACAB553F3CC71DD7F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0445F1162F2C8CB800B25EC2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0445F11D2F2C8CB800B25EC2;
+			remoteInfo = DIYTypeless;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -30,12 +37,18 @@
 /* Begin PBXFileReference section */
 		0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DIYTypeless.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libdiy_typeless_core.dylib; path = "$(PROJECT_DIR)/../../target/$(RUST_PROFILE)/libdiy_typeless_core.dylib"; sourceTree = "<group>"; };
+		38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DIYTypelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0445F1202F2C8CB800B25EC2 /* DIYTypeless */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DIYTypeless;
+			sourceTree = "<group>";
+		};
+		193431A1680610C673B7D837 /* DIYTypelessTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DIYTypelessTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -49,6 +62,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3FD0CE21BC37F19B9BDAC1EE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -56,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
+				193431A1680610C673B7D837 /* DIYTypelessTests */,
 				0445F15E2F2C8DFE00B25EC2 /* Frameworks */,
 				0445F11F2F2C8CB800B25EC2 /* Products */,
 			);
@@ -65,6 +86,7 @@
 			isa = PBXGroup;
 			children = (
 				0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */,
+				38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -103,6 +125,29 @@
 			productReference = 0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4C1802A5CD2D8723A2D3C658 /* DIYTypelessTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9E957A03E05DEFC926E6AD85 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */;
+			buildPhases = (
+				DD9D87B8F9A2765A32A129B3 /* Sources */,
+				3FD0CE21BC37F19B9BDAC1EE /* Frameworks */,
+				260C7497D9D282431C7701BD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F44E3FAC4217514995ED7D83 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				193431A1680610C673B7D837 /* DIYTypelessTests */,
+			);
+			name = DIYTypelessTests;
+			packageProductDependencies = (
+			);
+			productName = DIYTypelessTests;
+			productReference = 38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -115,6 +160,10 @@
 				TargetAttributes = {
 					0445F11D2F2C8CB800B25EC2 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					4C1802A5CD2D8723A2D3C658 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 0445F11D2F2C8CB800B25EC2;
 					};
 				};
 			};
@@ -133,12 +182,20 @@
 			projectRoot = "";
 			targets = (
 				0445F11D2F2C8CB800B25EC2 /* DIYTypeless */,
+				4C1802A5CD2D8723A2D3C658 /* DIYTypelessTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0445F11C2F2C8CB800B25EC2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		260C7497D9D282431C7701BD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -155,9 +212,21 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD9D87B8F9A2765A32A129B3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F44E3FAC4217514995ED7D83 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0445F11D2F2C8CB800B25EC2 /* DIYTypeless */;
+			targetProxy = DA30EE9ACAB553F3CC71DD7F /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -359,6 +428,52 @@
 			};
 			name = Release;
 		};
+		D823442F526B2800B71725EE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/../Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
+				TEST_TARGET_NAME = DIYTypeless;
+			};
+			name = Debug;
+		};
+		929F381D6B006D0527C51976 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/../Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
+				TEST_TARGET_NAME = DIYTypeless;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -376,6 +491,15 @@
 			buildConfigurations = (
 				0445F1402F2C8CB900B25EC2 /* Debug */,
 				0445F1412F2C8CB900B25EC2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9E957A03E05DEFC926E6AD85 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D823442F526B2800B71725EE /* Debug */,
+				929F381D6B006D0527C51976 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
