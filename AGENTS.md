@@ -47,6 +47,15 @@ docs(agents): add commit message convention
 - Keep the first line under 72 characters
 - Reference issues/PRs in footer when applicable
 
+## Branch Merge Convention
+
+When merging a feature branch into `main`, always use **squash merge**.
+
+Rules:
+- Do not use merge commits for feature branches targeting `main`
+- Keep `main` history linear and consistent with one logical commit per PR
+- The squashed commit message must follow Conventional Commits
+
 ## Closing the Loop (Primary Rule)
 
 This project prioritizes closing the loop. Any core logic changes must be verified through an executable path that the agent can run end-to-end without opening the macOS app UI.
