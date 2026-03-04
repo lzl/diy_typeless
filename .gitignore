@@ -19,7 +19,7 @@ build/
 *.profraw
 
 # Swift Package Manager
-/.build/
+.build/
 .swiftpm/
 Packages/
 
