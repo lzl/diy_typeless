@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 #if canImport(DIYTypeless)
 @testable import DIYTypeless
-#elseif canImport(DIYTypelessHeadlessCore)
-@testable import DIYTypelessHeadlessCore
+#elseif canImport(DIYTypelessCore)
+@testable import DIYTypelessCore
 #endif
 
 @MainActor

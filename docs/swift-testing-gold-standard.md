@@ -119,7 +119,7 @@ Future Swift tests should follow the same principles.
 ## Run Commands
 
 ```bash
-# Headless gold-standard tests (option 2, no app host launch)
+# Core-module gold-standard tests (option 3 baseline, no app host launch)
 cd app/DIYTypeless
 swift test
 
@@ -143,7 +143,21 @@ The new headless path runs the same gold-standard suites without launching the m
 - enables deterministic CI checks on business-critical behavior
 - keeps app-hosted tests available for integration confidence
 
-Implementation detail: the headless workflow uses `app/DIYTypeless/Package.swift` and compiles the same production source files under test, with Swift Package-only shims for FFI-only types required at compile time (`CancellationToken`, `CoreError`).
+Implementation detail: option 3 now formalizes this as a core module boundary (`DIYTypelessCore`) using `app/DIYTypeless/Package.swift`. The module compiles the same production source files under test, with Swift Package-only shims for FFI-only types required at compile time (`CancellationToken`, `CoreError`).
+
+## Option 3 Status
+
+Current status:
+
+- `DIYTypelessCore` exists as a dedicated module boundary for critical domain/state/use-case code.
+- Gold-standard suites run against that module with `swift test`.
+- The app build path remains unchanged and is still verified with `./scripts/dev-loop-build.sh --testing`.
+
+Next migration phase:
+
+- move app target dependency from in-target core source compilation to importing `DIYTypelessCore`
+- keep UI/integration code in app layer
+- retire duplicated core compilation paths in app target
 
 ## Files Under Test
 

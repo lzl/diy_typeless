@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "DIYTypelessHeadlessCore",
+    name: "DIYTypelessCore",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "DIYTypelessHeadlessCore",
-            targets: ["DIYTypelessHeadlessCore"]
+            name: "DIYTypelessCore",
+            targets: ["DIYTypelessCore"]
         )
     ],
     targets: [
         .target(
-            name: "DIYTypelessHeadlessCore",
+            name: "DIYTypelessCore",
             path: "DIYTypeless",
             sources: [
                 "Domain/Entities/ApiProvider.swift",
@@ -55,8 +55,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "DIYTypelessHeadlessCoreTests",
-            dependencies: ["DIYTypelessHeadlessCore"],
+            name: "DIYTypelessCoreTests",
+            dependencies: ["DIYTypelessCore"],
             path: "DIYTypelessTests",
             sources: [
                 "CoreErrorMapperTests.swift",
