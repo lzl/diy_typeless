@@ -51,6 +51,7 @@ public final class RecordingState {
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
     private let autoHideController = CapsuleStateAutoHideController()
+    private let stateTransitionGuard = CapsuleStateTransitionGuard()
     private let cancelFeedbackDuration: TimeInterval = 0.8
 
     public init(
@@ -135,7 +136,7 @@ public final class RecordingState {
         isProcessing = false
         capturedContext = nil
         voiceCommandResultLayer = nil
-        capsuleState = .hidden
+        setCapsuleState(.hidden)
     }
 
     public func handleCancel() {
@@ -155,13 +156,13 @@ public final class RecordingState {
             Task {
                 _ = try? await stopRecordingUseCase.execute()
             }
-            capsuleState = .hidden
+            setCapsuleState(.hidden)
 
         case .processingCommand, .transcribing, .polishing:
             currentGeneration += 1
             isProcessing = false
             capturedContext = nil
-            capsuleState = .canceled
+            setCapsuleState(.canceled)
             scheduleHide(after: cancelFeedbackDuration, expectedState: .canceled)
 
         case .hidden, .canceled, .done, .error:
@@ -208,7 +209,7 @@ public final class RecordingState {
             try await recordingControlUseCase.startRecording()
             isRecording = true
             voiceCommandResultLayer = nil
-            capsuleState = .recording
+            setCapsuleState(.recording)
             capturedContext = appContextRepository.captureContext().formatted
 
             // Schedule prefetch of selected text after delay
@@ -261,7 +262,7 @@ public final class RecordingState {
     }
 
     private func showError(_ error: UserFacingError) {
-        capsuleState = .error(error)
+        setCapsuleState(.error(error))
         isRecording = false
         isProcessing = false
         scheduleHide(after: 2.0, expectedState: .error(error))
@@ -273,7 +274,7 @@ public final class RecordingState {
             expectedState: expectedState,
             currentState: { [weak self] in self?.capsuleState ?? .hidden },
             onHide: { [weak self] in
-                self?.capsuleState = .hidden
+                self?.setCapsuleState(.hidden)
             }
         )
     }
@@ -311,6 +312,23 @@ public final class RecordingState {
         preselectedContext = context
     }
 
+    private func setCapsuleState(
+        _ nextState: CapsuleState,
+        file: StaticString = #fileID,
+        line: UInt = #line
+    ) {
+        let previousState = capsuleState
+        guard stateTransitionGuard.canTransition(from: previousState, to: nextState) else {
+            assertionFailure(
+                "Invalid capsule state transition: \(previousState) -> \(nextState)",
+                file: file,
+                line: line
+            )
+            return
+        }
+        capsuleState = nextState
+    }
+
     private func applyPipelineProgress(
         _ progress: RecordingPipelineProgress,
         generation: Int
@@ -318,11 +336,11 @@ public final class RecordingState {
         guard currentGeneration == generation else { return }
         switch progress {
         case .transcribing:
-            capsuleState = .transcribing(progress: 0)
+            setCapsuleState(.transcribing(progress: 0))
         case .polishing:
-            capsuleState = .polishing(progress: 0)
+            setCapsuleState(.polishing(progress: 0))
         case .processingCommand(let transcription):
-            capsuleState = .processingCommand(transcription, progress: 0)
+            setCapsuleState(.processingCommand(transcription, progress: 0))
         }
     }
 
@@ -360,11 +378,11 @@ public final class RecordingState {
                     text: result.processedText,
                     didCopy: false
                 )
-                capsuleState = .hidden
+                setCapsuleState(.hidden)
             case .polishedText(let polishedText):
                 onWillDeliverText?()
                 let outputResult = textOutputRepository.deliver(text: polishedText)
-                capsuleState = .done(outputResult)
+                setCapsuleState(.done(outputResult))
                 scheduleHide(after: 1.2, expectedState: .done(outputResult))
             }
             isProcessing = false
@@ -373,7 +391,7 @@ public final class RecordingState {
             if let error = pipelineCoordinator.mapToUserFacingError(error) {
                 showError(error)
             } else {
-                capsuleState = .hidden
+                setCapsuleState(.hidden)
             }
             isProcessing = false
         }
