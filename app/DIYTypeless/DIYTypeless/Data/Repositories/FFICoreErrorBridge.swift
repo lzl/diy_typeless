@@ -1,5 +1,7 @@
 import DIYTypelessCore
 
+// Temporary app-layer bridge for UniFFI error type conversion.
+// Remove after GeminiLLMRepository migrates into DIYTypelessCore.
 enum FFICoreErrorBridge {
     static func toCoreModuleError(_ ffiError: CoreError) -> DIYTypelessCore.CoreError {
         switch ffiError {
