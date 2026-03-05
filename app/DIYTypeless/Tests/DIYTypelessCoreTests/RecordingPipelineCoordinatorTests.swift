@@ -47,7 +47,7 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
             return XCTFail("Expected voice command result")
         }
         XCTAssertEqual(voiceResult.processedText, "rewritten text")
-        XCTAssertEqual(progressEvents, [.transcribing, .processingCommand("rewrite this")])
+        XCTAssertEqual(progressEvents, [.recordingStopped, .transcribing, .processingCommand("rewrite this")])
         XCTAssertEqual(stopRecordingUseCase.executeCallCount, 1)
         XCTAssertEqual(transcribeAudioUseCase.executeCallCount, 1)
         XCTAssertEqual(polishTextUseCase.executeCallCount, 0)
@@ -87,7 +87,7 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
             return XCTFail("Expected polished text result")
         }
         XCTAssertEqual(polishedText, "polished result")
-        XCTAssertEqual(progressEvents, [.transcribing, .polishing])
+        XCTAssertEqual(progressEvents, [.recordingStopped, .transcribing, .polishing])
         XCTAssertEqual(stopRecordingUseCase.executeCallCount, 1)
         XCTAssertEqual(transcribeAudioUseCase.executeCallCount, 1)
         XCTAssertEqual(polishTextUseCase.executeCallCount, 1)

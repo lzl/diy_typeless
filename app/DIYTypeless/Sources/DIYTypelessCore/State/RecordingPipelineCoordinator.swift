@@ -23,6 +23,7 @@ public struct RecordingPipelineRequest: Sendable {
 }
 
 public enum RecordingPipelineProgress: Equatable, Sendable {
+    case recordingStopped
     case transcribing
     case polishing
     case processingCommand(String)
@@ -66,6 +67,7 @@ public final class RecordingPipelineCoordinator: RecordingPipelineCoordinating {
     ) async throws -> RecordingPipelineResult {
         let audio = try await stopRecordingUseCase.execute()
 
+        await onProgress(.recordingStopped)
         await onProgress(.transcribing)
         let rawText = try await transcribeAudioUseCase.execute(
             audioData: audio,

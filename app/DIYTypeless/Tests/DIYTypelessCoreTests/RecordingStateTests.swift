@@ -305,6 +305,42 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
     }
 
+    func testHandleCancel_duringEarlyProcessingStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        stopRecordingUseCase.beforeReturnDelayNanoseconds = 300_000_000
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            stopRecordingUseCase: stopRecordingUseCase,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        sut.handleCancel()
+        await sut.handleKeyDown()
+
+        XCTAssertEqual(
+            dependencies.recordingControlUseCase.startRecordingCallCount,
+            1,
+            "Restart should stay blocked until pipeline stopRecording completes"
+        )
+
+        await waitUntil { stopRecordingUseCase.completedCallCount == 1 }
+        for _ in 0..<5 where dependencies.recordingControlUseCase.startRecordingCallCount < 2 {
+            await sut.handleKeyDown()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
+    }
+
     func testDeactivate_whileStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
         let apiKeyRepository = MockApiKeyRepository()
         apiKeyRepository.keys[.groq] = "groq"

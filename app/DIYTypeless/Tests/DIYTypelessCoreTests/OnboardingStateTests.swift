@@ -138,6 +138,41 @@ final class OnboardingStateTests: XCTestCase {
         XCTAssertEqual(sut.groqValidation, ValidationState.success)
     }
 
+    func testRefresh_whenSameGroqKeyRevalidationCompletesOutOfOrder_doesNotApplyStaleFailure() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "same-groq"
+        apiKeyRepository.keys[.gemini] = ""
+
+        let validateUseCase = ControlledValidateApiKeyUseCase()
+        let sut = OnboardingState(
+            permissionRepository: MockPermissionRepository(),
+            apiKeyRepository: apiKeyRepository,
+            externalLinkRepository: MockExternalLinkRepository(),
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        await waitUntil { validateUseCase.callCount(for: .groq) == 1 }
+
+        sut.refresh()
+        await waitUntil { validateUseCase.callCount(for: .groq) == 2 }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 1,
+            result: .success(())
+        )
+        await waitUntil { sut.groqValidation == ValidationState.success }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 0,
+            result: .failure(ValidationError(message: "stale same-key failure"))
+        )
+        await Task.yield()
+
+        XCTAssertEqual(sut.groqValidation, ValidationState.success)
+    }
+
     func testValidateGroqKey_whenKeyChangesDuringValidation_keepsIdleForNewValue() async {
         let validateUseCase = ControlledValidateApiKeyUseCase()
         let sut = OnboardingState(

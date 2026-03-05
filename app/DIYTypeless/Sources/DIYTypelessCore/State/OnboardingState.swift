@@ -67,6 +67,7 @@ public final class OnboardingState {
     private var permissionTimer: Timer?
     private var groqValidationTask: Task<Void, Never>?
     private var geminiValidationTask: Task<Void, Never>?
+    private var revalidationSessionID: Int = 0
 
     private static let hasCompletedWelcomeKey = "hasCompletedWelcome"
 
@@ -105,17 +106,20 @@ public final class OnboardingState {
         geminiValidation = geminiKey.isEmpty ? .idle : .success
         refreshPermissions()
         syncStep()
-        revalidateStoredKeys()
+        revalidationSessionID += 1
+        revalidateStoredKeys(sessionID: revalidationSessionID)
     }
 
-    private func revalidateStoredKeys() {
+    private func revalidateStoredKeys(sessionID: Int) {
         let groqTrimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !groqTrimmed.isEmpty {
             Task {
                 do {
                     try await validateGroqKeyValue(groqTrimmed)
                 } catch {
-                    if !Task.isCancelled && currentGroqKeyMatches(groqTrimmed) {
+                    if !Task.isCancelled,
+                       isCurrentRevalidationSession(sessionID),
+                       currentGroqKeyMatches(groqTrimmed) {
                         groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
                     }
                 }
@@ -128,7 +132,9 @@ public final class OnboardingState {
                 do {
                     try await validateGeminiKeyValue(geminiTrimmed)
                 } catch {
-                    if !Task.isCancelled && currentGeminiKeyMatches(geminiTrimmed) {
+                    if !Task.isCancelled,
+                       isCurrentRevalidationSession(sessionID),
+                       currentGeminiKeyMatches(geminiTrimmed) {
                         geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
                     }
                 }
@@ -303,5 +309,9 @@ public final class OnboardingState {
 
     private func currentGeminiKeyMatches(_ key: String) -> Bool {
         geminiKey.trimmingCharacters(in: .whitespacesAndNewlines) == key
+    }
+
+    private func isCurrentRevalidationSession(_ sessionID: Int) -> Bool {
+        revalidationSessionID == sessionID
     }
 }

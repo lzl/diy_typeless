@@ -51,7 +51,8 @@ public final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
-    private var isStoppingRecording = false
+    private var stopOperationCount: Int = 0
+    private var generationsAwaitingStopCompletion: Set<Int> = []
     private let autoHideController: CapsuleStateAutoHideController
     private let stateTransitionGuard = CapsuleStateTransitionGuard()
     private let cancelFeedbackDuration: TimeInterval = 0.8
@@ -257,6 +258,8 @@ public final class RecordingState {
         let cancellationToken = CancellationToken()
         processingGeneration = gen
         processingCancellationToken = cancellationToken
+        generationsAwaitingStopCompletion.insert(gen)
+        beginStopOperation()
 
         processingTask = Task { [weak self] in
             await self?.runProcessingPipeline(
@@ -326,11 +329,11 @@ public final class RecordingState {
 
     private func stopRecordingIfNeeded() {
         guard !isStoppingRecording else { return }
-        isStoppingRecording = true
+        beginStopOperation()
 
         Task { [weak self] in
             guard let self else { return }
-            defer { self.isStoppingRecording = false }
+            defer { self.endStopOperation() }
             _ = try? await self.stopRecordingUseCase.execute()
         }
     }
@@ -361,13 +364,18 @@ public final class RecordingState {
         _ progress: RecordingPipelineProgress,
         generation: Int
     ) {
-        guard currentGeneration == generation else { return }
         switch progress {
+        case .recordingStopped:
+            markStopCompleted(for: generation)
+            guard currentGeneration == generation else { return }
         case .transcribing:
+            guard currentGeneration == generation else { return }
             setCapsuleState(.transcribing(progress: 0))
         case .polishing:
+            guard currentGeneration == generation else { return }
             setCapsuleState(.polishing(progress: 0))
         case .processingCommand(let transcription):
+            guard currentGeneration == generation else { return }
             setCapsuleState(.processingCommand(transcription, progress: 0))
         }
     }
@@ -378,6 +386,7 @@ public final class RecordingState {
         cancellationToken: CancellationToken
     ) async {
         defer {
+            markStopCompleted(for: generation)
             if processingGeneration == generation {
                 processingTask = nil
                 processingCancellationToken = nil
@@ -423,5 +432,23 @@ public final class RecordingState {
             }
             isProcessing = false
         }
+    }
+
+    private var isStoppingRecording: Bool {
+        stopOperationCount > 0
+    }
+
+    private func beginStopOperation() {
+        stopOperationCount += 1
+    }
+
+    private func endStopOperation() {
+        guard stopOperationCount > 0 else { return }
+        stopOperationCount -= 1
+    }
+
+    private func markStopCompleted(for generation: Int) {
+        guard generationsAwaitingStopCompletion.remove(generation) != nil else { return }
+        endStopOperation()
     }
 }
