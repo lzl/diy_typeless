@@ -1,12 +1,13 @@
 import Foundation
-import DIYTypelessCore
 
-final class RecordingControlUseCaseImpl: RecordingControlUseCaseProtocol {
-    func startRecording() async throws {
+public final class RecordingControlUseCaseImpl: RecordingControlUseCaseProtocol {
+    public init() {}
+
+    public func startRecording() async throws {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    try DIYTypeless.startRecording()
+                    try CoreFFIRuntime.startRecording()
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -15,11 +16,11 @@ final class RecordingControlUseCaseImpl: RecordingControlUseCaseProtocol {
         }
     }
 
-    func warmupConnections() async {
+    public func warmupConnections() async {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .background).async {
-                _ = try? warmupGroqConnection()
-                _ = try? warmupGeminiConnection()
+                _ = try? CoreFFIRuntime.warmupGroqConnection()
+                _ = try? CoreFFIRuntime.warmupGeminiConnection()
                 continuation.resume()
             }
         }

@@ -1,9 +1,10 @@
 import Foundation
-import DIYTypelessCore
 
 /// Repository implementation for validating Gemini API keys.
-final class GeminiApiKeyValidationRepository: ApiKeyValidationRepository {
-    func validate(key: String) async throws {
+public final class GeminiApiKeyValidationRepository: ApiKeyValidationRepository {
+    public init() {}
+
+    public func validate(key: String) async throws {
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(key)") else {
             throw ValidationError(message: "Gemini validation failed: invalid URL.")
         }

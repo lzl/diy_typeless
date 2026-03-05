@@ -1,9 +1,10 @@
 import Foundation
-import DIYTypelessCore
 
 /// Repository implementation for validating Groq API keys.
-final class GroqApiKeyValidationRepository: ApiKeyValidationRepository {
-    func validate(key: String) async throws {
+public final class GroqApiKeyValidationRepository: ApiKeyValidationRepository {
+    public init() {}
+
+    public func validate(key: String) async throws {
         guard let url = URL(string: "https://api.groq.com/openai/v1/models") else {
             throw ValidationError(message: "Groq validation failed: invalid URL.")
         }

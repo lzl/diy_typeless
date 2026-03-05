@@ -1,17 +1,13 @@
 import Foundation
-import DIYTypelessCore
 
-/// Repository implementation that calls Gemini API via Rust FFI.
-/// Wraps synchronous FFI calls in async continuations on background thread.
-///
-/// Note: This repository throws CoreError directly. Error mapping to UserFacingError
-/// should be handled by the UseCase layer to maintain proper dependency boundaries.
-final class GeminiLLMRepository: LLMRepository {
-    func generate(
+public final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
+    public init() {}
+
+    public func execute(
+        rawText: String,
         apiKey: String,
-        prompt: String,
-        temperature: Double?,
-        cancellationToken: DIYTypelessCore.CancellationToken?
+        context: String?,
+        cancellationToken: CancellationToken?
     ) async throws -> String {
         let ffiCancellationToken = await MainActor.run { CancellationToken() }
         let cancellationPropagationTask = Task.detached(priority: .userInitiated) { [cancellationToken] in
@@ -27,6 +23,11 @@ final class GeminiLLMRepository: LLMRepository {
             }
         }
 
+        guard !rawText.isEmpty else {
+            cancellationPropagationTask.cancel()
+            throw PolishingError.emptyInput
+        }
+
         if cancellationToken?.isCancelled() == true {
             cancellationPropagationTask.cancel()
             throw CancellationError()
@@ -39,28 +40,35 @@ final class GeminiLLMRepository: LLMRepository {
             return try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        let result = try processTextWithLlmCancellable(
+                        let polished = try CoreFFIRuntime.polishTextCancellable(
                             apiKey: apiKey,
-                            prompt: prompt,
-                            systemInstruction: nil,
-                            temperature: Float(temperature ?? 0.3),
+                            rawText: rawText,
+                            context: context,
                             cancellationToken: ffiCancellationToken
                         )
-                        continuation.resume(returning: result)
-                    } catch let ffiError as CoreError {
-                        let coreError = FFICoreErrorBridge.toCoreModuleError(ffiError)
+                        continuation.resume(returning: polished)
+                    } catch let coreError as CoreError {
                         if case .Cancelled = coreError {
                             continuation.resume(throwing: CancellationError())
                             return
                         }
 
-                        // Pass through DIYTypelessCore.CoreError - UseCase maps to UserFacingError.
-                        continuation.resume(throwing: coreError)
+                        let userError: UserFacingError
+                        switch coreError {
+                        case .Api(let message):
+                            userError = CoreErrorMapper.toUserFacingError(category: .api, message: message)
+                        case .Http(let message):
+                            userError = CoreErrorMapper.toUserFacingError(category: .network, message: message)
+                        default:
+                            userError = CoreErrorMapper.toUserFacingError(
+                                category: .unknown,
+                                message: coreError.localizedDescription
+                            )
+                        }
+                        continuation.resume(throwing: PolishingError.apiError(userError))
                     } catch {
-                        // Wrap unknown errors using the core module's error type.
-                        continuation.resume(
-                            throwing: DIYTypelessCore.CoreError.Api(error.localizedDescription)
-                        )
+                        let userError = UserFacingError.unknown(error.localizedDescription)
+                        continuation.resume(throwing: PolishingError.apiError(userError))
                     }
                 }
             }

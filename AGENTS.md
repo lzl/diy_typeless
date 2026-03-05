@@ -56,6 +56,16 @@ Rules:
 - Keep `main` history linear and consistent with one logical commit per PR
 - The squashed commit message must follow Conventional Commits
 
+## Finish Development Workflow
+
+When asked to "finish development", always execute this exact sequence:
+
+1. Verify all required tests pass.
+2. Rename the current branch to a clear, descriptive name.
+3. Push the branch to remote.
+4. Create a pull request.
+5. Merge the pull request into `main` using squash merge.
+
 ## Closing the Loop (Primary Rule)
 
 This project prioritizes closing the loop. Any core logic changes must be verified through an executable path that the agent can run end-to-end without opening the macOS app UI.

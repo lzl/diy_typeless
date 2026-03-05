@@ -1,16 +1,13 @@
 import Foundation
-import DIYTypelessCore
 
-final class StopRecordingUseCaseImpl: StopRecordingUseCaseProtocol {
-    func execute() async throws -> DomainAudioData {
+public final class StopRecordingUseCaseImpl: StopRecordingUseCaseProtocol {
+    public init() {}
+
+    public func execute() async throws -> DomainAudioData {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let ffiAudioData = try stopRecording()
-                    let audioData = DomainAudioData(
-                        bytes: ffiAudioData.bytes,
-                        durationSeconds: ffiAudioData.durationSeconds
-                    )
+                    let audioData = try CoreFFIRuntime.stopRecording()
                     continuation.resume(returning: audioData)
                 } catch {
                     continuation.resume(throwing: RecordingError.stopFailed(error.localizedDescription))
