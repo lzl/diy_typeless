@@ -54,7 +54,7 @@ public final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
-    private var hideWorkItem: DispatchWorkItem?
+    private let autoHideController = CapsuleStateAutoHideController()
     private let cancelFeedbackDuration: TimeInterval = 0.8
 
     public init(
@@ -100,6 +100,13 @@ public final class RecordingState {
                 await self?.handleKeyUp()
             }
         }
+    }
+
+    public func shutdown() {
+        deactivate()
+        keyMonitoringRepository.onFnDown = nil
+        keyMonitoringRepository.onFnUp = nil
+        autoHideController.cancel()
     }
 
     public func activate() {
@@ -347,14 +354,14 @@ public final class RecordingState {
     }
 
     private func scheduleHide(after delay: TimeInterval, expectedState: CapsuleState) {
-        cancelPendingHide()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self, self.capsuleState == expectedState else { return }
-            self.hideWorkItem = nil
-            self.capsuleState = .hidden
-        }
-        hideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        autoHideController.schedule(
+            after: delay,
+            expectedState: expectedState,
+            currentState: { [weak self] in self?.capsuleState ?? .hidden },
+            onHide: { [weak self] in
+                self?.capsuleState = .hidden
+            }
+        )
     }
 
     private func refreshKeys() {
@@ -383,8 +390,7 @@ public final class RecordingState {
     }
 
     private func cancelPendingHide() {
-        hideWorkItem?.cancel()
-        hideWorkItem = nil
+        autoHideController.cancel()
     }
 
     private func setPreselectedContext(_ context: SelectedTextContext) {

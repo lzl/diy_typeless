@@ -89,6 +89,15 @@ public final class OnboardingState {
         refresh()
     }
 
+    public func shutdown() {
+        permissionTimer?.invalidate()
+        permissionTimer = nil
+        groqValidationTask?.cancel()
+        groqValidationTask = nil
+        geminiValidationTask?.cancel()
+        geminiValidationTask = nil
+    }
+
     public func refresh() {
         groqKey = apiKeyRepository.loadKey(for: .groq) ?? ""
         geminiKey = apiKeyRepository.loadKey(for: .gemini) ?? ""

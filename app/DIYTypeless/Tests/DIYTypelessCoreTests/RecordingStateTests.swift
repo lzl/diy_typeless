@@ -202,6 +202,22 @@ final class RecordingStateTests: XCTestCase {
         }
     }
 
+    func testShutdown_afterActivate_stopsKeyMonitoring() async {
+        let keyMonitoringRepository = MockKeyMonitoringRepository()
+        let sut = makeSUT(
+            keyMonitoringRepository: keyMonitoringRepository
+        ).sut
+
+        sut.activate()
+        XCTAssertEqual(keyMonitoringRepository.startCallCount, 1)
+        XCTAssertEqual(keyMonitoringRepository.stopCallCount, 0)
+
+        sut.shutdown()
+        await Task.yield()
+
+        XCTAssertEqual(keyMonitoringRepository.stopCallCount, 1)
+    }
+
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
