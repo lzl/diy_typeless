@@ -288,6 +288,49 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertEqual(dependencies.transcribeAudioUseCase.executeCallCount, 1)
     }
 
+    func testCanceledPrefetch_doesNotLeakSelectedContextIntoNextSession() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let prefetchScheduler = MockPrefetchScheduler()
+        prefetchScheduler.shouldRunImmediately = false
+
+        let getSelectedTextUseCase = MockGetSelectedTextUseCase()
+        getSelectedTextUseCase.result = SelectedTextContext(
+            text: "stale selection",
+            isEditable: false,
+            isSecure: false,
+            applicationName: "Notes"
+        )
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            getSelectedTextUseCase: getSelectedTextUseCase,
+            prefetchScheduler: prefetchScheduler
+        )
+
+        await sut.handleKeyDown()
+        sut.handleCancel()
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount == 1 }
+
+        await prefetchScheduler.runScheduledOperations()
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        await waitUntil {
+            dependencies.polishTextUseCase.executeCallCount > 0
+                || dependencies.processVoiceCommandUseCase.executeCallCount > 0
+        }
+
+        XCTAssertEqual(
+            dependencies.processVoiceCommandUseCase.executeCallCount,
+            0,
+            "Stale canceled prefetch must not force voice-command path in next session"
+        )
+        XCTAssertEqual(dependencies.polishTextUseCase.executeCallCount, 1)
+    }
+
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),

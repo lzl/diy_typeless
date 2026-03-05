@@ -38,6 +38,7 @@ public final class RecordingState {
     // Prefetch
     private var preselectedContext: SelectedTextContext?
     private var prefetchTask: Task<Void, Never>?
+    private var prefetchSessionID: Int = 0
     private let prefetchScheduler: PrefetchScheduler
     private let prefetchDelay: Duration
 
@@ -221,13 +222,16 @@ public final class RecordingState {
             voiceCommandResultLayer = nil
             setCapsuleState(.recording)
             capturedContext = appContextRepository.captureContext().formatted
+            preselectedContext = nil
+            prefetchSessionID += 1
+            let prefetchSessionID = self.prefetchSessionID
 
             // Schedule prefetch of selected text after delay
             prefetchTask = prefetchScheduler.schedule(delay: prefetchDelay) { [weak self] in
                 guard let self else { return }
                 let context = await self.getSelectedTextUseCase.execute()
                 guard !Task.isCancelled else { return }
-                await self.setPreselectedContext(context)
+                await self.setPreselectedContext(context, sessionID: prefetchSessionID)
             }
         } catch {
             showError(.unknown(error.localizedDescription))
@@ -318,7 +322,8 @@ public final class RecordingState {
         autoHideController.cancel()
     }
 
-    private func setPreselectedContext(_ context: SelectedTextContext) {
+    private func setPreselectedContext(_ context: SelectedTextContext, sessionID: Int) {
+        guard prefetchSessionID == sessionID else { return }
         preselectedContext = context
     }
 
