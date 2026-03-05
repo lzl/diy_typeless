@@ -51,6 +51,7 @@ public final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
+    private var isStoppingRecording = false
     private let autoHideController: CapsuleStateAutoHideController
     private let stateTransitionGuard = CapsuleStateTransitionGuard()
     private let cancelFeedbackDuration: TimeInterval = 0.8
@@ -130,9 +131,7 @@ public final class RecordingState {
         cleanupPrefetch()
         cancelProcessingPipeline()
         if isRecording {
-            Task {
-                _ = try? await stopRecordingUseCase.execute()
-            }
+            stopRecordingIfNeeded()
             isRecording = false
         }
         currentGeneration += 1
@@ -163,9 +162,7 @@ public final class RecordingState {
                 isProcessing = false
                 currentGeneration += 1
                 capturedContext = nil
-                Task {
-                    _ = try? await stopRecordingUseCase.execute()
-                }
+                stopRecordingIfNeeded()
                 setCapsuleState(.hidden)
             }
 
@@ -196,7 +193,7 @@ public final class RecordingState {
             return
         }
 
-        guard !isRecording, !isProcessing else { return }
+        guard !isRecording, !isProcessing, !isStoppingRecording else { return }
 
         refreshKeys()
 
@@ -249,7 +246,12 @@ public final class RecordingState {
 
         currentGeneration += 1
         let gen = currentGeneration
-        let context = preselectedContext ?? .empty
+        let context: SelectedTextContext
+        if let preselectedContext {
+            context = preselectedContext
+        } else {
+            context = await getSelectedTextUseCase.execute()
+        }
         preselectedContext = nil
 
         let cancellationToken = CancellationToken()
@@ -320,6 +322,17 @@ public final class RecordingState {
 
     private func cancelPendingHide() {
         autoHideController.cancel()
+    }
+
+    private func stopRecordingIfNeeded() {
+        guard !isStoppingRecording else { return }
+        isStoppingRecording = true
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isStoppingRecording = false }
+            _ = try? await self.stopRecordingUseCase.execute()
+        }
     }
 
     private func setPreselectedContext(_ context: SelectedTextContext, sessionID: Int) {

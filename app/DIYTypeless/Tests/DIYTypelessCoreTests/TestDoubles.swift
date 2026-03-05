@@ -186,14 +186,20 @@ final class MockRecordingControlUseCase: RecordingControlUseCaseProtocol, @unche
 final class MockStopRecordingUseCase: StopRecordingUseCaseProtocol, @unchecked Sendable {
     var result = DomainAudioData(bytes: Data([1, 2, 3]), durationSeconds: 0.5)
     var error: Error?
+    var beforeReturnDelayNanoseconds: UInt64 = 0
 
     private(set) var executeCallCount = 0
+    private(set) var completedCallCount = 0
 
     func execute() async throws -> DomainAudioData {
         executeCallCount += 1
+        if beforeReturnDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: beforeReturnDelayNanoseconds)
+        }
         if let error {
             throw error
         }
+        completedCallCount += 1
         return result
     }
 }
