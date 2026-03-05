@@ -1,10 +1,21 @@
 import Foundation
 
 @MainActor
-final class CapsuleStateAutoHideController {
-    private var pendingWorkItem: DispatchWorkItem?
+public final class CapsuleStateAutoHideController {
+    public typealias ScheduleWork = (_ delay: TimeInterval, _ workItem: DispatchWorkItem) -> Void
 
-    func schedule(
+    private var pendingWorkItem: DispatchWorkItem?
+    private let scheduleWork: ScheduleWork
+
+    public init(
+        scheduleWork: @escaping ScheduleWork = { delay, workItem in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        }
+    ) {
+        self.scheduleWork = scheduleWork
+    }
+
+    public func schedule(
         after delay: TimeInterval,
         expectedState: CapsuleState,
         currentState: @escaping () -> CapsuleState,
@@ -17,10 +28,10 @@ final class CapsuleStateAutoHideController {
             onHide()
         }
         pendingWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        scheduleWork(delay, workItem)
     }
 
-    func cancel() {
+    public func cancel() {
         pendingWorkItem?.cancel()
         pendingWorkItem = nil
     }
