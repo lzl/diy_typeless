@@ -149,14 +149,22 @@ public final class RecordingState {
 
         switch capsuleState {
         case .recording:
-            isRecording = false
-            isProcessing = false
-            currentGeneration += 1
-            capturedContext = nil
-            Task {
-                _ = try? await stopRecordingUseCase.execute()
+            if isProcessing {
+                currentGeneration += 1
+                isProcessing = false
+                capturedContext = nil
+                setCapsuleState(.canceled)
+                scheduleHide(after: cancelFeedbackDuration, expectedState: .canceled)
+            } else {
+                isRecording = false
+                isProcessing = false
+                currentGeneration += 1
+                capturedContext = nil
+                Task {
+                    _ = try? await stopRecordingUseCase.execute()
+                }
+                setCapsuleState(.hidden)
             }
-            setCapsuleState(.hidden)
 
         case .processingCommand, .transcribing, .polishing:
             currentGeneration += 1
