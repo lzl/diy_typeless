@@ -181,25 +181,32 @@ final class RecordingStateTests: XCTestCase {
         let permissionRepository = MockPermissionRepository(
             currentStatus: PermissionStatus(accessibility: false, microphone: false)
         )
-        let (sut, _) = makeSUT(permissionRepository: permissionRepository)
+        let autoHideScheduler = ManualAutoHideScheduler()
+        let autoHideController = CapsuleStateAutoHideController(
+            scheduleWork: autoHideScheduler.schedule(delay:workItem:)
+        )
+        let (sut, _) = makeSUT(
+            permissionRepository: permissionRepository,
+            autoHideController: autoHideController
+        )
 
         await sut.handleKeyDown()
         guard case .error = sut.capsuleState else {
             return XCTFail("Expected first state to be .error")
         }
 
-        try? await Task.sleep(nanoseconds: 1_200_000_000)
-
         await sut.handleKeyDown()
         guard case .error = sut.capsuleState else {
             return XCTFail("Expected second state to be .error")
         }
 
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-
+        autoHideScheduler.runNext()
         guard case .error = sut.capsuleState else {
             return XCTFail("Expected stale timer not to hide the second error early")
         }
+
+        autoHideScheduler.runNext()
+        XCTAssertEqual(sut.capsuleState, .hidden)
     }
 
     func testShutdown_afterActivate_stopsKeyMonitoring() async {
@@ -253,7 +260,8 @@ final class RecordingStateTests: XCTestCase {
         polishTextUseCase: MockPolishTextUseCase = MockPolishTextUseCase(),
         getSelectedTextUseCase: MockGetSelectedTextUseCase = MockGetSelectedTextUseCase(),
         processVoiceCommandUseCase: MockProcessVoiceCommandUseCase = MockProcessVoiceCommandUseCase(),
-        prefetchScheduler: MockPrefetchScheduler = MockPrefetchScheduler()
+        prefetchScheduler: MockPrefetchScheduler = MockPrefetchScheduler(),
+        autoHideController: CapsuleStateAutoHideController? = nil
     ) -> (sut: RecordingState, dependencies: Dependencies) {
         let sut = RecordingState(
             permissionRepository: permissionRepository,
@@ -268,7 +276,8 @@ final class RecordingStateTests: XCTestCase {
             getSelectedTextUseCase: getSelectedTextUseCase,
             processVoiceCommandUseCase: processVoiceCommandUseCase,
             prefetchScheduler: prefetchScheduler,
-            prefetchDelay: .milliseconds(0)
+            prefetchDelay: .milliseconds(0),
+            autoHideController: autoHideController
         )
 
         let dependencies = Dependencies(
@@ -302,5 +311,22 @@ final class RecordingStateTests: XCTestCase {
         let getSelectedTextUseCase: MockGetSelectedTextUseCase
         let processVoiceCommandUseCase: MockProcessVoiceCommandUseCase
         let prefetchScheduler: MockPrefetchScheduler
+    }
+}
+
+@MainActor
+private final class ManualAutoHideScheduler {
+    private var workItems: [DispatchWorkItem] = []
+
+    func schedule(delay: TimeInterval, workItem: DispatchWorkItem) {
+        _ = delay
+        workItems.append(workItem)
+    }
+
+    func runNext() {
+        guard !workItems.isEmpty else { return }
+        let workItem = workItems.removeFirst()
+        guard !workItem.isCancelled else { return }
+        workItem.perform()
     }
 }

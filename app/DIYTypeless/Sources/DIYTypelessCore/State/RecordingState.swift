@@ -50,7 +50,7 @@ public final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
-    private let autoHideController = CapsuleStateAutoHideController()
+    private let autoHideController: CapsuleStateAutoHideController
     private let stateTransitionGuard = CapsuleStateTransitionGuard()
     private let cancelFeedbackDuration: TimeInterval = 0.8
 
@@ -72,7 +72,8 @@ public final class RecordingState {
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
         prefetchDelay: Duration = .milliseconds(300),
-        pipelineCoordinator: RecordingPipelineCoordinating? = nil
+        pipelineCoordinator: RecordingPipelineCoordinating? = nil,
+        autoHideController: CapsuleStateAutoHideController? = nil
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -90,6 +91,7 @@ public final class RecordingState {
         )
         self.prefetchScheduler = prefetchScheduler
         self.prefetchDelay = prefetchDelay
+        self.autoHideController = autoHideController ?? CapsuleStateAutoHideController()
 
         keyMonitoringRepository.onFnDown = { [weak self] in
             Task { @MainActor in
