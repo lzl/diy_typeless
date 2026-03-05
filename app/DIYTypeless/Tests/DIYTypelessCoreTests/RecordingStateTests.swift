@@ -177,6 +177,286 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertNil(sut.voiceCommandResultLayer)
     }
 
+    func testRepeatedSameError_doesNotHideEarlyFromStaleTimer() async {
+        let permissionRepository = MockPermissionRepository(
+            currentStatus: PermissionStatus(accessibility: false, microphone: false)
+        )
+        let autoHideScheduler = ManualAutoHideScheduler()
+        let autoHideController = CapsuleStateAutoHideController(
+            scheduleWork: autoHideScheduler.schedule(delay:workItem:)
+        )
+        let (sut, _) = makeSUT(
+            permissionRepository: permissionRepository,
+            autoHideController: autoHideController
+        )
+
+        await sut.handleKeyDown()
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected first state to be .error")
+        }
+
+        await sut.handleKeyDown()
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected second state to be .error")
+        }
+
+        autoHideScheduler.runNext()
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected stale timer not to hide the second error early")
+        }
+
+        autoHideScheduler.runNext()
+        XCTAssertEqual(sut.capsuleState, .hidden)
+    }
+
+    func testShutdown_afterActivate_stopsKeyMonitoring() async {
+        let keyMonitoringRepository = MockKeyMonitoringRepository()
+        let sut = makeSUT(
+            keyMonitoringRepository: keyMonitoringRepository
+        ).sut
+
+        sut.activate()
+        XCTAssertEqual(keyMonitoringRepository.startCallCount, 1)
+        XCTAssertEqual(keyMonitoringRepository.stopCallCount, 0)
+
+        sut.shutdown()
+        await Task.yield()
+
+        XCTAssertEqual(keyMonitoringRepository.stopCallCount, 1)
+    }
+
+    func testHandleCancel_immediatelyAfterKeyUp_doesNotTriggerDuplicateStopRecording() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        sut.handleCancel()
+
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount >= 1 }
+
+        XCTAssertEqual(dependencies.stopRecordingUseCase.executeCallCount, 1)
+        XCTAssertEqual(dependencies.textOutputRepository.deliverCalls, [])
+    }
+
+    func testDeactivate_immediatelyAfterKeyUp_stillStopsRecording() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        sut.deactivate()
+
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount >= 1 }
+        XCTAssertEqual(dependencies.stopRecordingUseCase.executeCallCount, 1)
+        XCTAssertEqual(sut.capsuleState, .hidden)
+        XCTAssertEqual(dependencies.textOutputRepository.deliverCalls, [])
+    }
+
+    func testHandleCancel_whileStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        stopRecordingUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            stopRecordingUseCase: stopRecordingUseCase
+        )
+
+        await sut.handleKeyDown()
+        sut.handleCancel()
+        await sut.handleKeyDown()
+
+        XCTAssertEqual(
+            dependencies.recordingControlUseCase.startRecordingCallCount,
+            1,
+            "Recording restart should be blocked while previous stop is still running"
+        )
+
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount == 1 }
+        await waitUntil { stopRecordingUseCase.completedCallCount == 1 }
+        await waitUntil { sut.capsuleState == .hidden }
+
+        for _ in 0..<5 where dependencies.recordingControlUseCase.startRecordingCallCount < 2 {
+            await sut.handleKeyDown()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
+    }
+
+    func testHandleCancel_duringEarlyProcessingStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        stopRecordingUseCase.beforeReturnDelayNanoseconds = 300_000_000
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            stopRecordingUseCase: stopRecordingUseCase,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        sut.handleCancel()
+        await sut.handleKeyDown()
+
+        XCTAssertEqual(
+            dependencies.recordingControlUseCase.startRecordingCallCount,
+            1,
+            "Restart should stay blocked until pipeline stopRecording completes"
+        )
+
+        await waitUntil { stopRecordingUseCase.completedCallCount == 1 }
+        for _ in 0..<5 where dependencies.recordingControlUseCase.startRecordingCallCount < 2 {
+            await sut.handleKeyDown()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
+    }
+
+    func testDeactivate_whileStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        stopRecordingUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            stopRecordingUseCase: stopRecordingUseCase
+        )
+
+        await sut.handleKeyDown()
+        sut.deactivate()
+        await sut.handleKeyDown()
+
+        XCTAssertEqual(
+            dependencies.recordingControlUseCase.startRecordingCallCount,
+            1,
+            "Recording restart should be blocked while deactivate-triggered stop is running"
+        )
+
+        await waitUntil { stopRecordingUseCase.completedCallCount == 1 }
+        for _ in 0..<5 where dependencies.recordingControlUseCase.startRecordingCallCount < 2 {
+            await sut.handleKeyDown()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
+    }
+
+    func testRapidRepeatedKeyDownWhileRecording_startsRecordingOnlyOnce() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let (sut, dependencies) = makeSUT(apiKeyRepository: apiKeyRepository)
+
+        await sut.handleKeyDown()
+        for _ in 0..<10 {
+            await sut.handleKeyDown()
+        }
+
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 1)
+        XCTAssertEqual(sut.capsuleState, .recording)
+    }
+
+    func testRapidRepeatedKeyUpWhileProcessing_startsPipelineOnlyOnce() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 200_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        for _ in 0..<10 {
+            await sut.handleKeyUp()
+        }
+
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount >= 1 }
+        XCTAssertEqual(dependencies.stopRecordingUseCase.executeCallCount, 1)
+        XCTAssertEqual(dependencies.transcribeAudioUseCase.executeCallCount, 1)
+    }
+
+    func testCanceledPrefetch_doesNotLeakSelectedContextIntoNextSession() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let prefetchScheduler = MockPrefetchScheduler()
+        prefetchScheduler.shouldRunImmediately = false
+
+        let getSelectedTextUseCase = MockGetSelectedTextUseCase()
+        getSelectedTextUseCase.result = SelectedTextContext(
+            text: "stale selection",
+            isEditable: false,
+            isSecure: false,
+            applicationName: "Notes"
+        )
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            getSelectedTextUseCase: getSelectedTextUseCase,
+            prefetchScheduler: prefetchScheduler
+        )
+
+        await sut.handleKeyDown()
+        sut.handleCancel()
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount == 1 }
+
+        await prefetchScheduler.runScheduledOperations()
+        getSelectedTextUseCase.result = .empty
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        await waitUntil {
+            dependencies.polishTextUseCase.executeCallCount > 0
+                || dependencies.processVoiceCommandUseCase.executeCallCount > 0
+        }
+
+        XCTAssertEqual(
+            dependencies.processVoiceCommandUseCase.executeCallCount,
+            0,
+            "Stale canceled prefetch must not force voice-command path in next session"
+        )
+        XCTAssertEqual(dependencies.polishTextUseCase.executeCallCount, 1)
+    }
+
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
@@ -189,7 +469,8 @@ final class RecordingStateTests: XCTestCase {
         polishTextUseCase: MockPolishTextUseCase = MockPolishTextUseCase(),
         getSelectedTextUseCase: MockGetSelectedTextUseCase = MockGetSelectedTextUseCase(),
         processVoiceCommandUseCase: MockProcessVoiceCommandUseCase = MockProcessVoiceCommandUseCase(),
-        prefetchScheduler: MockPrefetchScheduler = MockPrefetchScheduler()
+        prefetchScheduler: MockPrefetchScheduler = MockPrefetchScheduler(),
+        autoHideController: CapsuleStateAutoHideController? = nil
     ) -> (sut: RecordingState, dependencies: Dependencies) {
         let sut = RecordingState(
             permissionRepository: permissionRepository,
@@ -204,7 +485,8 @@ final class RecordingStateTests: XCTestCase {
             getSelectedTextUseCase: getSelectedTextUseCase,
             processVoiceCommandUseCase: processVoiceCommandUseCase,
             prefetchScheduler: prefetchScheduler,
-            prefetchDelay: .milliseconds(0)
+            prefetchDelay: .milliseconds(0),
+            autoHideController: autoHideController
         )
 
         let dependencies = Dependencies(
@@ -238,5 +520,22 @@ final class RecordingStateTests: XCTestCase {
         let getSelectedTextUseCase: MockGetSelectedTextUseCase
         let processVoiceCommandUseCase: MockProcessVoiceCommandUseCase
         let prefetchScheduler: MockPrefetchScheduler
+    }
+}
+
+@MainActor
+private final class ManualAutoHideScheduler {
+    private var workItems: [DispatchWorkItem] = []
+
+    func schedule(delay: TimeInterval, workItem: DispatchWorkItem) {
+        _ = delay
+        workItems.append(workItem)
+    }
+
+    func runNext() {
+        guard !workItems.isEmpty else { return }
+        let workItem = workItems.removeFirst()
+        guard !workItem.isCancelled else { return }
+        workItem.perform()
     }
 }

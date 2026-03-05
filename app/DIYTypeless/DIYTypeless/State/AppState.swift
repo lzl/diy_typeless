@@ -23,10 +23,13 @@ final class AppState {
     private let textOutputRepository: TextOutputRepository
 
     private var readinessTimer: Timer?
+    private var showSettingsObserver: NSObjectProtocol?
+    private var willTerminateObserver: NSObjectProtocol?
     private var onboardingWindow: OnboardingWindowController?
     private var capsuleWindow: CapsuleWindowController?
     private var isForcedOnboarding = false
     private var hasShownReadyConfirmation = false
+    private var hasStopped = false
 
     init(
         apiKeyRepository: ApiKeyRepository? = nil,
@@ -98,6 +101,23 @@ final class AppState {
         }
     }
 
+    func stop() {
+        guard !hasStopped else { return }
+        hasStopped = true
+        readinessTimer?.invalidate()
+        readinessTimer = nil
+        if let showSettingsObserver {
+            NotificationCenter.default.removeObserver(showSettingsObserver)
+            self.showSettingsObserver = nil
+        }
+        if let willTerminateObserver {
+            NotificationCenter.default.removeObserver(willTerminateObserver)
+            self.willTerminateObserver = nil
+        }
+        onboarding.shutdown()
+        recording.shutdown()
+    }
+
     func start() {
         uniffiEnsureDiyTypelessCoreInitialized()
         // Skip Keychain preload in test environment to avoid auth prompts
@@ -109,6 +129,7 @@ final class AppState {
         setPhase(checkReadiness() ? .ready : .onboarding, force: true)
         startReadinessTimer()
         observeShowSettings()
+        observeAppTermination()
     }
 
     func showOnboarding() {
@@ -117,7 +138,10 @@ final class AppState {
     }
 
     private func observeShowSettings() {
-        NotificationCenter.default.addObserver(
+        if let showSettingsObserver {
+            NotificationCenter.default.removeObserver(showSettingsObserver)
+        }
+        showSettingsObserver = NotificationCenter.default.addObserver(
             forName: .showSettings,
             object: nil,
             queue: .main
@@ -126,6 +150,19 @@ final class AppState {
             Task { @MainActor [self] in
                 self.showOnboarding()
             }
+        }
+    }
+
+    private func observeAppTermination() {
+        if let willTerminateObserver {
+            NotificationCenter.default.removeObserver(willTerminateObserver)
+        }
+        willTerminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stop()
         }
     }
 
@@ -194,6 +231,7 @@ final class AppState {
     }
 
     private func restartApp() {
+        stop()
         let bundleURL = Bundle.main.bundleURL
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")

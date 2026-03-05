@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol KeyMonitoringRepository: AnyObject, Sendable {
+public protocol KeyMonitoringRepository: AnyObject {
     var onFnDown: (() -> Void)? { get set }
     var onFnUp: (() -> Void)? { get set }
     func start() -> Bool

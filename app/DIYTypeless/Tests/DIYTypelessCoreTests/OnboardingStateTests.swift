@@ -30,13 +30,11 @@ final class OnboardingStateTests: XCTestCase {
         apiKeyRepository.keys[.gemini] = "gemini-key"
         let validateUseCase = MockValidateApiKeyUseCase()
 
-        let (sut, dependencies) = makeSUT(
+        let (sut, _) = makeSUT(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
             validateApiKeyUseCase: validateUseCase
         )
-
-        await waitUntil { dependencies.validateApiKeyUseCase.executeCalls.count == 2 }
 
         XCTAssertEqual(sut.step, .completion)
         XCTAssertEqual(sut.groqValidation, .success)
@@ -104,6 +102,103 @@ final class OnboardingStateTests: XCTestCase {
         XCTAssertEqual(sut.groqValidation, .idle)
     }
 
+    func testRefresh_whenEarlierRevalidationCompletesLast_doesNotOverrideLatestGroqValidation() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "old-groq"
+        apiKeyRepository.keys[.gemini] = ""
+
+        let validateUseCase = ControlledValidateApiKeyUseCase()
+        let sut = OnboardingState(
+            permissionRepository: MockPermissionRepository(),
+            apiKeyRepository: apiKeyRepository,
+            externalLinkRepository: MockExternalLinkRepository(),
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        await waitUntil { validateUseCase.callCount(for: .groq) == 1 }
+
+        apiKeyRepository.keys[.groq] = "new-groq"
+        sut.refresh()
+        await waitUntil { validateUseCase.callCount(for: .groq) == 2 }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 1,
+            result: .success(())
+        )
+        await waitUntil { sut.groqValidation == ValidationState.success }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 0,
+            result: .failure(ValidationError(message: "stale failure"))
+        )
+        await Task.yield()
+
+        XCTAssertEqual(sut.groqValidation, ValidationState.success)
+    }
+
+    func testRefresh_whenSameGroqKeyRevalidationCompletesOutOfOrder_doesNotApplyStaleFailure() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "same-groq"
+        apiKeyRepository.keys[.gemini] = ""
+
+        let validateUseCase = ControlledValidateApiKeyUseCase()
+        let sut = OnboardingState(
+            permissionRepository: MockPermissionRepository(),
+            apiKeyRepository: apiKeyRepository,
+            externalLinkRepository: MockExternalLinkRepository(),
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        await waitUntil { validateUseCase.callCount(for: .groq) == 1 }
+
+        sut.refresh()
+        await waitUntil { validateUseCase.callCount(for: .groq) == 2 }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 1,
+            result: .success(())
+        )
+        await waitUntil { sut.groqValidation == ValidationState.success }
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 0,
+            result: .failure(ValidationError(message: "stale same-key failure"))
+        )
+        await Task.yield()
+
+        XCTAssertEqual(sut.groqValidation, ValidationState.success)
+    }
+
+    func testValidateGroqKey_whenKeyChangesDuringValidation_keepsIdleForNewValue() async {
+        let validateUseCase = ControlledValidateApiKeyUseCase()
+        let sut = OnboardingState(
+            permissionRepository: MockPermissionRepository(),
+            apiKeyRepository: MockApiKeyRepository(),
+            externalLinkRepository: MockExternalLinkRepository(),
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        sut.groqKey = "old-key"
+        sut.validateGroqKey()
+        await waitUntil { validateUseCase.callCount(for: .groq) == 1 }
+
+        sut.groqKey = "new-key"
+        XCTAssertEqual(sut.groqValidation, .idle)
+
+        validateUseCase.resolveCall(
+            provider: .groq,
+            at: 0,
+            result: .success(())
+        )
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.groqValidation, .idle)
+    }
+
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
@@ -132,5 +227,43 @@ final class OnboardingStateTests: XCTestCase {
         let apiKeyRepository: MockApiKeyRepository
         let externalLinkRepository: MockExternalLinkRepository
         let validateApiKeyUseCase: MockValidateApiKeyUseCase
+    }
+}
+
+@MainActor
+private final class ControlledValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
+    private var pendingContinuationsByProvider: [ApiProvider: [CheckedContinuation<Void, Error>]] = [:]
+    private var callsByProvider: [ApiProvider: [String]] = [:]
+
+    func execute(key: String, for provider: ApiProvider) async throws {
+        callsByProvider[provider, default: []].append(key)
+        try await withCheckedThrowingContinuation { continuation in
+            pendingContinuationsByProvider[provider, default: []].append(continuation)
+        }
+    }
+
+    func callCount(for provider: ApiProvider) -> Int {
+        callsByProvider[provider, default: []].count
+    }
+
+    func resolveCall(provider: ApiProvider, at index: Int, result: Result<Void, Error>) {
+        guard var providerContinuations = pendingContinuationsByProvider[provider] else {
+            XCTFail("No pending continuations for provider \(provider)")
+            return
+        }
+        guard providerContinuations.indices.contains(index) else {
+            XCTFail("No continuation at index \(index) for provider \(provider)")
+            return
+        }
+
+        let continuation = providerContinuations.remove(at: index)
+        pendingContinuationsByProvider[provider] = providerContinuations
+
+        switch result {
+        case .success:
+            continuation.resume()
+        case .failure(let error):
+            continuation.resume(throwing: error)
+        }
     }
 }
