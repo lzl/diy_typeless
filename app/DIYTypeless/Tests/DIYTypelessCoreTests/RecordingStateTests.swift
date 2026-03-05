@@ -248,6 +248,29 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertEqual(dependencies.textOutputRepository.deliverCalls, [])
     }
 
+    func testDeactivate_immediatelyAfterKeyUp_stillStopsRecording() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            transcribeAudioUseCase: transcribeAudioUseCase
+        )
+
+        await sut.handleKeyDown()
+        await sut.handleKeyUp()
+        sut.deactivate()
+
+        await waitUntil { dependencies.stopRecordingUseCase.executeCallCount >= 1 }
+        XCTAssertEqual(dependencies.stopRecordingUseCase.executeCallCount, 1)
+        XCTAssertEqual(sut.capsuleState, .hidden)
+        XCTAssertEqual(dependencies.textOutputRepository.deliverCalls, [])
+    }
+
     func testRapidRepeatedKeyDownWhileRecording_startsRecordingOnlyOnce() async {
         let apiKeyRepository = MockApiKeyRepository()
         apiKeyRepository.keys[.groq] = "groq"
