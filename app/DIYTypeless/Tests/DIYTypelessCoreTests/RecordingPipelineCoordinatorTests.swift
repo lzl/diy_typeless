@@ -96,6 +96,48 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         XCTAssertEqual(processVoiceCommandUseCase.executeCallCount, 0)
     }
 
+    func testExecute_withSecureSelection_usesPolishPath() async throws {
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        let transcribeAudioUseCase = MockTranscribeAudioUseCase()
+        transcribeAudioUseCase.result = "raw transcript"
+        let polishTextUseCase = MockPolishTextUseCase()
+        polishTextUseCase.result = "polished result"
+        let processVoiceCommandUseCase = MockProcessVoiceCommandUseCase()
+        let sut = RecordingPipelineCoordinator(
+            stopRecordingUseCase: stopRecordingUseCase,
+            transcribeAudioUseCase: transcribeAudioUseCase,
+            polishTextUseCase: polishTextUseCase,
+            processVoiceCommandUseCase: processVoiceCommandUseCase
+        )
+
+        var progressEvents: [RecordingPipelineProgress] = []
+        let result = try await sut.execute(
+            request: RecordingPipelineRequest(
+                groqKey: "groq-key",
+                geminiKey: "gemini-key",
+                selectedTextContext: SelectedTextContext(
+                    text: "secret",
+                    isEditable: false,
+                    isSecure: true,
+                    applicationName: "1Password"
+                ),
+                appContext: "Captured app context",
+                cancellationToken: nil
+            ),
+            onProgress: { progress in
+                progressEvents.append(progress)
+            }
+        )
+
+        guard case .polishedText(let polishedText) = result else {
+            return XCTFail("Expected polished text result")
+        }
+        XCTAssertEqual(polishedText, "polished result")
+        XCTAssertEqual(progressEvents, [.recordingStopped, .transcribing, .polishing])
+        XCTAssertEqual(polishTextUseCase.executeCallCount, 1)
+        XCTAssertEqual(processVoiceCommandUseCase.executeCallCount, 0)
+    }
+
     func testMapToUserFacingError_transcriptionErrors_mapsToExpectedMessage() {
         let sut = RecordingPipelineCoordinator(
             stopRecordingUseCase: MockStopRecordingUseCase(),
@@ -131,4 +173,32 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         let mapped = sut.mapToUserFacingError(CancellationError())
         XCTAssertNil(mapped)
     }
+
+    func testMapToUserFacingError_userFacingError_passthrough() {
+        let sut = RecordingPipelineCoordinator(
+            stopRecordingUseCase: MockStopRecordingUseCase(),
+            transcribeAudioUseCase: MockTranscribeAudioUseCase(),
+            polishTextUseCase: MockPolishTextUseCase(),
+            processVoiceCommandUseCase: MockProcessVoiceCommandUseCase()
+        )
+
+        let mapped = sut.mapToUserFacingError(UserFacingError.rateLimited)
+        XCTAssertEqual(mapped, .rateLimited)
+    }
+
+    func testMapToUserFacingError_unknownError_wrapsDescription() {
+        let sut = RecordingPipelineCoordinator(
+            stopRecordingUseCase: MockStopRecordingUseCase(),
+            transcribeAudioUseCase: MockTranscribeAudioUseCase(),
+            polishTextUseCase: MockPolishTextUseCase(),
+            processVoiceCommandUseCase: MockProcessVoiceCommandUseCase()
+        )
+
+        let mapped = sut.mapToUserFacingError(StubError())
+        XCTAssertEqual(mapped, .unknown("stub failure"))
+    }
+}
+
+private struct StubError: LocalizedError {
+    var errorDescription: String? { "stub failure" }
 }
