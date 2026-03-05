@@ -54,6 +54,7 @@ public final class RecordingState {
     private var processingGeneration: Int?
     private var processingTask: Task<Void, Never>?
     private var processingCancellationToken: CancellationToken?
+    private var hideWorkItem: DispatchWorkItem?
     private let cancelFeedbackDuration: TimeInterval = 0.8
 
     public init(
@@ -114,6 +115,7 @@ public final class RecordingState {
 
     public func deactivate() {
         keyMonitoringRepository.stop()
+        cancelPendingHide()
         cleanupPrefetch()
         cancelProcessingPipeline()
         if isRecording {
@@ -345,10 +347,14 @@ public final class RecordingState {
     }
 
     private func scheduleHide(after delay: TimeInterval, expectedState: CapsuleState) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        cancelPendingHide()
+        let workItem = DispatchWorkItem { [weak self] in
             guard let self, self.capsuleState == expectedState else { return }
+            self.hideWorkItem = nil
             self.capsuleState = .hidden
         }
+        hideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func refreshKeys() {
@@ -374,6 +380,11 @@ public final class RecordingState {
         processingTask?.cancel()
         processingTask = nil
         processingGeneration = nil
+    }
+
+    private func cancelPendingHide() {
+        hideWorkItem?.cancel()
+        hideWorkItem = nil
     }
 
     private func setPreselectedContext(_ context: SelectedTextContext) {

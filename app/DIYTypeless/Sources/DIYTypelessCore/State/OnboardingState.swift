@@ -106,7 +106,7 @@ public final class OnboardingState {
                 do {
                     try await validateGroqKeyValue(groqTrimmed)
                 } catch {
-                    if !Task.isCancelled {
+                    if !Task.isCancelled && currentGroqKeyMatches(groqTrimmed) {
                         groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
                     }
                 }
@@ -119,7 +119,7 @@ public final class OnboardingState {
                 do {
                     try await validateGeminiKeyValue(geminiTrimmed)
                 } catch {
-                    if !Task.isCancelled {
+                    if !Task.isCancelled && currentGeminiKeyMatches(geminiTrimmed) {
                         geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
                     }
                 }
@@ -207,11 +207,11 @@ public final class OnboardingState {
         groqValidationTask = Task {
             do {
                 try await validateGroqKeyValue(trimmed)
-                if Task.isCancelled { return }
+                if Task.isCancelled || !currentGroqKeyMatches(trimmed) { return }
                 groqValidation = .success
                 try? apiKeyRepository.saveKey(trimmed, for: .groq)
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled || !currentGroqKeyMatches(trimmed) { return }
                 groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
             }
         }
@@ -230,11 +230,11 @@ public final class OnboardingState {
         geminiValidationTask = Task {
             do {
                 try await validateGeminiKeyValue(trimmed)
-                if Task.isCancelled { return }
+                if Task.isCancelled || !currentGeminiKeyMatches(trimmed) { return }
                 geminiValidation = .success
                 try? apiKeyRepository.saveKey(trimmed, for: .gemini)
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled || !currentGeminiKeyMatches(trimmed) { return }
                 geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
             }
         }
@@ -286,5 +286,13 @@ public final class OnboardingState {
 
     private func validateGeminiKeyValue(_ key: String) async throws {
         try await validateApiKeyUseCase.execute(key: key, for: .gemini)
+    }
+
+    private func currentGroqKeyMatches(_ key: String) -> Bool {
+        groqKey.trimmingCharacters(in: .whitespacesAndNewlines) == key
+    }
+
+    private func currentGeminiKeyMatches(_ key: String) -> Bool {
+        geminiKey.trimmingCharacters(in: .whitespacesAndNewlines) == key
     }
 }

@@ -177,6 +177,31 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertNil(sut.voiceCommandResultLayer)
     }
 
+    func testRepeatedSameError_doesNotHideEarlyFromStaleTimer() async {
+        let permissionRepository = MockPermissionRepository(
+            currentStatus: PermissionStatus(accessibility: false, microphone: false)
+        )
+        let (sut, _) = makeSUT(permissionRepository: permissionRepository)
+
+        await sut.handleKeyDown()
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected first state to be .error")
+        }
+
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        await sut.handleKeyDown()
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected second state to be .error")
+        }
+
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+        guard case .error = sut.capsuleState else {
+            return XCTFail("Expected stale timer not to hide the second error early")
+        }
+    }
+
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
