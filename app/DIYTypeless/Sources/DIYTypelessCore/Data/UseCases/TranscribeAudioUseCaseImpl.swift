@@ -1,12 +1,13 @@
 import Foundation
-import DIYTypelessCore
 
-final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
-    func execute(
-        rawText: String,
+public final class TranscribeAudioUseCaseImpl: TranscribeAudioUseCaseProtocol {
+    public init() {}
+
+    public func execute(
+        audioData: DomainAudioData,
         apiKey: String,
-        context: String?,
-        cancellationToken: DIYTypelessCore.CancellationToken?
+        language: String?,
+        cancellationToken: CancellationToken?
     ) async throws -> String {
         let ffiCancellationToken = await MainActor.run { CancellationToken() }
         let cancellationPropagationTask = Task.detached(priority: .userInitiated) { [cancellationToken] in
@@ -22,9 +23,9 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
             }
         }
 
-        guard !rawText.isEmpty else {
+        guard !audioData.bytes.isEmpty else {
             cancellationPropagationTask.cancel()
-            throw PolishingError.emptyInput
+            throw TranscriptionError.emptyAudio
         }
 
         if cancellationToken?.isCancelled() == true {
@@ -39,13 +40,13 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
             return try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        let polished = try polishTextCancellable(
+                        let text = try CoreFFIRuntime.transcribeAudioBytesCancellable(
                             apiKey: apiKey,
-                            rawText: rawText,
-                            context: context,
+                            audioBytes: audioData.bytes,
+                            language: language,
                             cancellationToken: ffiCancellationToken
                         )
-                        continuation.resume(returning: polished)
+                        continuation.resume(returning: text)
                     } catch let coreError as CoreError {
                         if case .Cancelled = coreError {
                             continuation.resume(throwing: CancellationError())
@@ -64,10 +65,10 @@ final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
                                 message: coreError.localizedDescription
                             )
                         }
-                        continuation.resume(throwing: PolishingError.apiError(userError))
+                        continuation.resume(throwing: TranscriptionError.apiError(userError))
                     } catch {
                         let userError = UserFacingError.unknown(error.localizedDescription)
-                        continuation.resume(throwing: PolishingError.apiError(userError))
+                        continuation.resume(throwing: TranscriptionError.apiError(userError))
                     }
                 }
             }

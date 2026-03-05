@@ -46,6 +46,8 @@ final class AppState {
         getSelectedTextUseCase: GetSelectedTextUseCaseProtocol? = nil,
         processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol? = nil
     ) {
+        configureCoreFFIRuntimeIfNeeded()
+
         let repository = apiKeyRepository ?? KeychainApiKeyRepository()
         self.apiKeyRepository = repository
         self.permissionRepository = permissionRepository ?? SystemPermissionRepository()
