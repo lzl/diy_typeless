@@ -31,13 +31,9 @@ public final class RecordingState {
     private let recordingControlUseCase: RecordingControlUseCaseProtocol
     private let stopRecordingUseCase: StopRecordingUseCaseProtocol
 
-    // Transcription pipeline
-    private let transcribeAudioUseCase: TranscribeAudioUseCaseProtocol
-    private let polishTextUseCase: PolishTextUseCaseProtocol
-
     // Voice command
     private let getSelectedTextUseCase: GetSelectedTextUseCaseProtocol
-    private let processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol
+    private let pipelineCoordinator: RecordingPipelineCoordinating
 
     // Prefetch
     private var preselectedContext: SelectedTextContext?
@@ -74,7 +70,8 @@ public final class RecordingState {
         processVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol,
         // Prefetch
         prefetchScheduler: PrefetchScheduler = RealPrefetchScheduler(),
-        prefetchDelay: Duration = .milliseconds(300)
+        prefetchDelay: Duration = .milliseconds(300),
+        pipelineCoordinator: RecordingPipelineCoordinating? = nil
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
@@ -83,10 +80,13 @@ public final class RecordingState {
         self.appContextRepository = appContextRepository
         self.recordingControlUseCase = recordingControlUseCase
         self.stopRecordingUseCase = stopRecordingUseCase
-        self.transcribeAudioUseCase = transcribeAudioUseCase
-        self.polishTextUseCase = polishTextUseCase
         self.getSelectedTextUseCase = getSelectedTextUseCase
-        self.processVoiceCommandUseCase = processVoiceCommandUseCase
+        self.pipelineCoordinator = pipelineCoordinator ?? RecordingPipelineCoordinator(
+            stopRecordingUseCase: stopRecordingUseCase,
+            transcribeAudioUseCase: transcribeAudioUseCase,
+            polishTextUseCase: polishTextUseCase,
+            processVoiceCommandUseCase: processVoiceCommandUseCase
+        )
         self.prefetchScheduler = prefetchScheduler
         self.prefetchDelay = prefetchDelay
 
@@ -260,92 +260,6 @@ public final class RecordingState {
         voiceCommandResultLayer = nil
     }
 
-    // MARK: - Error Handling
-
-    private func handleTranscriptionError(_ error: TranscriptionError) {
-        switch error {
-        case .apiError(let userError):
-            showError(userError)
-        case .emptyAudio, .decodingFailed:
-            showError(.unknown("Transcription failed"))
-        }
-    }
-
-    private func handlePolishingError(_ error: PolishingError) {
-        switch error {
-        case .apiError(let userError):
-            showError(userError)
-        case .emptyInput, .invalidResponse:
-            showError(.unknown("Polishing failed"))
-        }
-    }
-
-    // MARK: - Business Logic
-
-    private func shouldUseVoiceCommandMode(_ context: SelectedTextContext) -> Bool {
-        // Note: isEditable is not required for voice command mode
-        // Some apps (like Chrome) may report isEditable=false even when text is selected
-        // We only care about: hasSelection and !isSecure
-        context.hasSelection && !context.isSecure
-    }
-
-    // MARK: - Voice Command Mode
-
-    private func handleVoiceCommandMode(
-        transcription: String,
-        selectedText: String,
-        geminiKey: String,
-        generation: Int,
-        cancellationToken: CancellationToken
-    ) async throws {
-        capsuleState = .processingCommand(transcription, progress: 0)
-
-        let result = try await processVoiceCommandUseCase.execute(
-            transcription: transcription,
-            selectedText: selectedText,
-            geminiKey: geminiKey,
-            cancellationToken: cancellationToken
-        )
-
-        guard currentGeneration == generation else { return }
-
-        voiceCommandResultLayer = VoiceCommandResultLayerState(
-            text: result.processedText,
-            didCopy: false
-        )
-        capsuleState = .hidden
-        isProcessing = false
-    }
-
-    // MARK: - Transcription Mode (Fallback)
-
-    private func handleTranscriptionMode(
-        rawText: String,
-        geminiKey: String,
-        context: String?,
-        generation: Int,
-        cancellationToken: CancellationToken
-    ) async throws {
-        capsuleState = .polishing(progress: 0)
-
-        let polishedText = try await polishTextUseCase.execute(
-            rawText: rawText,
-            apiKey: geminiKey,
-            context: context,
-            cancellationToken: cancellationToken
-        )
-
-        guard currentGeneration == generation else { return }
-
-        onWillDeliverText?()
-        let outputResult = textOutputRepository.deliver(text: polishedText)
-
-        capsuleState = .done(outputResult)
-        isProcessing = false
-
-        scheduleHide(after: 1.2, expectedState: .done(outputResult))
-    }
-
     private func showError(_ error: UserFacingError) {
         capsuleState = .error(error)
         isRecording = false
@@ -397,6 +311,21 @@ public final class RecordingState {
         preselectedContext = context
     }
 
+    private func applyPipelineProgress(
+        _ progress: RecordingPipelineProgress,
+        generation: Int
+    ) {
+        guard currentGeneration == generation else { return }
+        switch progress {
+        case .transcribing:
+            capsuleState = .transcribing(progress: 0)
+        case .polishing:
+            capsuleState = .polishing(progress: 0)
+        case .processingCommand(let transcription):
+            capsuleState = .processingCommand(transcription, progress: 0)
+        }
+    }
+
     private func runProcessingPipeline(
         generation: Int,
         context: SelectedTextContext,
@@ -411,59 +340,41 @@ public final class RecordingState {
         }
 
         do {
-            // Step 1: Stop recording and obtain audio bytes.
-            let audio = try await stopRecordingUseCase.execute()
-
-            guard currentGeneration == generation else { return }
-
-            // Step 2: Transcribe audio with cooperative cancellation.
-            capsuleState = .transcribing(progress: 0)
-            let rawText = try await transcribeAudioUseCase.execute(
-                audioData: audio,
-                apiKey: groqKey,
-                language: nil,
-                cancellationToken: cancellationToken
+            let result = try await pipelineCoordinator.execute(
+                request: RecordingPipelineRequest(
+                    groqKey: groqKey,
+                    geminiKey: geminiKey,
+                    selectedTextContext: context,
+                    appContext: capturedContext,
+                    cancellationToken: cancellationToken
+                ),
+                onProgress: { [weak self] progress in
+                    self?.applyPipelineProgress(progress, generation: generation)
+                }
             )
 
             guard currentGeneration == generation else { return }
-
-            // Step 3: Determine mode and process.
-            if shouldUseVoiceCommandMode(context) {
-                try await handleVoiceCommandMode(
-                    transcription: rawText,
-                    selectedText: context.text!,
-                    geminiKey: geminiKey,
-                    generation: generation,
-                    cancellationToken: cancellationToken
+            switch result {
+            case .voiceCommand(let result):
+                voiceCommandResultLayer = VoiceCommandResultLayerState(
+                    text: result.processedText,
+                    didCopy: false
                 )
-            } else {
-                try await handleTranscriptionMode(
-                    rawText: rawText,
-                    geminiKey: geminiKey,
-                    context: capturedContext,
-                    generation: generation,
-                    cancellationToken: cancellationToken
-                )
+                capsuleState = .hidden
+            case .polishedText(let polishedText):
+                onWillDeliverText?()
+                let outputResult = textOutputRepository.deliver(text: polishedText)
+                capsuleState = .done(outputResult)
+                scheduleHide(after: 1.2, expectedState: .done(outputResult))
             }
-        } catch is CancellationError {
-            guard currentGeneration == generation else { return }
-            isProcessing = false
-            capsuleState = .hidden
-        } catch let error as TranscriptionError {
-            guard currentGeneration == generation else { return }
-            handleTranscriptionError(error)
-            isProcessing = false
-        } catch let error as PolishingError {
-            guard currentGeneration == generation else { return }
-            handlePolishingError(error)
-            isProcessing = false
-        } catch let error as UserFacingError {
-            guard currentGeneration == generation else { return }
-            showError(error)
             isProcessing = false
         } catch {
             guard currentGeneration == generation else { return }
-            showError(.unknown(error.localizedDescription))
+            if let error = pipelineCoordinator.mapToUserFacingError(error) {
+                showError(error)
+            } else {
+                capsuleState = .hidden
+            }
             isProcessing = false
         }
     }
