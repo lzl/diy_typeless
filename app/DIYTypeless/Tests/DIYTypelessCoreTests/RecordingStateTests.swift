@@ -305,6 +305,38 @@ final class RecordingStateTests: XCTestCase {
         XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
     }
 
+    func testDeactivate_whileStopInFlight_blocksImmediateRestartUntilStopCompletes() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq"
+        apiKeyRepository.keys[.gemini] = "gemini"
+
+        let stopRecordingUseCase = MockStopRecordingUseCase()
+        stopRecordingUseCase.beforeReturnDelayNanoseconds = 300_000_000
+
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            stopRecordingUseCase: stopRecordingUseCase
+        )
+
+        await sut.handleKeyDown()
+        sut.deactivate()
+        await sut.handleKeyDown()
+
+        XCTAssertEqual(
+            dependencies.recordingControlUseCase.startRecordingCallCount,
+            1,
+            "Recording restart should be blocked while deactivate-triggered stop is running"
+        )
+
+        await waitUntil { stopRecordingUseCase.completedCallCount == 1 }
+        for _ in 0..<5 where dependencies.recordingControlUseCase.startRecordingCallCount < 2 {
+            await sut.handleKeyDown()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertEqual(dependencies.recordingControlUseCase.startRecordingCallCount, 2)
+    }
+
     func testRapidRepeatedKeyDownWhileRecording_startsRecordingOnlyOnce() async {
         let apiKeyRepository = MockApiKeyRepository()
         apiKeyRepository.keys[.groq] = "groq"
