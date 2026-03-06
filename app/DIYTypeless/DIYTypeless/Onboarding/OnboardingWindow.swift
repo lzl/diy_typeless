@@ -2,6 +2,35 @@ import AppKit
 import SwiftUI
 import DIYTypelessCore
 
+enum OnboardingWindowChromeLayout {
+    static let trafficLightButtons: [NSWindow.ButtonType] = [
+        .closeButton,
+        .miniaturizeButton,
+        .zoomButton
+    ]
+
+    static func trafficLightOrigins(
+        for buttonSizes: [NSWindow.ButtonType: CGSize],
+        in titlebarHeight: CGFloat
+    ) -> [NSWindow.ButtonType: CGPoint] {
+        var origins: [NSWindow.ButtonType: CGPoint] = [:]
+        var currentX = OnboardingTheme.windowTrafficLightsLeadingInset
+
+        for buttonType in trafficLightButtons {
+            guard let buttonSize = buttonSizes[buttonType] else {
+                continue
+            }
+            origins[buttonType] = CGPoint(
+                x: currentX,
+                y: titlebarHeight - OnboardingTheme.windowTrafficLightsTopInset - buttonSize.height
+            )
+            currentX += buttonSize.width + OnboardingTheme.windowTrafficLightsSpacing
+        }
+
+        return origins
+    }
+}
+
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
@@ -9,6 +38,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     init(state: OnboardingState, recording: RecordingState) {
         let hosting = NSHostingController(rootView: OnboardingWindow(state: state, recording: recording))
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = .clear
         window = NSWindow(
             contentRect: NSRect(
                 x: 0,
@@ -16,13 +47,17 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
                 width: AppSize.onboardingWidth,
                 height: AppSize.onboardingHeight
             ),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "DIY Typeless"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(
             width: AppSize.onboardingWidth,
@@ -32,6 +67,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.contentView = hosting.view
         super.init()
         window.delegate = self
+        scheduleTrafficLightsLayout()
     }
 
     func show() {
@@ -41,6 +77,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        scheduleTrafficLightsLayout()
     }
 
     func hide() {
@@ -53,6 +90,46 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         // Switch back to accessory policy when window closes
         NSApp.setActivationPolicy(.accessory)
         onClose?()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        scheduleTrafficLightsLayout()
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        scheduleTrafficLightsLayout()
+    }
+
+    private func scheduleTrafficLightsLayout() {
+        DispatchQueue.main.async { [weak self] in
+            self?.layoutTrafficLights()
+        }
+    }
+
+    private func layoutTrafficLights() {
+        var buttons: [NSWindow.ButtonType: NSButton] = [:]
+        var buttonSizes: [NSWindow.ButtonType: CGSize] = [:]
+
+        for buttonType in OnboardingWindowChromeLayout.trafficLightButtons {
+            guard let button = window.standardWindowButton(buttonType) else {
+                return
+            }
+            button.superview?.layoutSubtreeIfNeeded()
+            buttons[buttonType] = button
+            buttonSizes[buttonType] = button.frame.size
+        }
+
+        let titlebarHeight = buttons[.closeButton]?.superview?.bounds.height ?? 0
+        let origins = OnboardingWindowChromeLayout.trafficLightOrigins(
+            for: buttonSizes,
+            in: titlebarHeight
+        )
+        for buttonType in OnboardingWindowChromeLayout.trafficLightButtons {
+            guard let button = buttons[buttonType], let origin = origins[buttonType] else {
+                continue
+            }
+            button.setFrameOrigin(origin)
+        }
     }
 }
 
@@ -81,6 +158,13 @@ struct OnboardingWindow: View {
                 removal: .move(edge: .trailing).combined(with: .opacity)
             )
         }
+    }
+
+    private var windowShellShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: OnboardingTheme.windowShellCornerRadius,
+            style: .continuous
+        )
     }
 
     var body: some View {
@@ -130,21 +214,29 @@ struct OnboardingWindow: View {
                     .padding(.bottom, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 22)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.appSurface.opacity(0.96))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.appBorderSubtle.opacity(0.82), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 18)
+            .padding(.horizontal, OnboardingTheme.windowContentHorizontalPadding)
+            .padding(.top, OnboardingTheme.windowContentTopPadding)
+            .padding(.bottom, OnboardingTheme.windowContentBottomPadding)
         }
-        .padding(14)
         .frame(width: AppSize.onboardingWidth, height: AppSize.onboardingHeight)
-        .background(Color.appBackground)
+        .background(
+            windowShellShape
+                .fill(Color.appSurface.opacity(0.96))
+        )
+        .clipShape(windowShellShape)
+        .overlay(
+            windowShellShape
+                .stroke(Color.appBorderSubtle.opacity(0.82), lineWidth: 1)
+        )
+        .shadow(
+            color: .black.opacity(0.08),
+            radius: OnboardingTheme.windowShadowRadius,
+            x: 0,
+            y: OnboardingTheme.windowShadowYOffset
+        )
+        .padding(OnboardingTheme.windowOuterPadding)
+        .background(Color.clear)
+        .ignoresSafeArea()
     }
 
     private var stepIndicator: some View {

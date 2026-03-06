@@ -19,6 +19,18 @@ enum AppTheme {
 }
 
 enum OnboardingTheme {
+    static let windowShellCornerRadius: CGFloat = 28
+    static let windowOuterPadding: CGFloat = 0
+    static let windowShadowRadius: CGFloat = 24
+    static let windowShadowYOffset: CGFloat = 18
+    static let windowTrafficLightsLeadingInset: CGFloat = 14
+    static let windowTrafficLightsTopInset: CGFloat = 14
+    static let windowTrafficLightsSpacing: CGFloat = 8
+    static let windowChromeReservedHeight: CGFloat = 30
+    static let windowContentHorizontalPadding: CGFloat = 24
+    static let windowContentTopPadding: CGFloat = 30
+    static let windowContentBottomPadding: CGFloat = 22
+
     static let stepViewportMinHeight: CGFloat = 408
     static let stepViewportCornerRadius: CGFloat = 18
     static let contentColumnMaxWidth: CGFloat = 440
