@@ -74,32 +74,76 @@ struct OnboardingWindow: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            stepIndicator
-                .padding(.top, 24)
-                .padding(.bottom, 32)
+        ZStack {
+            LinearGradient(
+                colors: [
+                    .appBackground,
+                    .appBackgroundSecondary
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
 
-            stepView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Circle()
+                .fill(Color.glowPrimary)
+                .frame(width: 240, height: 240)
+                .blur(radius: 90)
+                .offset(x: -160, y: -120)
 
-            navigationButtons
-                .padding(.top, 24)
-                .padding(.bottom, 28)
+            Circle()
+                .fill(Color.glowAccent)
+                .frame(width: 220, height: 220)
+                .blur(radius: 100)
+                .offset(x: 180, y: 140)
+
+            VStack(spacing: 0) {
+                stepIndicator
+                    .padding(.top, 24)
+                    .padding(.bottom, 28)
+
+                stepView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                navigationButtons
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
+            }
+            .padding(.horizontal, 30)
+            .padding(.vertical, 26)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.96))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(Color.appBorderSubtle.opacity(0.82), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 18)
         }
-        .padding(.horizontal, 40)
-        .frame(minWidth: 480, minHeight: 440)
-        .background(Color(NSColor.windowBackgroundColor))
+        .padding(20)
+        .frame(minWidth: 520, minHeight: 480)
+        .background(Color.appBackground)
     }
 
     private var stepIndicator: some View {
         HStack(spacing: 8) {
             ForEach(OnboardingStep.allCases, id: \.self) { step in
                 Capsule()
-                    .fill(step.rawValue <= state.step.rawValue ? Color.brandPrimary : Color.secondary.opacity(0.3))
-                    .frame(width: step == state.step ? 24 : 8, height: 8)
+                    .fill(indicatorColor(for: step))
+                    .frame(width: step == state.step ? 28 : 10, height: 10)
                     .animation(AppAnimation.stateChange, value: state.step)
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.appSurfaceSubtle)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.appBorderSubtle.opacity(0.65), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -135,8 +179,7 @@ struct OnboardingWindow: View {
                         state.goBack()
                     }
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.secondary)
+                .buttonStyle(EnhancedSecondaryButtonStyle())
             }
 
             Spacer()
@@ -157,6 +200,16 @@ struct OnboardingWindow: View {
                 .disabled(!state.canProceed)
             }
         }
+    }
+
+    private func indicatorColor(for step: OnboardingStep) -> Color {
+        if step == state.step {
+            return .brandPrimary
+        }
+        if step.rawValue < state.step.rawValue {
+            return .brandAccent.opacity(0.65)
+        }
+        return .appBorderSubtle.opacity(0.7)
     }
 }
 

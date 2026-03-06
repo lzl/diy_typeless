@@ -8,10 +8,9 @@ struct WelcomeStepView: View {
     private var dynamicGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color.brandPrimary,
-                Color.brandAccent,
-                Color.brandPrimaryLight,
-                Color.brandAccentLight
+                Color.brandPrimary.opacity(0.92),
+                Color.brandAccent.opacity(0.72),
+                Color.brandPrimaryLight.opacity(0.82)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -19,65 +18,51 @@ struct WelcomeStepView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             ZStack {
-                // Subtle ambient glow - smaller and softer
                 Circle()
                     .fill(dynamicGradient)
-                    .blur(radius: 12)
-                    .frame(width: 100, height: 100)
-                    .opacity(0.15 + gradientPhase * 0.1)
-                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: gradientPhase)
+                    .blur(radius: 22)
+                    .frame(width: 116, height: 116)
+                    .opacity(0.16 + gradientPhase * 0.04)
+                    .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true), value: gradientPhase)
 
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 72))
-                    .foregroundStyle(dynamicGradient)
-                    // Very subtle breathing effect instead of bounce
-                    .scaleEffect(1.0 + gradientPhase * 0.02)
-                    .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: gradientPhase)
+                OnboardingIconBadge(systemName: "waveform.circle.fill", size: 92)
+                    .overlay {
+                        Circle()
+                            .stroke(Color.white.opacity(0.45), lineWidth: 0.8)
+                            .padding(7)
+                    }
+                    .scaleEffect(1.0 + gradientPhase * 0.015)
+                    .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true), value: gradientPhase)
             }
-            .frame(height: 100)
+            .frame(height: 110)
             .onAppear { gradientPhase = 1 }
             .onDisappear { gradientPhase = 0 }
 
             VStack(spacing: 8) {
                 Text("DIY Typeless")
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+                    .foregroundStyle(Color.textPrimary)
 
                 Text("Voice to polished text, instantly.")
                     .font(.system(size: 15))
-                    .foregroundColor(.textSecondary)
+                    .foregroundStyle(Color.textSecondary)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                FeatureRow(icon: "globe", text: "Hold Fn to record")
-                FeatureRow(icon: "waveform", text: "Transcribe with Whisper")
-                FeatureRow(icon: "sparkles", text: "Polish with Gemini")
-                FeatureRow(icon: "doc.on.clipboard", text: "Paste or copy instantly")
+            OnboardingSurfaceCard(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What happens")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.linkQuiet)
+
+                    OnboardingDetailRow(systemName: "globe", text: "Hold Fn to record")
+                    OnboardingDetailRow(systemName: "waveform", text: "Transcribe with Whisper")
+                    OnboardingDetailRow(systemName: "sparkles", text: "Polish with Gemini")
+                    OnboardingDetailRow(systemName: "doc.on.clipboard", text: "Paste or copy instantly")
+                }
             }
-            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct FeatureRow: View {
-    let icon: String
-    let text: String
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .frame(width: 20)
-                .foregroundColor(.brandPrimary)
-                .scaleEffect(isHovered ? 1.1 : 1.0)
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.textPrimary)
-        }
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.2), value: isHovered)
     }
 }

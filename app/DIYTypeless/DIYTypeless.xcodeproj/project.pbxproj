@@ -14,6 +14,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		A5F97D1A44B94F6B9F2C0101 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0445F1162F2C8CB800B25EC2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0445F11D2F2C8CB800B25EC2;
+			remoteInfo = DIYTypeless;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -140,6 +147,7 @@
 				buildRules = (
 				);
 				dependencies = (
+					A5F97D1B44B94F6B9F2C0101 /* PBXTargetDependency */,
 				);
 			fileSystemSynchronizedGroups = (
 				193431A1680610C673B7D837 /* DIYTypelessTests */,
@@ -228,6 +236,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A5F97D1B44B94F6B9F2C0101 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0445F11D2F2C8CB800B25EC2 /* DIYTypeless */;
+			targetProxy = A5F97D1A44B94F6B9F2C0101 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -439,6 +452,7 @@
 			D823442F526B2800B71725EE /* Debug */ = {
 				isa = XCBuildConfiguration;
 				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
 					CODE_SIGN_STYLE = Automatic;
 					CURRENT_PROJECT_VERSION = 1;
 					GENERATE_INFOPLIST_FILE = YES;
@@ -453,12 +467,14 @@
 					STRING_CATALOG_GENERATE_SYMBOLS = YES;
 					SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 					SWIFT_VERSION = 5.0;
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				};
 				name = Debug;
 			};
 			929F381D6B006D0527C51976 /* Release */ = {
 				isa = XCBuildConfiguration;
 				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
 					CODE_SIGN_STYLE = Automatic;
 					CURRENT_PROJECT_VERSION = 1;
 					GENERATE_INFOPLIST_FILE = YES;
@@ -473,6 +489,7 @@
 					STRING_CATALOG_GENERATE_SYMBOLS = YES;
 					SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 					SWIFT_VERSION = 5.0;
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DIYTypeless.app/Contents/MacOS/DIYTypeless";
 				};
 				name = Release;
 			};

@@ -7,26 +7,38 @@ import DIYTypelessCore
 extension Color {
     // MARK: Background Colors
     static var appBackground: Color {
-        Color(nsColor: .windowBackgroundColor)
+        dynamicColor(light: "#F3F5F4", dark: "#121715")
     }
     static var appBackgroundSecondary: Color {
-        Color(nsColor: .controlBackgroundColor)
+        dynamicColor(light: "#EDF1F0", dark: "#171D1B")
     }
     static var appSurface: Color {
-        Color(nsColor: .controlColor)
+        dynamicColor(light: "#FCFDFC", dark: "#1C2220")
+    }
+    static var appSurfaceRaised: Color {
+        dynamicColor(light: AppTheme.raisedSurfaceHex, dark: "#242B29")
+    }
+    static var appSurfaceSubtle: Color {
+        dynamicColor(light: AppTheme.surfaceTintHex, dark: "#1A201E")
+    }
+    static var appBorderSubtle: Color {
+        dynamicColor(light: AppTheme.borderHex, dark: "#313A37")
+    }
+    static var linkQuiet: Color {
+        dynamicColor(light: AppTheme.quietLinkHex, dark: "#A5B2BD")
     }
 
     // MARK: Brand Colors
-    static let brandPrimary = Color(hex: "#0D9488")
-    static let brandPrimaryLight = Color(hex: "#14B8A6")
-    static let brandAccent = Color(hex: "#F97316")
-    static let brandAccentLight = Color(hex: "#FB923C")
+    static let brandPrimary = Color(hex: AppTheme.brandPrimaryHex)
+    static let brandPrimaryLight = Color(hex: AppTheme.brandPrimaryLightHex)
+    static let brandAccent = Color(hex: AppTheme.brandAccentHex)
+    static let brandAccentLight = Color(hex: AppTheme.brandAccentLightHex)
 
     // MARK: Semantic Colors
-    static let success = Color(hex: "#10B981")
-    static let warning = Color(hex: "#F59E0B")
-    static let error = Color(hex: "#EF4444")
-    static let info = Color(hex: "#3B82F6")
+    static let success = Color(hex: AppTheme.successHex)
+    static let warning = Color(hex: AppTheme.warningHex)
+    static let error = Color(hex: AppTheme.errorHex)
+    static let info = Color(hex: AppTheme.infoHex)
 
     // MARK: Text Colors
     static var textPrimary: Color {
@@ -41,19 +53,19 @@ extension Color {
 
     // MARK: Dynamic Colors
     static var glassBackground: Color {
-        Color(nsColor: .underPageBackgroundColor)
+        appSurfaceRaised.opacity(0.9)
     }
 
     static var glassBorder: Color {
-        Color.white.opacity(0.1)
+        appBorderSubtle.opacity(0.6)
     }
 
     static var glowPrimary: Color {
-        brandPrimary.opacity(0.3)
+        brandPrimary.opacity(0.18)
     }
 
     static var glowAccent: Color {
-        brandAccent.opacity(0.3)
+        brandAccent.opacity(0.15)
     }
 
     // MARK: - Hex Initializer
@@ -81,28 +93,40 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
+
+    fileprivate static func dynamicColor(light: String, dark: String) -> Color {
+        Color(
+            nsColor: NSColor(
+                name: nil,
+                dynamicProvider: { appearance in
+                    let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                    return NSColor(hex: isDark ? dark : light)
+                }
+            )
+        )
+    }
 }
 
 // MARK: - Semantic Color Extensions
 extension Color {
     /// Background color for active recording state
     static var recordingBackground: Color {
-        Color(hex: "#7F1D1D").opacity(0.3) // Deep red with opacity
+        error.opacity(0.16)
     }
 
     /// Background color for transcribing state
     static var transcribingBackground: Color {
-        brandPrimary.opacity(0.2)
+        brandPrimary.opacity(0.14)
     }
 
     /// Background color for polishing state
     static var polishingBackground: Color {
-        brandAccent.opacity(0.2)
+        brandAccent.opacity(0.14)
     }
 
     /// Background color for completed state
     static var completedBackground: Color {
-        success.opacity(0.2)
+        success.opacity(0.16)
     }
 }
 
@@ -110,56 +134,82 @@ extension Color {
 extension Color {
     /// Secondary button background (neutral, adaptive)
     static var buttonSecondaryBackground: Color {
-        Color(nsColor: .quaternarySystemFill)
+        appSurfaceRaised
     }
 
     /// Secondary button background when hovered
     static var buttonSecondaryBackgroundHover: Color {
-        Color(nsColor: .tertiarySystemFill)
+        appSurfaceSubtle
     }
 
     /// Secondary button background when pressed
     static var buttonSecondaryBackgroundPressed: Color {
-        Color(nsColor: .secondarySystemFill)
+        appSurfaceSubtle.opacity(0.9)
     }
 
     /// Secondary button border
     static var buttonSecondaryBorder: Color {
-        Color(nsColor: .separatorColor)
+        appBorderSubtle
     }
 
     /// Secondary button border when hovered
     static var buttonSecondaryBorderHover: Color {
-        Color(nsColor: .separatorColor).opacity(0.8)
+        brandAccent.opacity(0.28)
     }
 
     /// Secondary button border when pressed
     static var buttonSecondaryBorderPressed: Color {
-        Color(nsColor: .separatorColor).opacity(0.6)
+        appBorderSubtle.opacity(0.7)
     }
 
     /// Icon button background when hovered
     static var buttonIconBackgroundHover: Color {
-        Color(nsColor: .quaternarySystemFill)
+        appSurfaceSubtle
     }
 
     /// Icon button background when pressed
     static var buttonIconBackgroundPressed: Color {
-        Color(nsColor: .tertiarySystemFill)
+        appSurfaceSubtle.opacity(0.82)
     }
 
     /// Menu bar button background when hovered
     static var buttonMenuBackgroundHover: Color {
-        Color(nsColor: .quaternarySystemFill)
+        appSurfaceSubtle
     }
 
     /// Menu bar button background when pressed
     static var buttonMenuBackgroundPressed: Color {
-        Color(nsColor: .tertiarySystemFill)
+        appSurfaceSubtle.opacity(0.82)
     }
 
     /// Ghost button background when hovered
     static var buttonGhostBackgroundHover: Color {
-        Color(nsColor: .quaternarySystemFill)
+        appSurfaceSubtle
+    }
+}
+
+private extension NSColor {
+    convenience init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3:
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 255, 255, 255)
+        }
+
+        self.init(
+            srgbRed: CGFloat(r) / 255,
+            green: CGFloat(g) / 255,
+            blue: CGFloat(b) / 255,
+            alpha: CGFloat(a) / 255
+        )
     }
 }

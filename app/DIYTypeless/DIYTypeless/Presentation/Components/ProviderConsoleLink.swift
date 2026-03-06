@@ -6,17 +6,14 @@ struct ProviderConsoleLink: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 0) {
-                Text("Don't have an API key? ")
-                    .foregroundColor(.secondary)
-                Text("Get one here")
-                    .foregroundColor(.accentColor)
-                    .underline()
-            }
-            .font(.system(size: 13))
+        HStack(spacing: 4) {
+            Text("Don't have an API key?")
+                .foregroundStyle(Color.textSecondary)
+
+            Button("Get one here", action: action)
+                .quietLinkButton()
         }
-        .buttonStyle(PlainButtonStyle())
+        .font(.system(size: 13))
         .onHover { isHovered in
             if isHovered {
                 NSCursor.pointingHand.push()

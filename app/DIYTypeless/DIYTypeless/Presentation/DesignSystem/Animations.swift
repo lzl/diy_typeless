@@ -6,15 +6,15 @@ import DIYTypelessCore
 
 enum AppAnimation {
     /// Micro-interactions (button presses, small state changes)
-    static let micro = Animation.easeOut(duration: 0.15)
+    static let micro = Animation.easeOut(duration: 0.18)
 
     /// State changes (capsule state transitions)
     static let stateChange = Animation.easeInOut(duration: 0.25)
 
     /// Page transitions (onboarding step changes)
     static let pageTransition = Animation.spring(
-        response: 0.35,
-        dampingFraction: 0.8,
+        response: 0.42,
+        dampingFraction: 0.9,
         blendDuration: 0.3
     )
 
@@ -26,7 +26,8 @@ enum AppAnimation {
 
     /// Breathing animation for recording state
     static func breathing(duration: Double = 2.0) -> Animation {
-        .easeInOut(duration: duration).repeatForever(autoreverses: true)
+        let resolvedDuration = max(duration, 3.2)
+        return .easeInOut(duration: resolvedDuration).repeatForever(autoreverses: true)
     }
 
     /// Pulse animation for indicators
@@ -46,22 +47,22 @@ enum AppAnimation {
     static let progressFill = Animation.easeInOut(duration: 0.3)
 
     /// Shake animation for errors
-    static let shake = Animation.spring(response: 0.1, dampingFraction: 0.2)
+    static let shake = Animation.spring(response: 0.16, dampingFraction: 0.35)
 }
 
 // MARK: - Animation Duration Constants
 extension Double {
     /// Micro-interaction duration (150ms)
-    static let animationMicro: Double = 0.15
+    static let animationMicro: Double = 0.18
 
     /// Standard state change duration (250ms)
     static let animationStandard: Double = 0.25
 
     /// Page transition duration (350ms)
-    static let animationPage: Double = 0.35
+    static let animationPage: Double = 0.42
 
     /// Breathing cycle duration (2000ms)
-    static let animationBreathing: Double = 2.0
+    static let animationBreathing: Double = 3.2
 }
 
 // MARK: - View Modifiers for Common Animations
