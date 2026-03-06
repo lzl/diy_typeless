@@ -57,7 +57,7 @@ enum AppSize {
     static let onboardingWidth: CGFloat = 560
 
     /// Onboarding window height
-    static let onboardingHeight: CGFloat = 660
+    static let onboardingHeight: CGFloat = 640
 
     /// Icon size small
     static let iconSmall: CGFloat = 16

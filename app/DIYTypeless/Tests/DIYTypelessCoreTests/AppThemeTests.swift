@@ -24,7 +24,7 @@ final class AppThemeTests: XCTestCase {
 
     func testOnboardingUsesStableWindowAndViewportSizing() {
         XCTAssertEqual(AppSize.onboardingWidth, 560)
-        XCTAssertEqual(AppSize.onboardingHeight, 660)
+        XCTAssertEqual(AppSize.onboardingHeight, 640)
         XCTAssertEqual(OnboardingTheme.windowShellCornerRadius, 28)
         XCTAssertEqual(OnboardingTheme.windowOuterPadding, 0)
         XCTAssertEqual(OnboardingTheme.windowTrafficLightsLeadingInset, 14)
