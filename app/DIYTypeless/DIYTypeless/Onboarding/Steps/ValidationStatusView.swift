@@ -66,38 +66,6 @@ struct ValidationStatusView: View {
     }
 }
 
-struct PermissionIcon: View {
-    let icon: String
-    let granted: Bool
-    @State private var glowPhase: Double = 0
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(granted ? Color.success.opacity(0.12) : Color.brandPrimary.opacity(0.12))
-                .frame(width: 86, height: 86)
-            
-            if granted {
-                Circle()
-                    .stroke(Color.success.opacity(0.24), lineWidth: 1.2)
-                    .frame(width: 98, height: 98)
-                    .scaleEffect(1.0 + glowPhase * 0.05)
-                    .opacity(1.0 - glowPhase * 0.35)
-                    .onAppear {
-                        withAnimation(AppAnimation.breathing(duration: 3.4)) {
-                            glowPhase = 1
-                        }
-                    }
-            }
-
-            Image(systemName: icon)
-                .font(.system(size: 32))
-                .foregroundStyle(granted ? Color.success : Color.brandPrimary)
-        }
-        .shadow(color: (granted ? Color.success : Color.brandPrimary).opacity(0.08), radius: 16, x: 0, y: 8)
-    }
-}
-
 struct StatusBadge: View {
     let granted: Bool
     @State private var scale: CGFloat = 0.8

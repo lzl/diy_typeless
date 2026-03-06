@@ -1,10 +1,22 @@
 import SwiftUI
 
+enum OnboardingStepLayoutMode {
+    case top
+    case centered
+}
+
+enum OnboardingStepIconStyle {
+    static let size: CGFloat = 88
+    static let tintHex = AppTheme.brandPrimaryHex
+    static let shadowOpacity = 0.0
+}
+
 struct OnboardingStepScaffold<Icon: View, Content: View>: View {
     let title: String
     let subtitle: String
     let iconHeight: CGFloat
     let contentSpacing: CGFloat
+    let layoutMode: OnboardingStepLayoutMode
     let icon: Icon
     let content: Content
 
@@ -13,6 +25,7 @@ struct OnboardingStepScaffold<Icon: View, Content: View>: View {
         subtitle: String,
         iconHeight: CGFloat = 110,
         contentSpacing: CGFloat = 24,
+        layoutMode: OnboardingStepLayoutMode = .top,
         @ViewBuilder icon: () -> Icon,
         @ViewBuilder content: () -> Content
     ) {
@@ -20,6 +33,7 @@ struct OnboardingStepScaffold<Icon: View, Content: View>: View {
         self.subtitle = subtitle
         self.iconHeight = iconHeight
         self.contentSpacing = contentSpacing
+        self.layoutMode = layoutMode
         self.icon = icon()
         self.content = content()
     }
@@ -45,10 +59,13 @@ struct OnboardingStepScaffold<Icon: View, Content: View>: View {
                 .padding(.top, contentSpacing)
                 .frame(maxWidth: OnboardingTheme.contentColumnMaxWidth)
                 .frame(maxWidth: .infinity, alignment: .center)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.vertical, layoutMode == .centered ? 12 : 0)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: layoutMode == .centered ? .center : .top
+        )
     }
 }
 
@@ -93,22 +110,18 @@ struct OnboardingSurfaceCard<Content: View>: View {
 }
 
 struct OnboardingIconBadge: View {
-    enum Tone {
-        case accent
-        case success
-        case muted
-    }
-
     let systemName: String
-    let tone: Tone
     let size: CGFloat
-    let tintOverride: Color?
+    let tint: Color
 
-    init(systemName: String, tone: Tone = .accent, size: CGFloat = 88, tint: Color? = nil) {
+    init(
+        systemName: String,
+        size: CGFloat = OnboardingStepIconStyle.size,
+        tint: Color = Color(hex: OnboardingStepIconStyle.tintHex)
+    ) {
         self.systemName = systemName
-        self.tone = tone
         self.size = size
-        self.tintOverride = tint
+        self.tint = tint
     }
 
     var body: some View {
@@ -125,31 +138,15 @@ struct OnboardingIconBadge: View {
                 .font(.system(size: size * 0.36, weight: .medium))
                 .foregroundStyle(tint)
         }
-        .shadow(color: tint.opacity(0.10), radius: 18, x: 0, y: 8)
-    }
-
-    private var tint: Color {
-        if let tintOverride {
-            return tintOverride
-        }
-        switch tone {
-        case .accent:
-            return .brandPrimary
-        case .success:
-            return .success
-        case .muted:
-            return .brandAccent
-        }
     }
 }
 
-struct OnboardingDetailRow: View {
-    let systemName: String
-    let text: String
+struct OnboardingChecklistRow: View {
+    let item: OnboardingChecklistItem
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemName)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: item.systemName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.brandAccent)
                 .frame(width: 28, height: 28)
@@ -158,10 +155,17 @@ struct OnboardingDetailRow: View {
                         .fill(Color.brandAccent.opacity(0.12))
                 )
 
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundStyle(Color.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+
+                Text(item.detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

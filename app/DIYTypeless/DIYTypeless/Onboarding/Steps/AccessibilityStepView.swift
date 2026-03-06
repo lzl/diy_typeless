@@ -9,30 +9,38 @@ struct AccessibilityStepView: View {
             title: "Accessibility Access",
             subtitle: "Required to paste text into apps."
         ) {
-            PermissionIcon(
-                icon: "hand.raised.fill",
-                granted: state.permissions.accessibility
-            )
-            .breathing(intensity: 0.018, duration: 3.6)
-            .opacity(state.permissions.accessibility ? 1.0 : 0.85)
+            OnboardingIconBadge(systemName: "hand.raised.fill")
         } content: {
-            OnboardingSurfaceCard {
+            OnboardingSurfaceCard(padding: 20, minHeight: 156) {
                 if state.permissions.accessibility {
-                    StatusBadge(granted: true)
-                        .transition(.scale.combined(with: .opacity))
-                } else {
-                    Button("Grant Access") {
-                        state.requestAccessibilityPermission()
-                    }
-                    .buttonStyle(EnhancedSecondaryButtonStyle())
+                    VStack(spacing: 10) {
+                        StatusBadge(granted: true)
+                            .transition(.scale.combined(with: .opacity))
 
-                    Button("Open System Settings") {
-                        state.openAccessibilitySettings()
+                        Text("Accessibility access is ready for text insertion.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .quietLinkButton()
+                } else {
+                    VStack(spacing: 12) {
+                        Text("This lets DIY Typeless paste polished text back into the active app.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("Grant Access") {
+                            state.requestAccessibilityPermission()
+                        }
+                        .buttonStyle(EnhancedSecondaryButtonStyle())
+
+                        Button("Open System Settings") {
+                            state.openAccessibilitySettings()
+                        }
+                        .quietLinkButton()
+                    }
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .center)
             .animation(AppAnimation.stateChange, value: state.permissions.accessibility)
         }
     }

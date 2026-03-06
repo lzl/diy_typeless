@@ -9,30 +9,38 @@ struct MicrophoneStepView: View {
             title: "Microphone Access",
             subtitle: "Required to record your voice."
         ) {
-            PermissionIcon(
-                icon: "mic.fill",
-                granted: state.permissions.microphone
-            )
-            .breathing(intensity: 0.018, duration: 3.6)
-            .opacity(state.permissions.microphone ? 1.0 : 0.85)
+            OnboardingIconBadge(systemName: "mic.fill")
         } content: {
-            OnboardingSurfaceCard {
+            OnboardingSurfaceCard(padding: 20, minHeight: 156) {
                 if state.permissions.microphone {
-                    StatusBadge(granted: true)
-                        .transition(.scale.combined(with: .opacity))
-                } else {
-                    Button("Grant Access") {
-                        state.requestMicrophonePermission()
-                    }
-                    .buttonStyle(EnhancedSecondaryButtonStyle())
+                    VStack(spacing: 10) {
+                        StatusBadge(granted: true)
+                            .transition(.scale.combined(with: .opacity))
 
-                    Button("Open System Settings") {
-                        state.openMicrophoneSettings()
+                        Text("Microphone access is ready for recording.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .quietLinkButton()
+                } else {
+                    VStack(spacing: 12) {
+                        Text("We only use this to capture audio while you hold Fn.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("Grant Access") {
+                            state.requestMicrophonePermission()
+                        }
+                        .buttonStyle(EnhancedSecondaryButtonStyle())
+
+                        Button("Open System Settings") {
+                            state.openMicrophoneSettings()
+                        }
+                        .quietLinkButton()
+                    }
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .center)
             .animation(AppAnimation.stateChange, value: state.permissions.microphone)
         }
     }

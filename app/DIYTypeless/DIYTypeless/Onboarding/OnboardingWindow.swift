@@ -7,8 +7,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     var onClose: (() -> Void)?
 
-    init(state: OnboardingState) {
-        let hosting = NSHostingController(rootView: OnboardingWindow(state: state))
+    init(state: OnboardingState, recording: RecordingState) {
+        let hosting = NSHostingController(rootView: OnboardingWindow(state: state, recording: recording))
         window = NSWindow(
             contentRect: NSRect(
                 x: 0,
@@ -58,6 +58,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
 struct OnboardingWindow: View {
     @Bindable var state: OnboardingState
+    let recording: RecordingState
     @State private var transitionDirection: TransitionDirection = .forward
 
     enum TransitionDirection {
@@ -116,6 +117,12 @@ struct OnboardingWindow: View {
                         minHeight: OnboardingTheme.stepViewportMinHeight,
                         maxHeight: .infinity,
                         alignment: .top
+                    )
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: OnboardingTheme.stepViewportCornerRadius,
+                            style: .continuous
+                        )
                     )
 
                 navigationButtons
@@ -180,7 +187,7 @@ struct OnboardingWindow: View {
             GeminiKeyStepView(state: state)
                 .transition(transition)
         case .completion:
-            CompletionStepView(state: state)
+            CompletionStepView(state: state, recording: recording)
                 .transition(transition)
         }
     }

@@ -170,7 +170,7 @@ final class AppState {
 
     private func configureWindows() {
         if onboardingWindow == nil {
-            onboardingWindow = OnboardingWindowController(state: onboarding)
+            onboardingWindow = OnboardingWindowController(state: onboarding, recording: recording)
             onboardingWindow?.onClose = { [weak self] in
                 guard let self else { return }
                 if self.isForcedOnboarding {

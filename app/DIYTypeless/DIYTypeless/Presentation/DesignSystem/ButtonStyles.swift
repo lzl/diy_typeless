@@ -49,7 +49,7 @@ struct EnhancedPrimaryButtonStyle: ButtonStyle {
             return .brandPrimary.opacity(0.82)
         }
         if isHovered {
-            return .brandPrimaryLight
+            return Color(hex: PrimaryButtonPalette.hoverFillHex)
         }
         return .brandPrimary
     }
@@ -62,7 +62,7 @@ struct EnhancedPrimaryButtonStyle: ButtonStyle {
             return .brandPrimaryLight.opacity(0.32)
         }
         if isHovered {
-            return .brandPrimaryLight.opacity(0.48)
+            return Color(hex: PrimaryButtonPalette.hoverFillHex).opacity(0.42)
         }
         return .brandPrimary.opacity(0.28)
     }

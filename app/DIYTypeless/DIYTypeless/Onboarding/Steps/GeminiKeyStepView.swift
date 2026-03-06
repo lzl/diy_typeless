@@ -9,10 +9,7 @@ struct GeminiKeyStepView: View {
             title: "Gemini API Key",
             subtitle: "Polishes your transcript into clean text."
         ) {
-            OnboardingIconBadge(
-                systemName: "sparkles",
-                tint: Color(hex: OnboardingTheme.providerBadgeHex(for: .gemini))
-            )
+            OnboardingIconBadge(systemName: "sparkles")
         } content: {
             OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 ProviderConsoleLink {

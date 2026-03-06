@@ -27,6 +27,7 @@ final class AppThemeTests: XCTestCase {
         XCTAssertEqual(AppSize.onboardingHeight, 660)
         XCTAssertEqual(OnboardingTheme.stepViewportMinHeight, 408)
         XCTAssertEqual(OnboardingTheme.contentColumnMaxWidth, 440)
+        XCTAssertEqual(OnboardingTheme.stepViewportCornerRadius, 18)
     }
 }
 #endif
