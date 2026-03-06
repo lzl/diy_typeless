@@ -123,13 +123,6 @@ Future Swift tests should follow the same principles.
 cd app/DIYTypeless
 swift test
 
-# Run Swift app tests
-xcodebuild -project app/DIYTypeless/DIYTypeless.xcodeproj \
-  -scheme DIYTypeless \
-  -configuration Debug \
-  -derivedDataPath .context/DerivedData \
-  test -destination 'platform=macOS'
-
 # Build verification loop required by project workflow
 ./scripts/dev-loop-build.sh --testing
 ```
