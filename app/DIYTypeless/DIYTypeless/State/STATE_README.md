@@ -73,4 +73,4 @@ When AI needs to understand UI behavior:
 
 ## Testing
 
-State classes are tested with mocked use cases. See `DIYTypelessTests/State/RecordingStateTests.swift` for examples.
+State classes are tested with mocked use cases. See `Tests/DIYTypelessCoreTests/RecordingStateTests.swift` for examples.

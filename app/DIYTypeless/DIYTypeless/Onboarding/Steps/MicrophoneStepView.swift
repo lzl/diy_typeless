@@ -5,46 +5,43 @@ struct MicrophoneStepView: View {
     @Bindable var state: OnboardingState
 
     var body: some View {
-        VStack(spacing: 16) {
-            PermissionIcon(
-                icon: "mic.fill",
-                granted: state.permissions.microphone
-            )
-            .frame(height: 100)
-            .breathing(intensity: 0.03, duration: 3.0)
-            .opacity(state.permissions.microphone ? 1.0 : 0.7)
-
-            VStack(spacing: 8) {
-                Text("Microphone Access")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.textPrimary)
-
-                Text("Required to record your voice.")
-                    .font(.system(size: 14))
-                    .foregroundColor(.textSecondary)
-            }
-
-            VStack(spacing: 12) {
+        OnboardingStepScaffold(
+            title: "Microphone Access",
+            subtitle: "Required to record your voice."
+        ) {
+            OnboardingIconBadge(systemName: "mic.fill")
+        } content: {
+            OnboardingSurfaceCard(padding: 20, minHeight: 156) {
                 if state.permissions.microphone {
-                    StatusBadge(granted: true)
-                        .transition(.scale.combined(with: .opacity))
-                } else {
-                    Button("Grant Access") {
-                        state.requestMicrophonePermission()
-                    }
-                    .buttonStyle(EnhancedSecondaryButtonStyle())
+                    VStack(spacing: 10) {
+                        StatusBadge(granted: true)
+                            .transition(.scale.combined(with: .opacity))
 
-                    Button("Open System Settings") {
-                        state.openMicrophoneSettings()
+                        Text("Microphone access is ready for recording.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundColor(.textSecondary)
+                } else {
+                    VStack(spacing: 12) {
+                        Text("We only use this to capture audio while you hold Fn.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("Grant Access") {
+                            state.requestMicrophonePermission()
+                        }
+                        .buttonStyle(EnhancedSecondaryButtonStyle())
+
+                        Button("Open System Settings") {
+                            state.openMicrophoneSettings()
+                        }
+                        .quietLinkButton()
+                    }
                 }
             }
-            .padding(.top, 8)
             .animation(AppAnimation.stateChange, value: state.permissions.microphone)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

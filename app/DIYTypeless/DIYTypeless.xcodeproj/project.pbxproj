@@ -10,11 +10,7 @@
 			0445F1602F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */; };
 			0445F1622F2C8E4900B25EC2 /* libdiy_typeless_core.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = 0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 			E1B0A5A6F35A4EC5A66A0002 /* DIYTypelessCore in Frameworks */ = {isa = PBXBuildFile; productRef = E1B0A5A7F35A4EC5A66A0003 /* DIYTypelessCore */; };
-			E1B0A5ABF35A4EC5A66A0007 /* DIYTypelessCore in Frameworks */ = {isa = PBXBuildFile; productRef = E1B0A5AAF35A4EC5A66A0006 /* DIYTypelessCore */; };
 /* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		0445F1612F2C8E1F00B25EC2 /* CopyFiles */ = {
@@ -32,7 +28,6 @@
 /* Begin PBXFileReference section */
 		0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DIYTypeless.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0445F15F2F2C8DFE00B25EC2 /* libdiy_typeless_core.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libdiy_typeless_core.dylib; path = "$(PROJECT_DIR)/../../target/$(RUST_PROFILE)/libdiy_typeless_core.dylib"; sourceTree = "<group>"; };
-		38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DIYTypelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,11 +39,6 @@
 		E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Sources/DIYTypelessCore;
-			sourceTree = "<group>";
-		};
-		193431A1680610C673B7D837 /* DIYTypelessTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Tests/DIYTypelessCoreTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -63,14 +53,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-			3FD0CE21BC37F19B9BDAC1EE /* Frameworks */ = {
-				isa = PBXFrameworksBuildPhase;
-				buildActionMask = 2147483647;
-				files = (
-					E1B0A5ABF35A4EC5A66A0007 /* DIYTypelessCore in Frameworks */,
-				);
-				runOnlyForDeploymentPostprocessing = 0;
-			};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,7 +61,6 @@
 			children = (
 				0445F1202F2C8CB800B25EC2 /* DIYTypeless */,
 				E1B0A5A5F35A4EC5A66A0001 /* DIYTypelessCore */,
-				193431A1680610C673B7D837 /* DIYTypelessTests */,
 				0445F15E2F2C8DFE00B25EC2 /* Frameworks */,
 				0445F11F2F2C8CB800B25EC2 /* Products */,
 			);
@@ -89,7 +70,6 @@
 			isa = PBXGroup;
 			children = (
 				0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */,
-				38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -129,29 +109,6 @@
 			productReference = 0445F11E2F2C8CB800B25EC2 /* DIYTypeless.app */;
 			productType = "com.apple.product-type.application";
 		};
-			4C1802A5CD2D8723A2D3C658 /* DIYTypelessTests */ = {
-				isa = PBXNativeTarget;
-				buildConfigurationList = 9E957A03E05DEFC926E6AD85 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */;
-			buildPhases = (
-				DD9D87B8F9A2765A32A129B3 /* Sources */,
-				3FD0CE21BC37F19B9BDAC1EE /* Frameworks */,
-				260C7497D9D282431C7701BD /* Resources */,
-			);
-				buildRules = (
-				);
-				dependencies = (
-				);
-			fileSystemSynchronizedGroups = (
-				193431A1680610C673B7D837 /* DIYTypelessTests */,
-			);
-				name = DIYTypelessTests;
-				packageProductDependencies = (
-					E1B0A5AAF35A4EC5A66A0006 /* DIYTypelessCore */,
-				);
-				productName = DIYTypelessTests;
-				productReference = 38F91E1730F1F2E9AA0716A8 /* DIYTypelessTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -163,9 +120,6 @@
 				LastUpgradeCheck = 2620;
 					TargetAttributes = {
 						0445F11D2F2C8CB800B25EC2 = {
-							CreatedOnToolsVersion = 26.2;
-						};
-						4C1802A5CD2D8723A2D3C658 = {
 							CreatedOnToolsVersion = 26.2;
 						};
 					};
@@ -188,20 +142,12 @@
 			projectRoot = "";
 			targets = (
 				0445F11D2F2C8CB800B25EC2 /* DIYTypeless */,
-				4C1802A5CD2D8723A2D3C658 /* DIYTypelessTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0445F11C2F2C8CB800B25EC2 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		260C7497D9D282431C7701BD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -218,17 +164,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DD9D87B8F9A2765A32A129B3 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-/* End PBXTargetDependency section */
 
 /* Begin XCLocalSwiftPackageReference section */
 		E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */ = {
@@ -436,55 +372,10 @@
 			};
 			name = Release;
 		};
-			D823442F526B2800B71725EE /* Debug */ = {
-				isa = XCBuildConfiguration;
-				buildSettings = {
-					CODE_SIGN_STYLE = Automatic;
-					CURRENT_PROJECT_VERSION = 1;
-					GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@loader_path/../Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					STRING_CATALOG_GENERATE_SYMBOLS = YES;
-					SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-					SWIFT_VERSION = 5.0;
-				};
-				name = Debug;
-			};
-			929F381D6B006D0527C51976 /* Release */ = {
-				isa = XCBuildConfiguration;
-				buildSettings = {
-					CODE_SIGN_STYLE = Automatic;
-					CURRENT_PROJECT_VERSION = 1;
-					GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@loader_path/../Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lizunlong.DIYTypelessTests;
-					PRODUCT_NAME = "$(TARGET_NAME)";
-					STRING_CATALOG_GENERATE_SYMBOLS = YES;
-					SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
-					SWIFT_VERSION = 5.0;
-				};
-				name = Release;
-			};
 /* End XCBuildConfiguration section */
 
 /* Begin XCSwiftPackageProductDependency section */
 			E1B0A5A7F35A4EC5A66A0003 /* DIYTypelessCore */ = {
-				isa = XCSwiftPackageProductDependency;
-				package = E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */;
-				productName = DIYTypelessCore;
-			};
-			E1B0A5AAF35A4EC5A66A0006 /* DIYTypelessCore */ = {
 				isa = XCSwiftPackageProductDependency;
 				package = E1B0A5A8F35A4EC5A66A0004 /* XCLocalSwiftPackageReference "." */;
 				productName = DIYTypelessCore;
@@ -506,15 +397,6 @@
 			buildConfigurations = (
 				0445F1402F2C8CB900B25EC2 /* Debug */,
 				0445F1412F2C8CB900B25EC2 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		9E957A03E05DEFC926E6AD85 /* Build configuration list for PBXNativeTarget "DIYTypelessTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D823442F526B2800B71725EE /* Debug */,
-				929F381D6B006D0527C51976 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

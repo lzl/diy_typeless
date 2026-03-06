@@ -13,15 +13,21 @@ struct EnhancedPrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 14, weight: .semibold))
             .foregroundColor(foregroundColor)
-            .padding(.horizontal, .md)
-            .padding(.vertical, .sm)
+            .padding(.horizontal, 18)
+            .frame(height: 40)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(backgroundColor(for: configuration))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(borderColor(for: configuration), lineWidth: 1)
+            )
+            .shadow(
+                color: isEnabled ? Color.glowPrimary.opacity(configuration.isPressed ? 0.08 : 0.12) : .clear,
+                radius: configuration.isPressed ? 4 : 10,
+                x: 0,
+                y: configuration.isPressed ? 2 : 6
             )
             .scaleEffect(scale(for: configuration))
             .opacity(opacity(for: configuration))
@@ -32,33 +38,33 @@ struct EnhancedPrimaryButtonStyle: ButtonStyle {
     }
 
     private var foregroundColor: Color {
-        isEnabled ? .white : .textMuted
+        isEnabled ? .buttonPrimaryForeground : .buttonPrimaryForegroundDisabled
     }
 
     private func backgroundColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .brandPrimary.opacity(0.3)
+            return .buttonPrimaryBackgroundDisabled
         }
         if configuration.isPressed {
-            return .brandPrimary.opacity(0.7)
+            return .buttonPrimaryBackgroundPressed
         }
         if isHovered {
-            return .brandPrimaryLight
+            return .buttonPrimaryBackgroundHover
         }
-        return .brandPrimary
+        return .buttonPrimaryBackground
     }
 
     private func borderColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .clear
+            return .buttonPrimaryBorderDisabled
         }
         if configuration.isPressed {
-            return .brandPrimary.opacity(0.5)
+            return .buttonPrimaryBorderPressed
         }
         if isHovered {
-            return .brandPrimaryLight.opacity(0.5)
+            return .buttonPrimaryBorderHover
         }
-        return .brandPrimary.opacity(0.3)
+        return .buttonPrimaryBorder
     }
 
     private func scale(for configuration: Configuration) -> CGFloat {
@@ -85,14 +91,14 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 14, weight: .medium))
             .foregroundColor(foregroundColor)
-            .padding(.horizontal, .md)
-            .padding(.vertical, .sm)
+            .padding(.horizontal, 16)
+            .frame(height: 40)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(backgroundColor(for: configuration))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(borderColor(for: configuration), lineWidth: 1)
             )
             .scaleEffect(scale(for: configuration))
@@ -109,7 +115,7 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
 
     private func backgroundColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .buttonSecondaryBackground.opacity(0.5)
+            return .buttonSecondaryBackground.opacity(0.75)
         }
         if configuration.isPressed {
             return .buttonSecondaryBackgroundPressed
@@ -122,7 +128,7 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
 
     private func borderColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .buttonSecondaryBorder.opacity(0.5)
+            return .buttonSecondaryBorder.opacity(0.6)
         }
         if configuration.isPressed {
             return .buttonSecondaryBorderPressed
@@ -145,6 +151,22 @@ struct EnhancedSecondaryButtonStyle: ButtonStyle {
             return 0.5
         }
         return configuration.isPressed ? 0.85 : 1.0
+    }
+}
+
+// MARK: - Quiet Link Button Style
+struct QuietLinkButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(isHovered ? Color.brandAccent : Color.linkQuiet)
+            .underline(isHovered)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(AppAnimation.micro, value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.15), value: isHovered)
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -377,5 +399,10 @@ extension View {
     /// Applies menu bar button style
     func menuBarButton() -> some View {
         buttonStyle(MenuBarButtonStyle())
+    }
+
+    /// Applies the quiet inline link treatment used by onboarding utility actions.
+    func quietLinkButton() -> some View {
+        buttonStyle(QuietLinkButtonStyle())
     }
 }

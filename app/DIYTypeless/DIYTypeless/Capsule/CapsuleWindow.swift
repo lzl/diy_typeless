@@ -141,15 +141,18 @@ final class CapsuleWindowController {
     }
 
     private func shouldPanelBeKey(capsuleState: CapsuleState, isResultLayerVisible: Bool) -> Bool {
-        if isResultLayerVisible {
-            return true
-        }
-        switch capsuleState {
-        case .recording, .transcribing, .polishing, .processingCommand:
-            return true
-        default:
+        CapsuleFocusCapturePolicy.shouldCaptureKeyFocus(
+            capsuleState: capsuleState,
+            isResultLayerVisible: isResultLayerVisible,
+            hasOtherKeyWindow: hasOtherKeyWindow()
+        )
+    }
+
+    private func hasOtherKeyWindow() -> Bool {
+        guard let keyWindow = NSApp.keyWindow else {
             return false
         }
+        return keyWindow !== panel
     }
 
     private func positionWindow() {

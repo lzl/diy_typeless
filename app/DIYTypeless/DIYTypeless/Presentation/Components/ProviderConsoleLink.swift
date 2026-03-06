@@ -4,20 +4,23 @@ import DIYTypelessCore
 
 struct ProviderConsoleLink: View {
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 0) {
-                Text("Don't have an API key? ")
-                    .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Text("Don't have an API key?")
+                    .foregroundStyle(Color.textSecondary)
+
                 Text("Get one here")
-                    .foregroundColor(.accentColor)
-                    .underline()
+                    .foregroundStyle(isHovered ? Color.brandAccent : Color.linkQuiet)
+                    .underline(isHovered)
             }
-            .font(.system(size: 13))
+            .font(.system(size: 13, weight: .medium))
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
         .onHover { isHovered in
+            self.isHovered = isHovered
             if isHovered {
                 NSCursor.pointingHand.push()
             } else {
