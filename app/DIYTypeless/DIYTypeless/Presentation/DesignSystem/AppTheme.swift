@@ -3,6 +3,7 @@ import DIYTypelessCore
 
 enum AppTheme {
     static let brandPrimaryHex = "#6F8F87"
+    static let brandPrimaryDarkHex = "#5D7871"
     static let brandPrimaryLightHex = "#A9C1BA"
     static let brandAccentHex = "#7F8C99"
     static let brandAccentLightHex = "#CAD2D8"

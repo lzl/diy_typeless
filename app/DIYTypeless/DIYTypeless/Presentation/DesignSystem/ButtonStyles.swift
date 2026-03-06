@@ -38,33 +38,33 @@ struct EnhancedPrimaryButtonStyle: ButtonStyle {
     }
 
     private var foregroundColor: Color {
-        isEnabled ? .white : .textMuted
+        isEnabled ? .buttonPrimaryForeground : .buttonPrimaryForegroundDisabled
     }
 
     private func backgroundColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .brandPrimary.opacity(0.35)
+            return .buttonPrimaryBackgroundDisabled
         }
         if configuration.isPressed {
-            return .brandPrimary.opacity(0.82)
+            return .buttonPrimaryBackgroundPressed
         }
         if isHovered {
-            return Color(hex: PrimaryButtonPalette.hoverFillHex)
+            return .buttonPrimaryBackgroundHover
         }
-        return .brandPrimary
+        return .buttonPrimaryBackground
     }
 
     private func borderColor(for configuration: Configuration) -> Color {
         if !isEnabled {
-            return .brandPrimary.opacity(0.1)
+            return .buttonPrimaryBorderDisabled
         }
         if configuration.isPressed {
-            return .brandPrimaryLight.opacity(0.32)
+            return .buttonPrimaryBorderPressed
         }
         if isHovered {
-            return Color(hex: PrimaryButtonPalette.hoverFillHex).opacity(0.42)
+            return .buttonPrimaryBorderHover
         }
-        return .brandPrimary.opacity(0.28)
+        return .buttonPrimaryBorder
     }
 
     private func scale(for configuration: Configuration) -> CGFloat {

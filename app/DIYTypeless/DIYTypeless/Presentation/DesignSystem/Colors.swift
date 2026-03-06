@@ -30,6 +30,7 @@ extension Color {
 
     // MARK: Brand Colors
     static let brandPrimary = Color(hex: AppTheme.brandPrimaryHex)
+    static let brandPrimaryDark = Color(hex: AppTheme.brandPrimaryDarkHex)
     static let brandPrimaryLight = Color(hex: AppTheme.brandPrimaryLightHex)
     static let brandAccent = Color(hex: AppTheme.brandAccentHex)
     static let brandAccentLight = Color(hex: AppTheme.brandAccentLightHex)
@@ -132,6 +133,54 @@ extension Color {
 
 // MARK: - Button Colors
 extension Color {
+    /// Primary button label color
+    static let buttonPrimaryForeground = Color.white
+
+    /// Primary button label color when disabled
+    static var buttonPrimaryForegroundDisabled: Color {
+        textMuted
+    }
+
+    /// Primary button background
+    static var buttonPrimaryBackground: Color {
+        brandPrimary
+    }
+
+    /// Primary button background when hovered
+    static var buttonPrimaryBackgroundHover: Color {
+        brandPrimaryDark
+    }
+
+    /// Primary button background when pressed
+    static var buttonPrimaryBackgroundPressed: Color {
+        brandPrimary.opacity(0.82)
+    }
+
+    /// Primary button background when disabled
+    static var buttonPrimaryBackgroundDisabled: Color {
+        brandPrimary.opacity(0.35)
+    }
+
+    /// Primary button border
+    static var buttonPrimaryBorder: Color {
+        brandPrimary.opacity(0.28)
+    }
+
+    /// Primary button border when hovered
+    static var buttonPrimaryBorderHover: Color {
+        buttonPrimaryBackgroundHover.opacity(0.42)
+    }
+
+    /// Primary button border when pressed
+    static var buttonPrimaryBorderPressed: Color {
+        brandPrimaryLight.opacity(0.32)
+    }
+
+    /// Primary button border when disabled
+    static var buttonPrimaryBorderDisabled: Color {
+        brandPrimary.opacity(0.1)
+    }
+
     /// Secondary button background (neutral, adaptive)
     static var buttonSecondaryBackground: Color {
         appSurfaceRaised

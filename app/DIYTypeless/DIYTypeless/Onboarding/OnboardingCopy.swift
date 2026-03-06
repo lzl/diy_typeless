@@ -92,7 +92,3 @@ enum CapsuleFocusCapturePolicy {
         }
     }
 }
-
-enum PrimaryButtonPalette {
-    static let hoverFillHex = "#5D7871"
-}
