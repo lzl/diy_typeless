@@ -192,7 +192,6 @@ struct OnboardingWindow: View {
 
             VStack(spacing: 0) {
                 stepIndicator
-                    .padding(.top, 16)
                     .padding(.bottom, 20)
 
                 stepView

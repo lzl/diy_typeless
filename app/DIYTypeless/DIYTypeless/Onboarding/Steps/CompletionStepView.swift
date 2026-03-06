@@ -14,8 +14,7 @@ struct CompletionStepView: View {
     var body: some View {
         OnboardingStepScaffold(
             title: "All Set",
-            subtitle: "Try DIY Typeless in the field below.",
-            layoutMode: .centered
+            subtitle: "Try DIY Typeless in the field below."
         ) {
             OnboardingIconBadge(systemName: "checkmark.circle.fill")
         } content: {
