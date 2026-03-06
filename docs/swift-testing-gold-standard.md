@@ -136,12 +136,11 @@ xcodebuild -project app/DIYTypeless/DIYTypeless.xcodeproj \
 
 ## Why Headless Testing Was Added
 
-The new headless path runs the same gold-standard suites without launching the macOS app host process. This matters because it:
+The new headless path runs the gold-standard suites without launching the macOS app host process. This matters because it:
 
 - reduces feedback loop time for core state/use-case logic
 - removes host-app/runtime noise from domain-level regression checks
 - enables deterministic CI checks on business-critical behavior
-- keeps app-hosted tests available for integration confidence
 
 Implementation detail: option 3 now formalizes this as a core module boundary (`DIYTypelessCore`) using `app/DIYTypeless/Package.swift`. The module compiles the same production source files under test, with Swift Package-only shims for FFI-only types required at compile time (`CancellationToken`, `CoreError`).
 

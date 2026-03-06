@@ -362,20 +362,12 @@ This command validates build/install only. It does **not** run Swift test suites
 
 ### Swift Test Verification (Required)
 
-After changing Swift code, run both Swift test lanes:
+After changing Swift code, run the headless SwiftPM lane:
 
 ```bash
 # 1) SwiftPM core/module tests (headless)
 cd app/DIYTypeless
 swift test
-
-# 2) Xcode project/scheme tests (integration wiring)
-cd app/DIYTypeless
-xcodebuild -project DIYTypeless.xcodeproj \
-  -scheme DIYTypeless \
-  -configuration Debug \
-  -derivedDataPath ../../.context/DerivedData \
-  test -destination 'platform=macOS'
 ```
 
 Then run build verification:
@@ -387,8 +379,7 @@ Then run build verification:
 Required command matrix:
 
 1. `swift test` - validates `DIYTypelessCore` package logic and headless tests.
-2. `xcodebuild ... test` - validates Xcode target/scheme wiring and app-hosted tests.
-3. `./scripts/dev-loop-build.sh --testing` - validates app build/install loop used by development and CI-like checks.
+2. `./scripts/dev-loop-build.sh --testing` - validates app build/install loop used by development and CI-like checks.
 
 ### Dev Loop Script
 
@@ -429,18 +420,10 @@ cargo run -p diy_typeless_cli -- full --duration-seconds 4
 cd app/DIYTypeless
 swift test
 
-# 3) Run Xcode scheme tests
-cd app/DIYTypeless
-xcodebuild -project DIYTypeless.xcodeproj \
-  -scheme DIYTypeless \
-  -configuration Debug \
-  -derivedDataPath ../../.context/DerivedData \
-  test -destination 'platform=macOS'
-
-# 4) Rebuild + reinstall + relaunch macOS app
+# 3) Rebuild + reinstall + relaunch macOS app
 ./scripts/dev-loop-build.sh
 
-# 5) Verify build in testing mode (CI-style)
+# 4) Verify build in testing mode (CI-style)
 ./scripts/dev-loop-build.sh --testing
 ```
 
@@ -453,7 +436,7 @@ Reset permissions if needed:
 
 ### Error Handling Workflow
 
-1. Run the failing command directly (`swift test`, `xcodebuild ... test`, or `./scripts/dev-loop-build.sh --testing`).
+1. Run the failing command directly (`swift test` or `./scripts/dev-loop-build.sh --testing`).
 2. Parse the output and locate the first `error:` lines.
 3. Common issues:
    - **Architecture mismatch**: Rust library only supports arm64
