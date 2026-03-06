@@ -5,23 +5,16 @@ struct GroqKeyStepView: View {
     @Bindable var state: OnboardingState
 
     var body: some View {
-        VStack(spacing: 20) {
+        OnboardingStepScaffold(
+            title: "Groq API Key",
+            subtitle: "Powers fast speech-to-text with Whisper."
+        ) {
             OnboardingIconBadge(
                 systemName: "waveform.circle.fill",
                 tint: Color(hex: OnboardingTheme.providerBadgeHex(for: .groq))
             )
-
-            VStack(spacing: 8) {
-                Text("Groq API Key")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-
-                Text("Powers fast speech-to-text with Whisper.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            OnboardingSurfaceCard(alignment: .leading) {
+        } content: {
+            OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 ProviderConsoleLink {
                     state.openProviderConsole(for: .groq)
                 }
@@ -54,6 +47,5 @@ struct GroqKeyStepView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

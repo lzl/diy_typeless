@@ -18,7 +18,12 @@ struct WelcomeStepView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        OnboardingStepScaffold(
+            title: "DIY Typeless",
+            subtitle: "Voice to polished text, instantly.",
+            iconHeight: 118,
+            contentSpacing: 26
+        ) {
             ZStack {
                 Circle()
                     .fill(dynamicGradient)
@@ -36,21 +41,10 @@ struct WelcomeStepView: View {
                     .scaleEffect(1.0 + gradientPhase * 0.015)
                     .animation(.easeInOut(duration: 5).repeatForever(autoreverses: true), value: gradientPhase)
             }
-            .frame(height: 110)
             .onAppear { gradientPhase = 1 }
             .onDisappear { gradientPhase = 0 }
-
-            VStack(spacing: 8) {
-                Text("DIY Typeless")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-
-                Text("Voice to polished text, instantly.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            OnboardingSurfaceCard(alignment: .leading) {
+        } content: {
+            OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("What happens")
                         .font(.system(size: 13, weight: .semibold))
@@ -63,6 +57,5 @@ struct WelcomeStepView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

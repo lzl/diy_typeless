@@ -10,7 +10,12 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     init(state: OnboardingState) {
         let hosting = NSHostingController(rootView: OnboardingWindow(state: state))
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 480),
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: AppSize.onboardingWidth,
+                height: AppSize.onboardingHeight
+            ),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -19,6 +24,10 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(
+            width: AppSize.onboardingWidth,
+            height: AppSize.onboardingHeight
+        )
         window.center()
         window.contentView = hosting.view
         super.init()
@@ -98,18 +107,24 @@ struct OnboardingWindow: View {
 
             VStack(spacing: 0) {
                 stepIndicator
-                    .padding(.top, 24)
-                    .padding(.bottom, 28)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
 
                 stepView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: OnboardingTheme.stepViewportMinHeight,
+                        maxHeight: .infinity,
+                        alignment: .top
+                    )
 
                 navigationButtons
-                    .padding(.top, 24)
+                    .padding(.top, 16)
                     .padding(.bottom, 8)
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 26)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 22)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(Color.appSurface.opacity(0.96))
@@ -120,8 +135,8 @@ struct OnboardingWindow: View {
             )
             .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 18)
         }
-        .padding(20)
-        .frame(minWidth: 520, minHeight: 480)
+        .padding(14)
+        .frame(width: AppSize.onboardingWidth, height: AppSize.onboardingHeight)
         .background(Color.appBackground)
     }
 

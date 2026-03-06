@@ -5,23 +5,16 @@ struct GeminiKeyStepView: View {
     @Bindable var state: OnboardingState
 
     var body: some View {
-        VStack(spacing: 20) {
+        OnboardingStepScaffold(
+            title: "Gemini API Key",
+            subtitle: "Polishes your transcript into clean text."
+        ) {
             OnboardingIconBadge(
                 systemName: "sparkles",
                 tint: Color(hex: OnboardingTheme.providerBadgeHex(for: .gemini))
             )
-
-            VStack(spacing: 8) {
-                Text("Gemini API Key")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-
-                Text("Polishes your transcript into clean text.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            OnboardingSurfaceCard(alignment: .leading) {
+        } content: {
+            OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 ProviderConsoleLink {
                     state.openProviderConsole(for: .gemini)
                 }
@@ -54,6 +47,5 @@ struct GeminiKeyStepView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

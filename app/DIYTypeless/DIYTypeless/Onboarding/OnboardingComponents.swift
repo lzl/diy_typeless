@@ -1,17 +1,72 @@
 import SwiftUI
 
+struct OnboardingStepScaffold<Icon: View, Content: View>: View {
+    let title: String
+    let subtitle: String
+    let iconHeight: CGFloat
+    let contentSpacing: CGFloat
+    let icon: Icon
+    let content: Content
+
+    init(
+        title: String,
+        subtitle: String,
+        iconHeight: CGFloat = 110,
+        contentSpacing: CGFloat = 24,
+        @ViewBuilder icon: () -> Icon,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.iconHeight = iconHeight
+        self.contentSpacing = contentSpacing
+        self.icon = icon()
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            icon
+                .frame(height: iconHeight)
+
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.top, 16)
+
+            content
+                .padding(.top, contentSpacing)
+                .frame(maxWidth: OnboardingTheme.contentColumnMaxWidth)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
 struct OnboardingSurfaceCard<Content: View>: View {
     let alignment: HorizontalAlignment
     let padding: CGFloat
+    let minHeight: CGFloat
     @ViewBuilder let content: Content
 
     init(
         alignment: HorizontalAlignment = .center,
         padding: CGFloat = 18,
+        minHeight: CGFloat = 0,
         @ViewBuilder content: () -> Content
     ) {
         self.alignment = alignment
         self.padding = padding
+        self.minHeight = minHeight
         self.content = content()
     }
 
@@ -20,7 +75,11 @@ struct OnboardingSurfaceCard<Content: View>: View {
             content
         }
         .padding(padding)
-        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: minHeight,
+            alignment: alignment == .leading ? .leading : .center
+        )
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.appSurfaceRaised.opacity(0.96))

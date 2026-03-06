@@ -21,5 +21,12 @@ final class AppThemeTests: XCTestCase {
             AppTheme.brandAccentHex
         )
     }
+
+    func testOnboardingUsesStableWindowAndViewportSizing() {
+        XCTAssertEqual(AppSize.onboardingWidth, 560)
+        XCTAssertEqual(AppSize.onboardingHeight, 660)
+        XCTAssertEqual(OnboardingTheme.stepViewportMinHeight, 408)
+        XCTAssertEqual(OnboardingTheme.contentColumnMaxWidth, 440)
+    }
 }
 #endif

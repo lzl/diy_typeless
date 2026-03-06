@@ -5,20 +5,13 @@ struct CompletionStepView: View {
     @Bindable var state: OnboardingState
 
     var body: some View {
-        VStack(spacing: 20) {
+        OnboardingStepScaffold(
+            title: "All Set",
+            subtitle: "DIY Typeless is ready to use."
+        ) {
             OnboardingIconBadge(systemName: "checkmark.circle.fill", tone: .success)
-
-            VStack(spacing: 8) {
-                Text("All Set")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color.textPrimary)
-
-                Text("DIY Typeless is ready to use.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            OnboardingSurfaceCard(alignment: .leading) {
+        } content: {
+            OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 Text("How it works")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.linkQuiet)
@@ -30,7 +23,6 @@ struct CompletionStepView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
