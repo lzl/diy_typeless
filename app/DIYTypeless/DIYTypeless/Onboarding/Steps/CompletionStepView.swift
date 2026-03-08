@@ -16,7 +16,7 @@ struct CompletionStepView: View {
             title: "All Set",
             subtitle: "Try DIY Typeless in the field below."
         ) {
-            OnboardingIconBadge(systemName: "checkmark.circle.fill")
+            OnboardingIconBadge(systemName: "checkmark")
         } content: {
             OnboardingSurfaceCard(alignment: .leading, padding: 16, minHeight: 228) {
                 Text("Try it now")
