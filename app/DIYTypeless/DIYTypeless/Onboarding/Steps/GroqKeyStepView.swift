@@ -9,9 +9,7 @@ struct GroqKeyStepView: View {
             title: "Groq API Key",
             subtitle: "Powers fast speech-to-text with Whisper."
         ) {
-            OnboardingIconBadge {
-                OnboardingGroqLogoGlyph()
-            }
+            OnboardingIconBadge(systemName: "bolt.fill")
         } content: {
             OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 ProviderConsoleLink {
