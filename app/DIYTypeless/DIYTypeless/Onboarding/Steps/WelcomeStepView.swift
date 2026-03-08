@@ -11,7 +11,7 @@ struct WelcomeStepView: View {
             iconHeight: 118,
             contentSpacing: 24
         ) {
-            OnboardingIconBadge(systemName: "waveform.circle.fill")
+            OnboardingIconBadge(systemName: "waveform")
         } content: {
             OnboardingSurfaceCard(alignment: .leading, padding: 16) {
                 VStack(alignment: .leading, spacing: 10) {
