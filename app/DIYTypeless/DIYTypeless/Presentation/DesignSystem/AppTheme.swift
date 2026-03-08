@@ -22,8 +22,8 @@ enum AppTheme {
 enum OnboardingTheme {
     static let windowShellCornerRadius: CGFloat = 28
     static let windowOuterPadding: CGFloat = 0
-    static let windowShadowRadius: CGFloat = 24
-    static let windowShadowYOffset: CGFloat = 18
+    static let windowShadowRadius: CGFloat = 14
+    static let windowShadowYOffset: CGFloat = 0
     static let windowTrafficLightsLeadingInset: CGFloat = 14
     static let windowTrafficLightsTopInset: CGFloat = 14
     static let windowTrafficLightsSpacing: CGFloat = 8

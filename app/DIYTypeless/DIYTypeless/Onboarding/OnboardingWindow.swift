@@ -57,6 +57,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.titlebarSeparatorStyle = .none
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.hasShadow = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(
@@ -66,6 +67,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.center()
         window.contentView = hosting.view
         super.init()
+        configureWindowFrameAppearance()
         window.delegate = self
         scheduleTrafficLightsLayout()
     }
@@ -77,6 +79,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        configureWindowFrameAppearance()
         scheduleTrafficLightsLayout()
     }
 
@@ -93,10 +96,12 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        configureWindowFrameAppearance()
         scheduleTrafficLightsLayout()
     }
 
     func windowDidResize(_ notification: Notification) {
+        configureWindowFrameAppearance()
         scheduleTrafficLightsLayout()
     }
 
@@ -104,6 +109,18 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.layoutTrafficLights()
         }
+    }
+
+    private func configureWindowFrameAppearance() {
+        guard let themeFrame = window.contentView?.superview else {
+            return
+        }
+
+        themeFrame.wantsLayer = true
+        themeFrame.layer?.backgroundColor = NSColor.clear.cgColor
+        themeFrame.layer?.cornerRadius = OnboardingTheme.windowShellCornerRadius
+        themeFrame.layer?.cornerCurve = .continuous
+        themeFrame.layer?.masksToBounds = true
     }
 
     private func layoutTrafficLights() {
@@ -223,16 +240,6 @@ struct OnboardingWindow: View {
                 .fill(Color.appSurface.opacity(0.96))
         )
         .clipShape(windowShellShape)
-        .overlay(
-            windowShellShape
-                .stroke(Color.appBorderSubtle.opacity(0.82), lineWidth: 1)
-        )
-        .shadow(
-            color: .black.opacity(0.08),
-            radius: OnboardingTheme.windowShadowRadius,
-            x: 0,
-            y: OnboardingTheme.windowShadowYOffset
-        )
         .padding(OnboardingTheme.windowOuterPadding)
         .background(Color.clear)
         .ignoresSafeArea()
