@@ -35,11 +35,4 @@ enum OnboardingTheme {
     static let stepViewportMinHeight: CGFloat = 408
     static let stepViewportCornerRadius: CGFloat = 18
     static let contentColumnMaxWidth: CGFloat = 440
-
-    static func providerBadgeHex(for provider: ApiProvider) -> String {
-        switch provider {
-        case .groq, .gemini:
-            return AppTheme.brandAccentHex
-        }
-    }
 }

@@ -1,8 +1,8 @@
 //! Command-line interface for local recording, transcription, and polishing.
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use diy_typeless_core::{start_recording, stop_recording};
+use clap::{Parser, Subcommand, ValueEnum};
+use diy_typeless_core::{start_recording, stop_recording, LlmProvider};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
@@ -13,7 +13,7 @@ use commands::diagnose::{
     run_diagnose_audio, run_diagnose_env, run_diagnose_llm, run_diagnose_pipeline,
 };
 use commands::utils::{
-    copy_to_clipboard, ensure_flac_bytes, read_stdin, resolve_gemini_key, resolve_groq_key,
+    copy_to_clipboard, ensure_flac_bytes, read_stdin, resolve_groq_key, resolve_llm_key,
     resolve_output_dir, timestamp, wait_for_enter,
 };
 
@@ -23,6 +23,23 @@ use commands::utils::{
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CliLlmProvider {
+    #[value(name = "google-ai-studio")]
+    GoogleAiStudio,
+    #[value(name = "openai")]
+    Openai,
+}
+
+impl From<CliLlmProvider> for LlmProvider {
+    fn from(value: CliLlmProvider) -> Self {
+        match value {
+            CliLlmProvider::GoogleAiStudio => LlmProvider::GoogleAiStudio,
+            CliLlmProvider::Openai => LlmProvider::Openai,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -42,7 +59,9 @@ enum Commands {
     },
     Polish {
         #[arg(long)]
-        gemini_key: Option<String>,
+        llm_key: Option<String>,
+        #[arg(long, value_enum, default_value = "google-ai-studio")]
+        provider: CliLlmProvider,
         #[arg(long)]
         text: Option<String>,
         #[arg(long)]
@@ -54,7 +73,9 @@ enum Commands {
         #[arg(long)]
         groq_key: Option<String>,
         #[arg(long)]
-        gemini_key: Option<String>,
+        llm_key: Option<String>,
+        #[arg(long, value_enum, default_value = "google-ai-studio")]
+        provider: CliLlmProvider,
         #[arg(long)]
         language: Option<String>,
         #[arg(long)]
@@ -79,7 +100,9 @@ enum DiagnoseCommands {
     },
     Llm {
         #[arg(long)]
-        gemini_key: Option<String>,
+        llm_key: Option<String>,
+        #[arg(long, value_enum, default_value = "google-ai-studio")]
+        provider: CliLlmProvider,
         #[arg(long)]
         prompt: String,
         #[arg(long)]
@@ -96,7 +119,9 @@ enum DiagnoseCommands {
         #[arg(long)]
         groq_key: Option<String>,
         #[arg(long)]
-        gemini_key: Option<String>,
+        llm_key: Option<String>,
+        #[arg(long, value_enum, default_value = "google-ai-studio")]
+        provider: CliLlmProvider,
         #[arg(long)]
         language: Option<String>,
         #[arg(long)]
@@ -121,21 +146,24 @@ fn main() -> Result<()> {
             language,
         } => cmd_transcribe(file, groq_key, language),
         Commands::Polish {
-            gemini_key,
+            llm_key,
+            provider,
             text,
             context,
-        } => cmd_polish(gemini_key, text, context),
+        } => cmd_polish(provider.into(), llm_key, text, context),
         Commands::Full {
             output_dir,
             groq_key,
-            gemini_key,
+            llm_key,
+            provider,
             language,
             duration_seconds,
             context,
         } => cmd_full(
             output_dir,
             groq_key,
-            gemini_key,
+            provider.into(),
+            llm_key,
             language,
             duration_seconds,
             context,
@@ -147,14 +175,16 @@ fn main() -> Result<()> {
                 output,
             } => run_diagnose_audio(duration_seconds, output),
             DiagnoseCommands::Llm {
-                gemini_key,
+                llm_key,
+                provider,
                 prompt,
                 system_instruction,
                 temperature,
                 cancel_immediately,
             } => run_diagnose_llm(
                 prompt,
-                gemini_key,
+                provider.into(),
+                llm_key,
                 system_instruction,
                 temperature,
                 cancel_immediately,
@@ -163,7 +193,8 @@ fn main() -> Result<()> {
                 file,
                 output_dir,
                 groq_key,
-                gemini_key,
+                llm_key,
+                provider,
                 language,
                 transcribe_only,
                 context,
@@ -171,7 +202,8 @@ fn main() -> Result<()> {
                 file,
                 output_dir,
                 groq_key,
-                gemini_key,
+                provider.into(),
+                llm_key,
                 language,
                 transcribe_only,
                 context,
@@ -224,18 +256,23 @@ fn cmd_transcribe(file: PathBuf, groq_key: Option<String>, language: Option<Stri
 }
 
 fn cmd_polish(
-    gemini_key: Option<String>,
+    provider: LlmProvider,
+    llm_key: Option<String>,
     text: Option<String>,
     context: Option<String>,
 ) -> Result<()> {
-    let api_key = resolve_gemini_key(gemini_key)?;
+    let api_key = resolve_llm_key(provider, llm_key)?;
     let raw_text = match text {
         Some(text) => text,
         None => read_stdin()?,
     };
     use secrecy::ExposeSecret;
-    let polished =
-        diy_typeless_core::polish_text(api_key.expose_secret().to_string(), raw_text, context)?;
+    let polished = diy_typeless_core::polish_text(
+        provider,
+        api_key.expose_secret().to_string(),
+        raw_text,
+        context,
+    )?;
     println!("{polished}");
     copy_to_clipboard(&polished);
     Ok(())
@@ -245,12 +282,13 @@ fn cmd_polish(
 fn cmd_full(
     output_dir: Option<PathBuf>,
     groq_key: Option<String>,
-    gemini_key: Option<String>,
+    provider: LlmProvider,
+    llm_key: Option<String>,
     language: Option<String>,
     duration_seconds: Option<u64>,
     context: Option<String>,
 ) -> Result<()> {
-    let gemini_key = resolve_gemini_key(gemini_key)?;
+    let llm_key = resolve_llm_key(provider, llm_key)?;
     let output_dir = resolve_output_dir(output_dir)?;
     fs::create_dir_all(&output_dir)?;
 
@@ -258,8 +296,12 @@ fn cmd_full(
 
     println!("Polishing...");
     use secrecy::ExposeSecret;
-    let polished_text =
-        diy_typeless_core::polish_text(gemini_key.expose_secret().to_string(), raw_text, context)?;
+    let polished_text = diy_typeless_core::polish_text(
+        provider,
+        llm_key.expose_secret().to_string(),
+        raw_text,
+        context,
+    )?;
 
     let polished_path = output_dir.join(format!("recording_{}_polished.txt", timestamp()));
     fs::write(&polished_path, &polished_text)?;
@@ -308,4 +350,46 @@ fn run_groq_full(
     fs::write(&raw_path, &text)?;
 
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, CliLlmProvider, Commands};
+    use clap::Parser;
+
+    #[test]
+    fn polish_command_should_accept_openai_provider() {
+        let cli = Cli::try_parse_from([
+            "diy-typeless",
+            "polish",
+            "--provider",
+            "openai",
+            "--text",
+            "hello",
+        ])
+        .expect("cli should parse");
+
+        match cli.command {
+            Commands::Polish { provider, .. } => assert_eq!(provider, CliLlmProvider::Openai),
+            _ => panic!("expected polish command"),
+        }
+    }
+
+    #[test]
+    fn full_command_should_accept_openai_provider() {
+        let cli = Cli::try_parse_from([
+            "diy-typeless",
+            "full",
+            "--provider",
+            "openai",
+            "--duration-seconds",
+            "1",
+        ])
+        .expect("cli should parse");
+
+        match cli.command {
+            Commands::Full { provider, .. } => assert_eq!(provider, CliLlmProvider::Openai),
+            _ => panic!("expected full command"),
+        }
+    }
 }

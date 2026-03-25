@@ -5,6 +5,7 @@ public final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
 
     public func execute(
         rawText: String,
+        provider: ApiProvider,
         apiKey: String,
         context: String?,
         cancellationToken: CancellationToken?
@@ -41,6 +42,7 @@ public final class PolishTextUseCaseImpl: PolishTextUseCaseProtocol {
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
                         let polished = try CoreFFIRuntime.polishTextCancellable(
+                            provider: provider,
                             apiKey: apiKey,
                             rawText: rawText,
                             context: context,

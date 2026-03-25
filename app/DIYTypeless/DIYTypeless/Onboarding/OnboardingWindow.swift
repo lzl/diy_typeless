@@ -281,7 +281,7 @@ struct OnboardingWindow: View {
         case .groqKey:
             GroqKeyStepView(state: state)
                 .transition(transition)
-        case .geminiKey:
+        case .llmProvider:
             GeminiKeyStepView(state: state)
                 .transition(transition)
         case .completion:

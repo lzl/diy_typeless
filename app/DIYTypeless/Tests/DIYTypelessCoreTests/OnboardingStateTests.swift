@@ -29,16 +29,25 @@ final class OnboardingStateTests: XCTestCase {
         apiKeyRepository.keys[.groq] = "groq-key"
         apiKeyRepository.keys[.gemini] = "gemini-key"
         let validateUseCase = MockValidateApiKeyUseCase()
+        let providerRepository = MockPreferredLLMProviderRepository(provider: .gemini)
 
         let (sut, _) = makeSUT(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: providerRepository,
             validateApiKeyUseCase: validateUseCase
         )
 
         XCTAssertEqual(sut.step, .completion)
+        XCTAssertEqual(sut.selectedLLMProvider, .gemini)
         XCTAssertEqual(sut.groqValidation, .success)
-        XCTAssertEqual(sut.geminiValidation, .success)
+        XCTAssertEqual(sut.activeLLMValidation, .success)
+    }
+
+    func testInit_withoutStoredProvider_defaultsToGeminiSelection() async {
+        let (sut, _) = makeSUT()
+
+        XCTAssertEqual(sut.selectedLLMProvider, .gemini)
     }
 
     func testValidateGroqKey_whenInputIsEmpty_setsFailureMessage() async {
@@ -91,6 +100,58 @@ final class OnboardingStateTests: XCTestCase {
         XCTAssertEqual(sut.geminiValidation, .failure("Gemini key rejected"))
     }
 
+    func testValidateActiveLLMKey_whenProviderIsOpenAI_savesTrimmedKeyForOpenAI() async {
+        let apiKeyRepository = MockApiKeyRepository()
+        let providerRepository = MockPreferredLLMProviderRepository(provider: .openai)
+        let validateUseCase = MockValidateApiKeyUseCase()
+        let (sut, dependencies) = makeSUT(
+            apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: providerRepository,
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        sut.openAIKey = "  sk-openai  "
+        sut.validateActiveLLMKey()
+
+        await waitUntil { sut.activeLLMValidation == .success }
+
+        XCTAssertEqual(sut.selectedLLMProvider, .openai)
+        XCTAssertEqual(dependencies.validateApiKeyUseCase.executeCalls.last?.provider, .openai)
+        XCTAssertEqual(dependencies.validateApiKeyUseCase.executeCalls.last?.key, "sk-openai")
+        XCTAssertEqual(dependencies.apiKeyRepository.saveCalls.last?.provider, .openai)
+        XCTAssertEqual(dependencies.apiKeyRepository.saveCalls.last?.key, "sk-openai")
+    }
+
+    func testSwitchSelectedLLMProvider_whenInactiveProviderFails_doesNotBlockCurrentProvider() async {
+        UserDefaults.standard.set(true, forKey: hasCompletedWelcomeKey)
+
+        let permissionRepository = MockPermissionRepository(
+            currentStatus: PermissionStatus(accessibility: true, microphone: true)
+        )
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq-key"
+        apiKeyRepository.keys[.gemini] = "gemini-key"
+        apiKeyRepository.keys[.openai] = "openai-key"
+        let providerRepository = MockPreferredLLMProviderRepository(provider: .openai)
+        let validateUseCase = MockValidateApiKeyUseCase()
+        validateUseCase.behaviorByProvider[.gemini] = .failure(
+            ValidationError(message: "Inactive Gemini key rejected")
+        )
+
+        let (sut, _) = makeSUT(
+            permissionRepository: permissionRepository,
+            apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: providerRepository,
+            validateApiKeyUseCase: validateUseCase
+        )
+
+        await waitUntil { sut.activeLLMValidation == .success }
+
+        XCTAssertEqual(sut.selectedLLMProvider, .openai)
+        XCTAssertEqual(sut.step, .completion)
+        XCTAssertEqual(sut.activeLLMValidation, .success)
+    }
+
     func testEditingKey_resetsValidationStateToIdle() async {
         let (sut, _) = makeSUT()
         sut.groqKey = "first"
@@ -111,6 +172,7 @@ final class OnboardingStateTests: XCTestCase {
         let sut = OnboardingState(
             permissionRepository: MockPermissionRepository(),
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: MockPreferredLLMProviderRepository(),
             externalLinkRepository: MockExternalLinkRepository(),
             validateApiKeyUseCase: validateUseCase
         )
@@ -147,6 +209,7 @@ final class OnboardingStateTests: XCTestCase {
         let sut = OnboardingState(
             permissionRepository: MockPermissionRepository(),
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: MockPreferredLLMProviderRepository(),
             externalLinkRepository: MockExternalLinkRepository(),
             validateApiKeyUseCase: validateUseCase
         )
@@ -178,6 +241,7 @@ final class OnboardingStateTests: XCTestCase {
         let sut = OnboardingState(
             permissionRepository: MockPermissionRepository(),
             apiKeyRepository: MockApiKeyRepository(),
+            preferredLLMProviderRepository: MockPreferredLLMProviderRepository(),
             externalLinkRepository: MockExternalLinkRepository(),
             validateApiKeyUseCase: validateUseCase
         )
@@ -202,12 +266,14 @@ final class OnboardingStateTests: XCTestCase {
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
+        preferredLLMProviderRepository: MockPreferredLLMProviderRepository = MockPreferredLLMProviderRepository(),
         externalLinkRepository: MockExternalLinkRepository = MockExternalLinkRepository(),
         validateApiKeyUseCase: MockValidateApiKeyUseCase = MockValidateApiKeyUseCase()
     ) -> (sut: OnboardingState, dependencies: Dependencies) {
         let sut = OnboardingState(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             externalLinkRepository: externalLinkRepository,
             validateApiKeyUseCase: validateApiKeyUseCase
         )
@@ -215,6 +281,7 @@ final class OnboardingStateTests: XCTestCase {
         let dependencies = Dependencies(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             externalLinkRepository: externalLinkRepository,
             validateApiKeyUseCase: validateApiKeyUseCase
         )
@@ -225,6 +292,7 @@ final class OnboardingStateTests: XCTestCase {
     struct Dependencies {
         let permissionRepository: MockPermissionRepository
         let apiKeyRepository: MockApiKeyRepository
+        let preferredLLMProviderRepository: MockPreferredLLMProviderRepository
         let externalLinkRepository: MockExternalLinkRepository
         let validateApiKeyUseCase: MockValidateApiKeyUseCase
     }

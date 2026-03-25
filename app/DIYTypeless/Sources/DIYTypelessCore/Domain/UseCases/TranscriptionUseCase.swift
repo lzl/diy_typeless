@@ -6,11 +6,17 @@ public protocol TranscriptionUseCaseProtocol: Sendable {
     /// Executes the complete transcription pipeline
     /// - Parameters:
     ///   - groqKey: Groq API key for transcription
-    ///   - geminiKey: Gemini API key for text polishing
+    ///   - llmProvider: Active provider for text polishing
+    ///   - llmApiKey: Provider API key for text polishing
     ///   - context: Optional context about the active application
     /// - Returns: TranscriptionResult containing raw and polished text
     /// - Throws: RecordingError, TranscriptionError, or PolishingError
-    func execute(groqKey: String, geminiKey: String, context: String?) async throws -> TranscriptionResult
+    func execute(
+        groqKey: String,
+        llmProvider: ApiProvider,
+        llmApiKey: String,
+        context: String?
+    ) async throws -> TranscriptionResult
 }
 
 /// Facade use case that composes the individual transcription steps
@@ -30,7 +36,12 @@ public final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
         self.polishTextUseCase = polishTextUseCase
     }
 
-    public func execute(groqKey: String, geminiKey: String, context: String?) async throws -> TranscriptionResult {
+    public func execute(
+        groqKey: String,
+        llmProvider: ApiProvider,
+        llmApiKey: String,
+        context: String?
+    ) async throws -> TranscriptionResult {
         // Step 1: Stop recording and get audio data
         let audioData = try await stopRecordingUseCase.execute()
 
@@ -45,7 +56,8 @@ public final class TranscriptionUseCase: TranscriptionUseCaseProtocol {
         // Step 3: Polish text
         let polishedText = try await polishTextUseCase.execute(
             rawText: rawText,
-            apiKey: geminiKey,
+            provider: llmProvider,
+            apiKey: llmApiKey,
             context: context,
             cancellationToken: nil
         )

@@ -460,6 +460,7 @@ final class RecordingStateTests: XCTestCase {
     private func makeSUT(
         permissionRepository: MockPermissionRepository = MockPermissionRepository(),
         apiKeyRepository: MockApiKeyRepository = MockApiKeyRepository(),
+        preferredLLMProviderRepository: MockPreferredLLMProviderRepository = MockPreferredLLMProviderRepository(),
         keyMonitoringRepository: MockKeyMonitoringRepository = MockKeyMonitoringRepository(),
         textOutputRepository: MockTextOutputRepository = MockTextOutputRepository(),
         appContextRepository: MockAppContextRepository = MockAppContextRepository(),
@@ -475,6 +476,7 @@ final class RecordingStateTests: XCTestCase {
         let sut = RecordingState(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             keyMonitoringRepository: keyMonitoringRepository,
             textOutputRepository: textOutputRepository,
             appContextRepository: appContextRepository,
@@ -492,6 +494,7 @@ final class RecordingStateTests: XCTestCase {
         let dependencies = Dependencies(
             permissionRepository: permissionRepository,
             apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             keyMonitoringRepository: keyMonitoringRepository,
             textOutputRepository: textOutputRepository,
             appContextRepository: appContextRepository,
@@ -510,6 +513,7 @@ final class RecordingStateTests: XCTestCase {
     struct Dependencies {
         let permissionRepository: MockPermissionRepository
         let apiKeyRepository: MockApiKeyRepository
+        let preferredLLMProviderRepository: MockPreferredLLMProviderRepository
         let keyMonitoringRepository: MockKeyMonitoringRepository
         let textOutputRepository: MockTextOutputRepository
         let appContextRepository: MockAppContextRepository

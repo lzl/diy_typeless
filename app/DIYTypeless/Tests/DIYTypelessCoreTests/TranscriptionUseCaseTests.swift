@@ -21,7 +21,8 @@ final class TranscriptionUseCaseTests: XCTestCase {
 
         let result = try await sut.execute(
             groqKey: "groq-key",
-            geminiKey: "gemini-key",
+            llmProvider: .openai,
+            llmApiKey: "openai-key",
             context: "app=Notes"
         )
 
@@ -29,8 +30,9 @@ final class TranscriptionUseCaseTests: XCTestCase {
         XCTAssertEqual(transcribe.executeCallCount, 1)
         XCTAssertEqual(transcribe.receivedAPIKey, "groq-key")
         XCTAssertEqual(polish.executeCallCount, 1)
+        XCTAssertEqual(polish.receivedProvider, .openai)
         XCTAssertEqual(polish.receivedRawText, "raw")
-        XCTAssertEqual(polish.receivedAPIKey, "gemini-key")
+        XCTAssertEqual(polish.receivedAPIKey, "openai-key")
         XCTAssertEqual(polish.receivedContext, "app=Notes")
 
         XCTAssertEqual(result.rawText, "raw")
@@ -51,7 +53,12 @@ final class TranscriptionUseCaseTests: XCTestCase {
         )
 
         do {
-            _ = try await sut.execute(groqKey: "g", geminiKey: "m", context: nil)
+            _ = try await sut.execute(
+                groqKey: "g",
+                llmProvider: .gemini,
+                llmApiKey: "m",
+                context: nil
+            )
             XCTFail("Expected RecordingError.notRecording")
         } catch let error as RecordingError {
             guard case .notRecording = error else {

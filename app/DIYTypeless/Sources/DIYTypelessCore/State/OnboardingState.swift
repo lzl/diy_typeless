@@ -6,7 +6,7 @@ public enum OnboardingStep: Int, CaseIterable {
     case microphone
     case accessibility
     case groqKey
-    case geminiKey
+    case llmProvider
     case completion
 
     public var next: OnboardingStep? {
@@ -23,6 +23,7 @@ public enum OnboardingStep: Int, CaseIterable {
 public final class OnboardingState {
     public var step: OnboardingStep = .welcome
     public var permissions = PermissionStatus(accessibility: false, microphone: false)
+    public private(set) var selectedLLMProvider: ApiProvider = .gemini
     public var groqKey: String = "" {
         didSet {
             if groqKey != oldValue {
@@ -37,11 +38,27 @@ public final class OnboardingState {
             }
         }
     }
+    public var openAIKey: String = "" {
+        didSet {
+            if openAIKey != oldValue {
+                openAIValidation = .idle
+            }
+        }
+    }
     public var groqValidation: ValidationState = .idle
     public var geminiValidation: ValidationState = .idle
+    public var openAIValidation: ValidationState = .idle
 
     public var onCompletion: (() -> Void)?
     public var onRequestRestart: (() -> Void)?
+
+    public var activeLLMValidation: ValidationState {
+        validationState(for: selectedLLMProvider)
+    }
+
+    public var llmProviderOptions: [ApiProvider] {
+        ApiProvider.llmProviders
+    }
 
     public var canProceed: Bool {
         switch step {
@@ -53,8 +70,8 @@ public final class OnboardingState {
             return permissions.accessibility
         case .groqKey:
             return groqValidation.isSuccess
-        case .geminiKey:
-            return geminiValidation.isSuccess
+        case .llmProvider:
+            return activeLLMValidation.isSuccess
         case .completion:
             return true
         }
@@ -62,11 +79,11 @@ public final class OnboardingState {
 
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
+    private let preferredLLMProviderRepository: PreferredLLMProviderRepository
     private let externalLinkRepository: ExternalLinkRepository
     private let validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol
     private var permissionTimer: Timer?
-    private var groqValidationTask: Task<Void, Never>?
-    private var geminiValidationTask: Task<Void, Never>?
+    private var validationTasks: [ApiProvider: Task<Void, Never>] = [:]
     private var revalidationSessionID: Int = 0
 
     private static let hasCompletedWelcomeKey = "hasCompletedWelcome"
@@ -79,11 +96,13 @@ public final class OnboardingState {
     public init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
+        preferredLLMProviderRepository: PreferredLLMProviderRepository,
         externalLinkRepository: ExternalLinkRepository,
         validateApiKeyUseCase: ValidateApiKeyUseCaseProtocol
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
+        self.preferredLLMProviderRepository = preferredLLMProviderRepository
         self.externalLinkRepository = externalLinkRepository
         self.validateApiKeyUseCase = validateApiKeyUseCase
         refreshPermissions()
@@ -93,17 +112,19 @@ public final class OnboardingState {
     public func shutdown() {
         permissionTimer?.invalidate()
         permissionTimer = nil
-        groqValidationTask?.cancel()
-        groqValidationTask = nil
-        geminiValidationTask?.cancel()
-        geminiValidationTask = nil
+        validationTasks.values.forEach { $0.cancel() }
+        validationTasks.removeAll()
     }
 
     public func refresh() {
+        let loadedProvider = preferredLLMProviderRepository.loadProvider()
+        selectedLLMProvider = loadedProvider.isLLMProvider ? loadedProvider : .gemini
         groqKey = apiKeyRepository.loadKey(for: .groq) ?? ""
         geminiKey = apiKeyRepository.loadKey(for: .gemini) ?? ""
+        openAIKey = apiKeyRepository.loadKey(for: .openai) ?? ""
         groqValidation = groqKey.isEmpty ? .idle : .success
         geminiValidation = geminiKey.isEmpty ? .idle : .success
+        openAIValidation = openAIKey.isEmpty ? .idle : .success
         refreshPermissions()
         syncStep()
         revalidationSessionID += 1
@@ -111,32 +132,25 @@ public final class OnboardingState {
     }
 
     private func revalidateStoredKeys(sessionID: Int) {
-        let groqTrimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !groqTrimmed.isEmpty {
-            Task {
-                do {
-                    try await validateGroqKeyValue(groqTrimmed)
-                } catch {
-                    if !Task.isCancelled,
-                       isCurrentRevalidationSession(sessionID),
-                       currentGroqKeyMatches(groqTrimmed) {
-                        groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
-                    }
-                }
-            }
-        }
+        revalidateStoredKey(for: .groq, sessionID: sessionID)
+        revalidateStoredKey(for: selectedLLMProvider, sessionID: sessionID)
+    }
 
-        let geminiTrimmed = geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !geminiTrimmed.isEmpty {
-            Task {
-                do {
-                    try await validateGeminiKeyValue(geminiTrimmed)
-                } catch {
-                    if !Task.isCancelled,
-                       isCurrentRevalidationSession(sessionID),
-                       currentGeminiKeyMatches(geminiTrimmed) {
-                        geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
-                    }
+    private func revalidateStoredKey(for provider: ApiProvider, sessionID: Int) {
+        let trimmed = keyValue(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        Task {
+            do {
+                try await validateKeyValue(trimmed, for: provider)
+            } catch {
+                if !Task.isCancelled,
+                   isCurrentRevalidationSession(sessionID),
+                   currentKeyMatches(trimmed, provider: provider) {
+                    setValidationState(
+                        .failure(errorMessage(for: error, provider: provider.displayName)),
+                        for: provider
+                    )
                 }
             }
         }
@@ -209,50 +223,31 @@ public final class OnboardingState {
         externalLinkRepository.openConsole(for: provider)
     }
 
+    public func selectLLMProvider(_ provider: ApiProvider) {
+        guard provider.isLLMProvider else { return }
+        guard selectedLLMProvider != provider else { return }
+
+        selectedLLMProvider = provider
+        preferredLLMProviderRepository.saveProvider(provider)
+        syncStep()
+        revalidationSessionID += 1
+        revalidateStoredKeys(sessionID: revalidationSessionID)
+    }
+
     public func validateGroqKey() {
-        let trimmed = groqKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            groqValidation = .failure("Enter your Groq API key to continue.")
-            return
-        }
-
-        groqValidationTask?.cancel()
-        groqValidation = .validating
-
-        groqValidationTask = Task {
-            do {
-                try await validateGroqKeyValue(trimmed)
-                if Task.isCancelled || !currentGroqKeyMatches(trimmed) { return }
-                groqValidation = .success
-                try? apiKeyRepository.saveKey(trimmed, for: .groq)
-            } catch {
-                if Task.isCancelled || !currentGroqKeyMatches(trimmed) { return }
-                groqValidation = .failure(errorMessage(for: error, provider: "Groq"))
-            }
-        }
+        validateKey(for: .groq)
     }
 
     public func validateGeminiKey() {
-        let trimmed = geminiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            geminiValidation = .failure("Enter your Gemini API key to continue.")
-            return
-        }
+        validateKey(for: .gemini)
+    }
 
-        geminiValidationTask?.cancel()
-        geminiValidation = .validating
+    public func validateOpenAIKey() {
+        validateKey(for: .openai)
+    }
 
-        geminiValidationTask = Task {
-            do {
-                try await validateGeminiKeyValue(trimmed)
-                if Task.isCancelled || !currentGeminiKeyMatches(trimmed) { return }
-                geminiValidation = .success
-                try? apiKeyRepository.saveKey(trimmed, for: .gemini)
-            } catch {
-                if Task.isCancelled || !currentGeminiKeyMatches(trimmed) { return }
-                geminiValidation = .failure(errorMessage(for: error, provider: "Gemini"))
-            }
-        }
+    public func validateActiveLLMKey() {
+        validateKey(for: selectedLLMProvider)
     }
 
     private func syncStep() {
@@ -276,8 +271,8 @@ public final class OnboardingState {
             return
         }
 
-        if geminiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            step = .geminiKey
+        if keyValue(for: selectedLLMProvider).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            step = .llmProvider
             return
         }
 
@@ -295,20 +290,68 @@ public final class OnboardingState {
         return "\(provider) validation failed: \(error.localizedDescription)"
     }
 
-    private func validateGroqKeyValue(_ key: String) async throws {
-        try await validateApiKeyUseCase.execute(key: key, for: .groq)
+    private func validateKey(for provider: ApiProvider) {
+        let trimmed = keyValue(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            setValidationState(.failure("\(provider.apiKeyPlaceholder) to continue."), for: provider)
+            return
+        }
+
+        validationTasks[provider]?.cancel()
+        setValidationState(.validating, for: provider)
+
+        validationTasks[provider] = Task {
+            do {
+                try await validateKeyValue(trimmed, for: provider)
+                if Task.isCancelled || !currentKeyMatches(trimmed, provider: provider) { return }
+                setValidationState(.success, for: provider)
+                try? apiKeyRepository.saveKey(trimmed, for: provider)
+            } catch {
+                if Task.isCancelled || !currentKeyMatches(trimmed, provider: provider) { return }
+                setValidationState(.failure(errorMessage(for: error, provider: provider.displayName)), for: provider)
+            }
+        }
     }
 
-    private func validateGeminiKeyValue(_ key: String) async throws {
-        try await validateApiKeyUseCase.execute(key: key, for: .gemini)
+    private func validateKeyValue(_ key: String, for provider: ApiProvider) async throws {
+        try await validateApiKeyUseCase.execute(key: key, for: provider)
     }
 
-    private func currentGroqKeyMatches(_ key: String) -> Bool {
-        groqKey.trimmingCharacters(in: .whitespacesAndNewlines) == key
+    private func keyValue(for provider: ApiProvider) -> String {
+        switch provider {
+        case .groq:
+            return groqKey
+        case .gemini:
+            return geminiKey
+        case .openai:
+            return openAIKey
+        }
     }
 
-    private func currentGeminiKeyMatches(_ key: String) -> Bool {
-        geminiKey.trimmingCharacters(in: .whitespacesAndNewlines) == key
+    private func currentKeyMatches(_ key: String, provider: ApiProvider) -> Bool {
+        keyValue(for: provider).trimmingCharacters(in: .whitespacesAndNewlines) == key
+    }
+
+    private func validationState(for provider: ApiProvider) -> ValidationState {
+        switch provider {
+        case .groq:
+            return groqValidation
+        case .gemini:
+            return geminiValidation
+        case .openai:
+            return openAIValidation
+        }
+    }
+
+    private func setValidationState(_ state: ValidationState, for provider: ApiProvider) {
+        switch provider {
+        case .groq:
+            groqValidation = state
+        case .gemini:
+            geminiValidation = state
+        case .openai:
+            openAIValidation = state
+        }
     }
 
     private func isCurrentRevalidationSession(_ sessionID: Int) -> Bool {

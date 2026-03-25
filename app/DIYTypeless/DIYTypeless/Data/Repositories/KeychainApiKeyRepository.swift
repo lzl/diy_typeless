@@ -41,11 +41,13 @@ final class KeychainApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             cache[.groq] = dict["groq"]
             cache[.gemini] = dict["gemini"]
+            cache[.openai] = dict["openai"]
         } else if let data = loadDataFromKeychain(account: combinedAccount, service: legacyService),
                   let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             // Migrate from legacy service (com.diytypeless.api) combined storage
             cache[.groq] = dict["groq"]
             cache[.gemini] = dict["gemini"]
+            cache[.openai] = dict["openai"]
             if saveAllKeysInternal() {
                 deleteFromKeychain(account: combinedAccount, service: legacyService)
             }
@@ -110,6 +112,9 @@ final class KeychainApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
         if let gemini = cache[.gemini], !gemini.isEmpty {
             dict["gemini"] = gemini
         }
+        if let openAI = cache[.openai], !openAI.isEmpty {
+            dict["openai"] = openAI
+        }
         guard let data = try? JSONEncoder().encode(dict) else { return false }
         return saveDataToKeychain(data: data, account: combinedAccount)
     }
@@ -169,5 +174,23 @@ final class KeychainApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
             kSecAttrAccount as String: account
         ]
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+final class UserDefaultsPreferredLLMProviderRepository: PreferredLLMProviderRepository, @unchecked Sendable {
+    private let key = "preferred_llm_provider"
+
+    func loadProvider() -> ApiProvider {
+        guard let rawValue = UserDefaults.standard.string(forKey: key),
+              let provider = ApiProvider(rawValue: rawValue),
+              provider.isLLMProvider else {
+            return .gemini
+        }
+        return provider
+    }
+
+    func saveProvider(_ provider: ApiProvider) {
+        guard provider.isLLMProvider else { return }
+        UserDefaults.standard.set(provider.rawValue, forKey: key)
     }
 }

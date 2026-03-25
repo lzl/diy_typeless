@@ -28,7 +28,8 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         let result = try await sut.execute(
             request: RecordingPipelineRequest(
                 groqKey: "groq-key",
-                geminiKey: "gemini-key",
+                llmProvider: .openai,
+                llmApiKey: "openai-key",
                 selectedTextContext: SelectedTextContext(
                     text: "original selection",
                     isEditable: false,
@@ -53,6 +54,8 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         XCTAssertEqual(polishTextUseCase.executeCallCount, 0)
         XCTAssertEqual(processVoiceCommandUseCase.executeCallCount, 1)
         XCTAssertEqual(processVoiceCommandUseCase.receivedSelectedText, "original selection")
+        XCTAssertEqual(processVoiceCommandUseCase.receivedProvider, .openai)
+        XCTAssertEqual(processVoiceCommandUseCase.receivedAPIKey, "openai-key")
     }
 
     func testExecute_withoutSelection_fallsBackToPolishPath() async throws {
@@ -73,7 +76,8 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         let result = try await sut.execute(
             request: RecordingPipelineRequest(
                 groqKey: "groq-key",
-                geminiKey: "gemini-key",
+                llmProvider: .openai,
+                llmApiKey: "openai-key",
                 selectedTextContext: .empty,
                 appContext: "Captured app context",
                 cancellationToken: nil
@@ -91,6 +95,8 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         XCTAssertEqual(stopRecordingUseCase.executeCallCount, 1)
         XCTAssertEqual(transcribeAudioUseCase.executeCallCount, 1)
         XCTAssertEqual(polishTextUseCase.executeCallCount, 1)
+        XCTAssertEqual(polishTextUseCase.receivedProvider, .openai)
+        XCTAssertEqual(polishTextUseCase.receivedAPIKey, "openai-key")
         XCTAssertEqual(polishTextUseCase.receivedRawText, "raw transcript")
         XCTAssertEqual(polishTextUseCase.receivedContext, "Captured app context")
         XCTAssertEqual(processVoiceCommandUseCase.executeCallCount, 0)
@@ -114,7 +120,8 @@ final class RecordingPipelineCoordinatorTests: XCTestCase {
         let result = try await sut.execute(
             request: RecordingPipelineRequest(
                 groqKey: "groq-key",
-                geminiKey: "gemini-key",
+                llmProvider: .gemini,
+                llmApiKey: "gemini-key",
                 selectedTextContext: SelectedTextContext(
                     text: "secret",
                     isEditable: false,

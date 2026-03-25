@@ -1,6 +1,6 @@
 import Foundation
 
-/// Repository implementation that calls Gemini API via Rust FFI.
+/// Repository implementation that calls provider-backed LLM APIs via Rust FFI.
 /// Wraps synchronous FFI calls in async continuations on background thread.
 ///
 /// Note: This repository throws CoreError directly. Error mapping to UserFacingError
@@ -9,6 +9,7 @@ public final class GeminiLLMRepository: LLMRepository {
     public init() {}
 
     public func generate(
+        provider: ApiProvider,
         apiKey: String,
         prompt: String,
         temperature: Double?,
@@ -41,6 +42,7 @@ public final class GeminiLLMRepository: LLMRepository {
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
                         let result = try CoreFFIRuntime.processTextWithLlmCancellable(
+                            provider: provider,
                             apiKey: apiKey,
                             prompt: prompt,
                             systemInstruction: nil,

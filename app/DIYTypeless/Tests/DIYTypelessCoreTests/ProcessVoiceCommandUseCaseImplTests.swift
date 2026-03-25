@@ -14,12 +14,14 @@ final class ProcessVoiceCommandUseCaseImplTests: XCTestCase {
         let result = try await sut.execute(
             transcription: "make it concise",
             selectedText: "This sentence is too long.",
-            geminiKey: "gem-key",
+            provider: .openai,
+            apiKey: "gem-key",
             cancellationToken: nil
         )
 
         XCTAssertEqual(result.processedText, "updated text")
         XCTAssertEqual(result.action, .replaceSelection)
+        XCTAssertEqual(repository.receivedProvider, .openai)
         XCTAssertEqual(repository.receivedAPIKey, "gem-key")
         XCTAssertEqual(repository.receivedTemperature, 0.3)
 
@@ -38,7 +40,8 @@ final class ProcessVoiceCommandUseCaseImplTests: XCTestCase {
             _ = try await sut.execute(
                 transcription: "do something",
                 selectedText: "text",
-                geminiKey: "key",
+                provider: .gemini,
+                apiKey: "key",
                 cancellationToken: token
             )
             XCTFail("Expected CancellationError")
@@ -58,7 +61,8 @@ final class ProcessVoiceCommandUseCaseImplTests: XCTestCase {
             _ = try await sut.execute(
                 transcription: "fix",
                 selectedText: "text",
-                geminiKey: "key",
+                provider: .gemini,
+                apiKey: "key",
                 cancellationToken: nil
             )
             XCTFail("Expected UserFacingError.invalidAPIKey")
@@ -78,7 +82,8 @@ final class ProcessVoiceCommandUseCaseImplTests: XCTestCase {
             _ = try await sut.execute(
                 transcription: "fix",
                 selectedText: "text",
-                geminiKey: "key",
+                provider: .gemini,
+                apiKey: "key",
                 cancellationToken: nil
             )
             XCTFail("Expected UserFacingError.networkError")
@@ -98,7 +103,8 @@ final class ProcessVoiceCommandUseCaseImplTests: XCTestCase {
             _ = try await sut.execute(
                 transcription: "fix",
                 selectedText: "text",
-                geminiKey: "key",
+                provider: .gemini,
+                apiKey: "key",
                 cancellationToken: nil
             )
             XCTFail("Expected CancellationError")
