@@ -23,6 +23,7 @@ public final class RecordingState {
 
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
+    private let preferredLLMProviderRepository: PreferredLLMProviderRepository
     private var keyMonitoringRepository: KeyMonitoringRepository
     private let textOutputRepository: TextOutputRepository
     private let appContextRepository: AppContextRepository
@@ -43,7 +44,8 @@ public final class RecordingState {
     private let prefetchDelay: Duration
 
     private var groqKey: String = ""
-    private var geminiKey: String = ""
+    private var llmProvider: ApiProvider = .gemini
+    private var llmApiKey: String = ""
     private var isRecording = false
     private var isProcessing = false
     private var capturedContext: String?
@@ -60,6 +62,7 @@ public final class RecordingState {
     public init(
         permissionRepository: PermissionRepository,
         apiKeyRepository: ApiKeyRepository,
+        preferredLLMProviderRepository: PreferredLLMProviderRepository,
         keyMonitoringRepository: KeyMonitoringRepository,
         textOutputRepository: TextOutputRepository,
         appContextRepository: AppContextRepository,
@@ -80,6 +83,7 @@ public final class RecordingState {
     ) {
         self.permissionRepository = permissionRepository
         self.apiKeyRepository = apiKeyRepository
+        self.preferredLLMProviderRepository = preferredLLMProviderRepository
         self.keyMonitoringRepository = keyMonitoringRepository
         self.textOutputRepository = textOutputRepository
         self.appContextRepository = appContextRepository
@@ -204,14 +208,14 @@ public final class RecordingState {
             return
         }
 
-        if geminiKey.isEmpty {
+        if llmApiKey.isEmpty {
             showError(.invalidAPIKey)
             onRequireOnboarding?()
             return
         }
 
         Task {
-            await recordingControlUseCase.warmupConnections()
+            await recordingControlUseCase.warmupConnections(llmProvider: llmProvider)
         }
 
         do {
@@ -300,7 +304,9 @@ public final class RecordingState {
 
     private func refreshKeys() {
         groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredProvider = preferredLLMProviderRepository.loadProvider()
+        llmProvider = preferredProvider.isLLMProvider ? preferredProvider : .gemini
+        llmApiKey = (apiKeyRepository.loadKey(for: llmProvider) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func cancelPrefetchTask() {
@@ -398,7 +404,8 @@ public final class RecordingState {
             let result = try await pipelineCoordinator.execute(
                 request: RecordingPipelineRequest(
                     groqKey: groqKey,
-                    geminiKey: geminiKey,
+                    llmProvider: llmProvider,
+                    llmApiKey: llmApiKey,
                     selectedTextContext: context,
                     appContext: capturedContext,
                     cancellationToken: cancellationToken

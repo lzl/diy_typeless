@@ -110,6 +110,24 @@ final class MockApiKeyRepository: ApiKeyRepository, @unchecked Sendable {
     }
 }
 
+final class MockPreferredLLMProviderRepository: PreferredLLMProviderRepository, @unchecked Sendable {
+    var provider: ApiProvider
+    private(set) var saveCalls: [ApiProvider] = []
+
+    init(provider: ApiProvider = .gemini) {
+        self.provider = provider
+    }
+
+    func loadProvider() -> ApiProvider {
+        provider
+    }
+
+    func saveProvider(_ provider: ApiProvider) {
+        self.provider = provider
+        saveCalls.append(provider)
+    }
+}
+
 final class MockKeyMonitoringRepository: KeyMonitoringRepository, @unchecked Sendable {
     var onFnDown: (() -> Void)?
     var onFnUp: (() -> Void)?
@@ -170,6 +188,7 @@ final class MockRecordingControlUseCase: RecordingControlUseCaseProtocol, @unche
     var startRecordingError: Error?
     private(set) var startRecordingCallCount = 0
     private(set) var warmupCallCount = 0
+    private(set) var warmupProviders: [ApiProvider] = []
 
     func startRecording() async throws {
         startRecordingCallCount += 1
@@ -178,8 +197,9 @@ final class MockRecordingControlUseCase: RecordingControlUseCaseProtocol, @unche
         }
     }
 
-    func warmupConnections() async {
+    func warmupConnections(llmProvider: ApiProvider) async {
         warmupCallCount += 1
+        warmupProviders.append(llmProvider)
     }
 }
 
@@ -245,17 +265,20 @@ final class MockPolishTextUseCase: PolishTextUseCaseProtocol, @unchecked Sendabl
     var error: Error?
 
     private(set) var executeCallCount = 0
+    private(set) var receivedProvider: ApiProvider?
     private(set) var receivedRawText: String?
     private(set) var receivedAPIKey: String?
     private(set) var receivedContext: String?
 
     func execute(
         rawText: String,
+        provider: ApiProvider,
         apiKey: String,
         context: String?,
         cancellationToken: CancellationToken?
     ) async throws -> String {
         executeCallCount += 1
+        receivedProvider = provider
         receivedRawText = rawText
         receivedAPIKey = apiKey
         receivedContext = context
@@ -286,20 +309,23 @@ final class MockProcessVoiceCommandUseCase: ProcessVoiceCommandUseCaseProtocol, 
     var error: Error?
 
     private(set) var executeCallCount = 0
+    private(set) var receivedProvider: ApiProvider?
     private(set) var receivedTranscription: String?
     private(set) var receivedSelectedText: String?
-    private(set) var receivedGeminiKey: String?
+    private(set) var receivedAPIKey: String?
 
     func execute(
         transcription: String,
         selectedText: String,
-        geminiKey: String,
+        provider: ApiProvider,
+        apiKey: String,
         cancellationToken: CancellationToken?
     ) async throws -> VoiceCommandResult {
         executeCallCount += 1
+        receivedProvider = provider
         receivedTranscription = transcription
         receivedSelectedText = selectedText
-        receivedGeminiKey = geminiKey
+        receivedAPIKey = apiKey
 
         if cancellationToken?.isCancelled() == true {
             throw CancellationError()
@@ -362,7 +388,7 @@ final class MockValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol, @unchecked
         case failure(Error)
     }
 
-    var behaviorByProvider: [ApiProvider: Behavior] = [.groq: .success, .gemini: .success]
+    var behaviorByProvider: [ApiProvider: Behavior] = [.groq: .success, .gemini: .success, .openai: .success]
     private(set) var executeCalls: [(provider: ApiProvider, key: String)] = []
 
     func execute(key: String, for provider: ApiProvider) async throws {
@@ -378,17 +404,20 @@ final class MockLLMRepository: LLMRepository, @unchecked Sendable {
     var error: Error?
 
     private(set) var generateCallCount = 0
+    private(set) var receivedProvider: ApiProvider?
     private(set) var receivedAPIKey: String?
     private(set) var receivedPrompt: String?
     private(set) var receivedTemperature: Double?
 
     func generate(
+        provider: ApiProvider,
         apiKey: String,
         prompt: String,
         temperature: Double?,
         cancellationToken: CancellationToken?
     ) async throws -> String {
         generateCallCount += 1
+        receivedProvider = provider
         receivedAPIKey = apiKey
         receivedPrompt = prompt
         receivedTemperature = temperature

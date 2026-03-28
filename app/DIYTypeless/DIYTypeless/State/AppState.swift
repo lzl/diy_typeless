@@ -19,6 +19,7 @@ final class AppState {
 
     private let permissionRepository: PermissionRepository
     private let apiKeyRepository: ApiKeyRepository
+    private let preferredLLMProviderRepository: PreferredLLMProviderRepository
     private let keyMonitoringRepository: KeyMonitoringRepository
     private let textOutputRepository: TextOutputRepository
 
@@ -49,14 +50,17 @@ final class AppState {
         configureCoreFFIRuntimeIfNeeded()
 
         let repository = apiKeyRepository ?? KeychainApiKeyRepository()
+        let preferredLLMProviderRepository = UserDefaultsPreferredLLMProviderRepository()
         self.apiKeyRepository = repository
+        self.preferredLLMProviderRepository = preferredLLMProviderRepository
         self.permissionRepository = permissionRepository ?? SystemPermissionRepository()
         self.keyMonitoringRepository = keyMonitoringRepository ?? SystemKeyMonitoringRepository()
         self.textOutputRepository = textOutputRepository ?? SystemTextOutputRepository()
         let resolvedExternalLinkRepository = externalLinkRepository ?? NSWorkspaceExternalLinkRepository()
         let resolvedValidateApiKeyUseCase = validateApiKeyUseCase ?? ValidateApiKeyUseCase(
             groqRepository: GroqApiKeyValidationRepository(),
-            geminiRepository: GeminiApiKeyValidationRepository()
+            geminiRepository: GeminiApiKeyValidationRepository(),
+            openAIRepository: OpenAIApiKeyValidationRepository()
         )
         let resolvedAppContextRepository = appContextRepository ?? DefaultAppContextRepository()
         let resolvedRecordingControlUseCase = recordingControlUseCase ?? RecordingControlUseCaseImpl()
@@ -72,12 +76,14 @@ final class AppState {
         onboarding = OnboardingState(
             permissionRepository: self.permissionRepository,
             apiKeyRepository: repository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             externalLinkRepository: resolvedExternalLinkRepository,
             validateApiKeyUseCase: resolvedValidateApiKeyUseCase
         )
         recording = RecordingState(
             permissionRepository: self.permissionRepository,
             apiKeyRepository: repository,
+            preferredLLMProviderRepository: preferredLLMProviderRepository,
             keyMonitoringRepository: self.keyMonitoringRepository,
             textOutputRepository: self.textOutputRepository,
             appContextRepository: resolvedAppContextRepository,
@@ -195,9 +201,12 @@ final class AppState {
 
     private func checkReadiness() -> Bool {
         let status = permissionRepository.currentStatus
-        let geminiKey = (apiKeyRepository.loadKey(for: .gemini) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let llmProvider = preferredLLMProviderRepository.loadProvider()
+        let resolvedLLMProvider = llmProvider.isLLMProvider ? llmProvider : .gemini
+        let llmKey = (apiKeyRepository.loadKey(for: resolvedLLMProvider) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let groqKey = (apiKeyRepository.loadKey(for: .groq) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return status.allGranted && !geminiKey.isEmpty && !groqKey.isEmpty
+        return status.allGranted && !llmKey.isEmpty && !groqKey.isEmpty
     }
 
     private func evaluateReadiness() {

@@ -271,22 +271,22 @@ int8_t uniffi_diy_typeless_core_fn_method_cancellationtoken_is_cancelled(uint64_
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT
-RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_polish_text(RustBuffer provider, RustBuffer api_key, RustBuffer raw_text, RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT_CANCELLABLE
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_POLISH_TEXT_CANCELLABLE
-RustBuffer uniffi_diy_typeless_core_fn_func_polish_text_cancellable(RustBuffer api_key, RustBuffer raw_text, RustBuffer context, uint64_t cancellation_token, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_polish_text_cancellable(RustBuffer provider, RustBuffer api_key, RustBuffer raw_text, RustBuffer context, uint64_t cancellation_token, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM
-RustBuffer uniffi_diy_typeless_core_fn_func_process_text_with_llm(RustBuffer api_key, RustBuffer prompt, RustBuffer system_instruction, RustBuffer temperature, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_process_text_with_llm(RustBuffer provider, RustBuffer api_key, RustBuffer prompt, RustBuffer system_instruction, RustBuffer temperature, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM_CANCELLABLE
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_PROCESS_TEXT_WITH_LLM_CANCELLABLE
-RustBuffer uniffi_diy_typeless_core_fn_func_process_text_with_llm_cancellable(RustBuffer api_key, RustBuffer prompt, RustBuffer system_instruction, RustBuffer temperature, uint64_t cancellation_token, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_diy_typeless_core_fn_func_process_text_with_llm_cancellable(RustBuffer provider, RustBuffer api_key, RustBuffer prompt, RustBuffer system_instruction, RustBuffer temperature, uint64_t cancellation_token, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_START_RECORDING
@@ -311,16 +311,15 @@ RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes(RustBuffer ap
 RustBuffer uniffi_diy_typeless_core_fn_func_transcribe_audio_bytes_cancellable(RustBuffer api_key, RustBuffer audio_bytes, RustBuffer language, uint64_t cancellation_token, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_GEMINI_CONNECTION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_GEMINI_CONNECTION
-void uniffi_diy_typeless_core_fn_func_warmup_gemini_connection(RustCallStatus *_Nonnull out_status
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_GROQ_CONNECTION
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_GROQ_CONNECTION
 void uniffi_diy_typeless_core_fn_func_warmup_groq_connection(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_LLM_CONNECTION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_FN_FUNC_WARMUP_LLM_CONNECTION
+void uniffi_diy_typeless_core_fn_func_warmup_llm_connection(RustBuffer provider, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_DIY_TYPELESS_CORE_RUSTBUFFER_ALLOC
@@ -631,15 +630,15 @@ uint16_t uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes_cancellab
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_GEMINI_CONNECTION
-#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_GEMINI_CONNECTION
-uint16_t uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_GROQ_CONNECTION
 #define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_GROQ_CONNECTION
 uint16_t uniffi_diy_typeless_core_checksum_func_warmup_groq_connection(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_LLM_CONNECTION
+#define UNIFFI_FFIDEF_UNIFFI_DIY_TYPELESS_CORE_CHECKSUM_FUNC_WARMUP_LLM_CONNECTION
+uint16_t uniffi_diy_typeless_core_checksum_func_warmup_llm_connection(void
     
 );
 #endif

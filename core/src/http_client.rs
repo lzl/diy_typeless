@@ -1,5 +1,6 @@
-use crate::config::GEMINI_API_URL;
+use crate::config::{GEMINI_API_URL, OPENAI_API_URL};
 use crate::error::CoreError;
+use crate::LlmProvider;
 use reqwest::blocking::Client;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -12,6 +13,10 @@ static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
 fn gemini_models_url() -> String {
     format!("{GEMINI_API_URL}/models")
+}
+
+fn openai_models_url() -> String {
+    format!("{OPENAI_API_URL}/models")
 }
 
 fn warmup_error(target: &str, detail: impl std::fmt::Display) -> CoreError {
@@ -110,6 +115,17 @@ pub(crate) fn warmup_gemini_connection() -> Result<(), CoreError> {
     warmup_connection_with_label(&gemini_models_url(), "Gemini")
 }
 
+pub(crate) fn warmup_openai_connection() -> Result<(), CoreError> {
+    warmup_connection_with_label(&openai_models_url(), "OpenAI")
+}
+
+pub(crate) fn warmup_llm_connection(provider: LlmProvider) -> Result<(), CoreError> {
+    match provider {
+        LlmProvider::GoogleAiStudio => warmup_gemini_connection(),
+        LlmProvider::Openai => warmup_openai_connection(),
+    }
+}
+
 /// Generic warmup for any URL
 ///
 /// Used internally or for testing connection to custom endpoints.
@@ -131,8 +147,8 @@ fn warmup_connection_with_label(url: &str, label: &str) -> Result<(), CoreError>
 
 #[cfg(test)]
 mod tests {
-    use super::{gemini_models_url, warmup_error, GROQ_MODELS_URL};
-    use crate::config::GEMINI_API_URL;
+    use super::{gemini_models_url, openai_models_url, warmup_error, GROQ_MODELS_URL};
+    use crate::config::{GEMINI_API_URL, OPENAI_API_URL};
     use crate::error::CoreError;
 
     #[test]
@@ -144,6 +160,12 @@ mod tests {
     #[test]
     fn groq_models_url_should_match_expected_endpoint() {
         assert_eq!(GROQ_MODELS_URL, "https://api.groq.com/openai/v1/models");
+    }
+
+    #[test]
+    fn openai_models_url_should_append_models_suffix() {
+        let url = openai_models_url();
+        assert_eq!(url, format!("{OPENAI_API_URL}/models"));
     }
 
     #[test]

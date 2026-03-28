@@ -994,6 +994,82 @@ public func FfiConverterTypeCoreError_lower(_ value: CoreError) -> RustBuffer {
     return FfiConverterTypeCoreError.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Supported LLM providers for polish and generic text-processing flows.
+ */
+
+public enum LlmProvider: Equatable, Hashable {
+    
+    /**
+     * Google AI Studio Gemini API.
+     */
+    case googleAiStudio
+    /**
+     * OpenAI Chat Completions API.
+     */
+    case openai
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension LlmProvider: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLlmProvider: FfiConverterRustBuffer {
+    typealias SwiftType = LlmProvider
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LlmProvider {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .googleAiStudio
+        
+        case 2: return .openai
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LlmProvider, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .googleAiStudio:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .openai:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProvider_lift(_ buf: RustBuffer) throws -> LlmProvider {
+    return try FfiConverterTypeLlmProvider.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProvider_lower(_ value: LlmProvider) -> RustBuffer {
+    return FfiConverterTypeLlmProvider.lower(value)
+}
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -1042,11 +1118,12 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     }
 }
 /**
- * Polish raw transcript text with Gemini API.
+ * Polish raw transcript text with the selected LLM provider.
  */
-public func polishText(apiKey: String, rawText: String, context: String?)throws  -> String  {
+public func polishText(provider: LlmProvider, apiKey: String, rawText: String, context: String?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text(
+        FfiConverterTypeLlmProvider_lower(provider),
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(rawText),
         FfiConverterOptionString.lower(context),$0
@@ -1054,13 +1131,14 @@ public func polishText(apiKey: String, rawText: String, context: String?)throws 
 })
 }
 /**
- * Polish raw transcript text with Gemini API.
+ * Polish raw transcript text with the selected LLM provider.
  *
  * Supports cooperative cancellation using a shared cancellation token.
  */
-public func polishTextCancellable(apiKey: String, rawText: String, context: String?, cancellationToken: CancellationToken)throws  -> String  {
+public func polishTextCancellable(provider: LlmProvider, apiKey: String, rawText: String, context: String?, cancellationToken: CancellationToken)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_polish_text_cancellable(
+        FfiConverterTypeLlmProvider_lower(provider),
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(rawText),
         FfiConverterOptionString.lower(context),
@@ -1069,13 +1147,14 @@ public func polishTextCancellable(apiKey: String, rawText: String, context: Stri
 })
 }
 /**
- * Process text with LLM (Gemini API)
+ * Process text with the selected LLM provider.
  * Generic function for processing text with custom prompts
- * Process arbitrary text with Gemini API and optional system instruction.
+ * Process arbitrary text with the selected LLM provider and optional system instruction.
  */
-public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?)throws  -> String  {
+public func processTextWithLlm(provider: LlmProvider, apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_process_text_with_llm(
+        FfiConverterTypeLlmProvider_lower(provider),
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(prompt),
         FfiConverterOptionString.lower(systemInstruction),
@@ -1084,13 +1163,14 @@ public func processTextWithLlm(apiKey: String, prompt: String, systemInstruction
 })
 }
 /**
- * Process arbitrary text with Gemini API and optional system instruction.
+ * Process arbitrary text with the selected LLM provider and optional system instruction.
  *
  * Supports cooperative cancellation using a shared cancellation token.
  */
-public func processTextWithLlmCancellable(apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?, cancellationToken: CancellationToken)throws  -> String  {
+public func processTextWithLlmCancellable(provider: LlmProvider, apiKey: String, prompt: String, systemInstruction: String?, temperature: Float?, cancellationToken: CancellationToken)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_process_text_with_llm_cancellable(
+        FfiConverterTypeLlmProvider_lower(provider),
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(prompt),
         FfiConverterOptionString.lower(systemInstruction),
@@ -1148,23 +1228,6 @@ public func transcribeAudioBytesCancellable(apiKey: String, audioBytes: Data, la
 })
 }
 /**
- * Warm up TLS connection to Gemini API
- *
- * Call this at the start of recording to eliminate TLS handshake latency.
- * See [`http_client::warmup_gemini_connection`] for detailed timing considerations.
- *
- * # Important
- * - The connection pool has a 300-second idle timeout
- * - For long recording sessions, consider re-warming before polish
- * - This should be called immediately before or at the start of recording
- * Warm up TLS connection to Gemini API.
- */
-public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
-    uniffi_diy_typeless_core_fn_func_warmup_gemini_connection($0
-    )
-}
-}
-/**
  * Warm up TLS connection to Groq API
  *
  * Call this at the start of recording to eliminate TLS handshake latency.
@@ -1178,6 +1241,23 @@ public func warmupGeminiConnection()throws   {try rustCallWithError(FfiConverter
  */
 public func warmupGroqConnection()throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
     uniffi_diy_typeless_core_fn_func_warmup_groq_connection($0
+    )
+}
+}
+/**
+ * Warm up TLS connection to the selected LLM provider.
+ *
+ * Call this at the start of recording to eliminate TLS handshake latency.
+ *
+ * # Important
+ * - The connection pool has a 300-second idle timeout
+ * - For long recording sessions, consider re-warming before polish
+ * - This should be called immediately before or at the start of recording
+ * Warm up TLS connection to the selected LLM provider.
+ */
+public func warmupLlmConnection(provider: LlmProvider)throws   {try rustCallWithError(FfiConverterTypeCoreError_lift) {
+    uniffi_diy_typeless_core_fn_func_warmup_llm_connection(
+        FfiConverterTypeLlmProvider_lower(provider),$0
     )
 }
 }
@@ -1197,16 +1277,16 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 45710) {
+    if (uniffi_diy_typeless_core_checksum_func_polish_text() != 41834) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_polish_text_cancellable() != 31763) {
+    if (uniffi_diy_typeless_core_checksum_func_polish_text_cancellable() != 21561) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 56597) {
+    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm() != 35189) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm_cancellable() != 41013) {
+    if (uniffi_diy_typeless_core_checksum_func_process_text_with_llm_cancellable() != 57067) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_func_start_recording() != 20492) {
@@ -1221,10 +1301,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_diy_typeless_core_checksum_func_transcribe_audio_bytes_cancellable() != 47248) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_gemini_connection() != 13024) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 35656) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_diy_typeless_core_checksum_func_warmup_groq_connection() != 35656) {
+    if (uniffi_diy_typeless_core_checksum_func_warmup_llm_connection() != 8480) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_diy_typeless_core_checksum_method_cancellationtoken_cancel() != 9674) {

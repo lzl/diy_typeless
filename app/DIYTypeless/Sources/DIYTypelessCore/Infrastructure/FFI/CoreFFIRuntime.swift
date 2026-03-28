@@ -8,7 +8,7 @@ public struct CoreFFIRuntimeHandlers: Sendable {
     public typealias StartRecording = @Sendable () throws -> Void
     public typealias StopRecording = @Sendable () throws -> DomainAudioData
     public typealias WarmupGroqConnection = @Sendable () throws -> Void
-    public typealias WarmupGeminiConnection = @Sendable () throws -> Void
+    public typealias WarmupLLMConnection = @Sendable (_ provider: ApiProvider) throws -> Void
     public typealias TranscribeAudioBytesCancellable = @Sendable (
         _ apiKey: String,
         _ audioBytes: Data,
@@ -16,12 +16,14 @@ public struct CoreFFIRuntimeHandlers: Sendable {
         _ cancellationToken: CancellationToken
     ) throws -> String
     public typealias PolishTextCancellable = @Sendable (
+        _ provider: ApiProvider,
         _ apiKey: String,
         _ rawText: String,
         _ context: String?,
         _ cancellationToken: CancellationToken
     ) throws -> String
     public typealias ProcessTextWithLlmCancellable = @Sendable (
+        _ provider: ApiProvider,
         _ apiKey: String,
         _ prompt: String,
         _ systemInstruction: String?,
@@ -32,7 +34,7 @@ public struct CoreFFIRuntimeHandlers: Sendable {
     public let startRecording: StartRecording
     public let stopRecording: StopRecording
     public let warmupGroqConnection: WarmupGroqConnection
-    public let warmupGeminiConnection: WarmupGeminiConnection
+    public let warmupLLMConnection: WarmupLLMConnection
     public let transcribeAudioBytesCancellable: TranscribeAudioBytesCancellable
     public let polishTextCancellable: PolishTextCancellable
     public let processTextWithLlmCancellable: ProcessTextWithLlmCancellable
@@ -41,7 +43,7 @@ public struct CoreFFIRuntimeHandlers: Sendable {
         startRecording: @escaping StartRecording,
         stopRecording: @escaping StopRecording,
         warmupGroqConnection: @escaping WarmupGroqConnection,
-        warmupGeminiConnection: @escaping WarmupGeminiConnection,
+        warmupLLMConnection: @escaping WarmupLLMConnection,
         transcribeAudioBytesCancellable: @escaping TranscribeAudioBytesCancellable,
         polishTextCancellable: @escaping PolishTextCancellable,
         processTextWithLlmCancellable: @escaping ProcessTextWithLlmCancellable
@@ -49,7 +51,7 @@ public struct CoreFFIRuntimeHandlers: Sendable {
         self.startRecording = startRecording
         self.stopRecording = stopRecording
         self.warmupGroqConnection = warmupGroqConnection
-        self.warmupGeminiConnection = warmupGeminiConnection
+        self.warmupLLMConnection = warmupLLMConnection
         self.transcribeAudioBytesCancellable = transcribeAudioBytesCancellable
         self.polishTextCancellable = polishTextCancellable
         self.processTextWithLlmCancellable = processTextWithLlmCancellable
@@ -60,14 +62,16 @@ public struct CoreFFIRuntimeHandlers: Sendable {
             startRecording: { throw CoreFFIRuntimeError.unconfigured("startRecording") },
             stopRecording: { throw CoreFFIRuntimeError.unconfigured("stopRecording") },
             warmupGroqConnection: { throw CoreFFIRuntimeError.unconfigured("warmupGroqConnection") },
-            warmupGeminiConnection: { throw CoreFFIRuntimeError.unconfigured("warmupGeminiConnection") },
+            warmupLLMConnection: { _ in
+                throw CoreFFIRuntimeError.unconfigured("warmupLLMConnection")
+            },
             transcribeAudioBytesCancellable: { _, _, _, _ in
                 throw CoreFFIRuntimeError.unconfigured("transcribeAudioBytesCancellable")
             },
-            polishTextCancellable: { _, _, _, _ in
+            polishTextCancellable: { _, _, _, _, _ in
                 throw CoreFFIRuntimeError.unconfigured("polishTextCancellable")
             },
-            processTextWithLlmCancellable: { _, _, _, _, _ in
+            processTextWithLlmCancellable: { _, _, _, _, _, _ in
                 throw CoreFFIRuntimeError.unconfigured("processTextWithLlmCancellable")
             }
         )
@@ -105,9 +109,9 @@ public enum CoreFFIRuntime {
         try handler()
     }
 
-    public static func warmupGeminiConnection() throws {
-        let handler = withHandlers { $0.warmupGeminiConnection }
-        try handler()
+    public static func warmupLLMConnection(provider: ApiProvider) throws {
+        let handler = withHandlers { $0.warmupLLMConnection }
+        try handler(provider)
     }
 
     public static func transcribeAudioBytesCancellable(
@@ -121,16 +125,18 @@ public enum CoreFFIRuntime {
     }
 
     public static func polishTextCancellable(
+        provider: ApiProvider,
         apiKey: String,
         rawText: String,
         context: String?,
         cancellationToken: CancellationToken
     ) throws -> String {
         let handler = withHandlers { $0.polishTextCancellable }
-        return try handler(apiKey, rawText, context, cancellationToken)
+        return try handler(provider, apiKey, rawText, context, cancellationToken)
     }
 
     public static func processTextWithLlmCancellable(
+        provider: ApiProvider,
         apiKey: String,
         prompt: String,
         systemInstruction: String?,
@@ -138,7 +144,7 @@ public enum CoreFFIRuntime {
         cancellationToken: CancellationToken
     ) throws -> String {
         let handler = withHandlers { $0.processTextWithLlmCancellable }
-        return try handler(apiKey, prompt, systemInstruction, temperature, cancellationToken)
+        return try handler(provider, apiKey, prompt, systemInstruction, temperature, cancellationToken)
     }
 
     private static func withHandlers<T>(

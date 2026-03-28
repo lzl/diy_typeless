@@ -1,6 +1,7 @@
 //! Utility functions for CLI
 
 use anyhow::{Context, Result};
+use diy_typeless_core::LlmProvider;
 use secrecy::SecretString;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -65,6 +66,18 @@ pub(crate) fn resolve_gemini_key(provided: Option<String>) -> Result<SecretStrin
         std::env::var("GEMINI_API_KEY").ok(),
         "GEMINI_API_KEY",
     )
+}
+
+pub(crate) fn resolve_llm_key(
+    provider: LlmProvider,
+    provided: Option<String>,
+) -> Result<SecretString> {
+    match provider {
+        LlmProvider::GoogleAiStudio => resolve_gemini_key(provided),
+        LlmProvider::Openai => {
+            resolve_api_key_value(provided, std::env::var("OPENAI_API_KEY").ok(), "OPENAI_API_KEY")
+        }
+    }
 }
 
 fn resolve_api_key_value(
@@ -154,8 +167,10 @@ pub(crate) fn print_binary_status(binary: &str) {
 mod tests {
     use super::{
         default_output_dir, ensure_flac_bytes, find_binary_in_path, format_duration, mask_secret,
-        resolve_api_key_value, resolve_gemini_key, resolve_groq_key, resolve_output_dir,
+        resolve_api_key_value, resolve_gemini_key, resolve_groq_key, resolve_llm_key,
+        resolve_output_dir,
     };
+    use diy_typeless_core::LlmProvider;
     use secrecy::ExposeSecret;
     use std::ffi::OsString;
     use std::fs;
@@ -223,6 +238,7 @@ mod tests {
     struct ApiKeyEnvGuard {
         original_groq: Option<OsString>,
         original_gemini: Option<OsString>,
+        original_openai: Option<OsString>,
     }
 
     impl Drop for ApiKeyEnvGuard {
@@ -238,12 +254,23 @@ mod tests {
             } else {
                 std::env::remove_var("GEMINI_API_KEY");
             }
+
+            if let Some(value) = &self.original_openai {
+                std::env::set_var("OPENAI_API_KEY", value);
+            } else {
+                std::env::remove_var("OPENAI_API_KEY");
+            }
         }
     }
 
-    fn set_api_keys_for_test(groq: Option<&str>, gemini: Option<&str>) -> ApiKeyEnvGuard {
+    fn set_api_keys_for_test(
+        groq: Option<&str>,
+        gemini: Option<&str>,
+        openai: Option<&str>,
+    ) -> ApiKeyEnvGuard {
         let original_groq = std::env::var_os("GROQ_API_KEY");
         let original_gemini = std::env::var_os("GEMINI_API_KEY");
+        let original_openai = std::env::var_os("OPENAI_API_KEY");
 
         if let Some(value) = groq {
             std::env::set_var("GROQ_API_KEY", value);
@@ -257,9 +284,16 @@ mod tests {
             std::env::remove_var("GEMINI_API_KEY");
         }
 
+        if let Some(value) = openai {
+            std::env::set_var("OPENAI_API_KEY", value);
+        } else {
+            std::env::remove_var("OPENAI_API_KEY");
+        }
+
         ApiKeyEnvGuard {
             original_groq,
             original_gemini,
+            original_openai,
         }
     }
 
@@ -475,7 +509,7 @@ mod tests {
         let _lock = API_KEY_TEST_LOCK
             .lock()
             .expect("api key test lock should be acquired");
-        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"), None);
 
         let key = resolve_groq_key(None).expect("groq env key should resolve");
         assert_eq!(key.expose_secret(), "groq-env");
@@ -486,7 +520,7 @@ mod tests {
         let _lock = API_KEY_TEST_LOCK
             .lock()
             .expect("api key test lock should be acquired");
-        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"), None);
 
         let key = resolve_gemini_key(None).expect("gemini env key should resolve");
         assert_eq!(key.expose_secret(), "gemini-env");
@@ -497,10 +531,22 @@ mod tests {
         let _lock = API_KEY_TEST_LOCK
             .lock()
             .expect("api key test lock should be acquired");
-        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"));
+        let _guard = set_api_keys_for_test(Some("groq-env"), Some("gemini-env"), None);
 
         let key = resolve_groq_key(Some("provided-groq".to_string()))
             .expect("provided groq key should resolve");
         assert_eq!(key.expose_secret(), "provided-groq");
+    }
+
+    #[test]
+    fn resolve_llm_key_should_read_openai_env_variable() {
+        let _lock = API_KEY_TEST_LOCK
+            .lock()
+            .expect("api key test lock should be acquired");
+        let _guard = set_api_keys_for_test(None, None, Some("openai-env"));
+
+        let key = resolve_llm_key(LlmProvider::Openai, None)
+            .expect("openai env key should resolve");
+        assert_eq!(key.expose_secret(), "openai-env");
     }
 }

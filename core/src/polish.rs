@@ -2,10 +2,11 @@ use crate::cancellation::{
     cancellation_requested, run_with_cancellation, worker_disconnected_message,
     CancellableOperationError, CancellationToken,
 };
-use crate::config::{GEMINI_API_URL, GEMINI_MODEL};
+use crate::config::{GEMINI_API_URL, GEMINI_MODEL, OPENAI_API_URL, OPENAI_MODEL};
 use crate::error::CoreError;
 use crate::http_client::get_http_client;
 use crate::retry::{is_retryable_status, with_retry, with_retry_cancellable, HttpResult};
+use crate::LlmProvider;
 use reqwest::StatusCode;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
@@ -34,15 +35,52 @@ struct GeminiPart {
     text: Option<String>,
 }
 
-fn build_polish_request_body(prompt: &str) -> serde_json::Value {
-    serde_json::json!({
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}],
-            }
-        ]
-    })
+#[derive(Deserialize)]
+struct OpenAiResponse {
+    choices: Vec<OpenAiChoice>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiChoice {
+    message: OpenAiMessage,
+}
+
+#[derive(Deserialize)]
+struct OpenAiMessage {
+    content: Option<String>,
+}
+
+fn provider_api_name(provider: LlmProvider) -> &'static str {
+    match provider {
+        LlmProvider::GoogleAiStudio => "Gemini API",
+        LlmProvider::Openai => "OpenAI API",
+    }
+}
+
+fn build_polish_request_body(provider: LlmProvider, prompt: &str) -> serde_json::Value {
+    match provider {
+        LlmProvider::GoogleAiStudio => serde_json::json!({
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                }
+            ]
+        }),
+        LlmProvider::Openai => serde_json::json!({
+            "model": OPENAI_MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional text editor. Output only the polished text."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        }),
+    }
 }
 
 fn extract_gemini_text(payload: GeminiResponse) -> HttpResult<String> {
@@ -65,22 +103,42 @@ fn extract_gemini_text(payload: GeminiResponse) -> HttpResult<String> {
     }
 }
 
-fn classify_gemini_status(status: StatusCode) -> HttpResult<()> {
+fn extract_openai_text(payload: OpenAiResponse) -> HttpResult<String> {
+    let text = payload
+        .choices
+        .first()
+        .and_then(|choice| choice.message.content.clone());
+
+    match text {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string())
+            } else {
+                HttpResult::Success(trimmed.to_string())
+            }
+        }
+        None => HttpResult::NonRetryable(EMPTY_RESPONSE_MESSAGE.to_string()),
+    }
+}
+
+fn classify_status(provider: LlmProvider, status: StatusCode) -> HttpResult<()> {
     if status == StatusCode::OK {
         HttpResult::Success(())
     } else if is_retryable_status(status) {
         HttpResult::Retryable
     } else {
-        HttpResult::NonRetryable(format!("Gemini API error: HTTP {status}"))
+        HttpResult::NonRetryable(format!("{} error: HTTP {status}", provider_api_name(provider)))
     }
 }
 
-fn map_gemini_error(msg: String) -> CoreError {
+fn map_provider_error(provider: LlmProvider, msg: String) -> CoreError {
+    let api_error_prefix = format!("{} error: HTTP", provider_api_name(provider));
     if msg == EMPTY_RESPONSE_MESSAGE {
         CoreError::EmptyResponse
     } else if msg == CANCELLED_RESPONSE_MESSAGE {
         CoreError::Cancelled
-    } else if msg.starts_with("Gemini API error") {
+    } else if msg.starts_with(&api_error_prefix) {
         CoreError::Api(msg)
     } else {
         CoreError::Http(msg)
@@ -88,38 +146,48 @@ fn map_gemini_error(msg: String) -> CoreError {
 }
 
 fn run_polish_with_retry(
+    provider: LlmProvider,
     operation: impl FnMut() -> HttpResult<String>,
     cancellation_token: Option<&CancellationToken>,
 ) -> Result<String, CoreError> {
+    let api_name = provider_api_name(provider);
     if let Some(token) = cancellation_token {
-        with_retry_cancellable(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API", || {
+        with_retry_cancellable(POLISH_MAX_RETRY_ATTEMPTS, operation, api_name, || {
             token.is_cancelled()
         })
-        .map_err(map_gemini_error)
+        .map_err(|msg| map_provider_error(provider, msg))
     } else {
-        with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, "Gemini API").map_err(map_gemini_error)
+        with_retry(POLISH_MAX_RETRY_ATTEMPTS, operation, api_name)
+            .map_err(|msg| map_provider_error(provider, msg))
     }
 }
 
 fn execute_polish_request(
+    provider: LlmProvider,
     client: &reqwest::blocking::Client,
     url: &str,
     api_key: &str,
     prompt: &str,
 ) -> HttpResult<String> {
-    let body = build_polish_request_body(prompt);
+    let body = build_polish_request_body(provider, prompt);
+    let request = match provider {
+        LlmProvider::GoogleAiStudio => client.post(url).header("x-goog-api-key", api_key),
+        LlmProvider::Openai => client.post(url).bearer_auth(api_key),
+    };
 
-    let response = client
-        .post(url)
-        .header("x-goog-api-key", api_key)
-        .json(&body)
-        .send();
+    let response = request.json(&body).send();
 
     match response {
-        Ok(resp) => match classify_gemini_status(resp.status()) {
-            HttpResult::Success(()) => match resp.json::<GeminiResponse>() {
-                Ok(payload) => extract_gemini_text(payload),
-                Err(e) => HttpResult::NonRetryable(e.to_string()),
+        Ok(resp) => match classify_status(provider, resp.status()) {
+            HttpResult::Success(()) => match provider {
+                LlmProvider::GoogleAiStudio => match resp.json::<GeminiResponse>() {
+                    Ok(payload) => extract_gemini_text(payload),
+                    Err(e) => HttpResult::NonRetryable(e.to_string()),
+                },
+                LlmProvider::Openai => match resp.json::<OpenAiResponse>() {
+                    Ok(payload) => extract_openai_text(payload),
+                    Err(e) => HttpResult::NonRetryable(e.to_string()),
+                },
             },
             HttpResult::Retryable => HttpResult::Retryable,
             HttpResult::NonRetryable(msg) => HttpResult::NonRetryable(msg),
@@ -129,6 +197,7 @@ fn execute_polish_request(
 }
 
 fn execute_polish_request_cancellable(
+    provider: LlmProvider,
     client: &reqwest::blocking::Client,
     url: &str,
     api_key: &SecretString,
@@ -140,7 +209,7 @@ fn execute_polish_request_cancellable(
     }
 
     if cancellation_token.is_none() {
-        return execute_polish_request(client, url, api_key.expose_secret(), prompt);
+        return execute_polish_request(provider, client, url, api_key.expose_secret(), prompt);
     }
 
     let worker_client = client.clone();
@@ -149,7 +218,13 @@ fn execute_polish_request_cancellable(
     let worker_prompt = prompt.to_string();
 
     match run_with_cancellation(cancellation_token, move || {
-        execute_polish_request(&worker_client, &worker_url, &worker_api_key, &worker_prompt)
+        execute_polish_request(
+            provider,
+            &worker_client,
+            &worker_url,
+            &worker_api_key,
+            &worker_prompt,
+        )
     }) {
         Ok(result) => result,
         Err(CancellableOperationError::Cancelled) => {
@@ -191,14 +266,16 @@ fn build_prompt(raw_text: &str, context: Option<&str>) -> String {
 }
 
 pub(crate) fn polish_text(
+    provider: LlmProvider,
     api_key: &SecretString,
     raw_text: &str,
     context: Option<&str>,
 ) -> Result<String, CoreError> {
-    polish_text_with_cancellation(api_key, raw_text, context, None)
+    polish_text_with_cancellation(provider, api_key, raw_text, context, None)
 }
 
 pub(crate) fn polish_text_with_cancellation(
+    provider: LlmProvider,
     api_key: &SecretString,
     raw_text: &str,
     context: Option<&str>,
@@ -211,10 +288,23 @@ pub(crate) fn polish_text_with_cancellation(
     let prompt = build_prompt(raw_text, context);
 
     let client = get_http_client();
-    let url = format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent");
+    let url = match provider {
+        LlmProvider::GoogleAiStudio => format!("{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent"),
+        LlmProvider::Openai => format!("{OPENAI_API_URL}/chat/completions"),
+    };
 
     run_polish_with_retry(
-        || execute_polish_request_cancellable(client, &url, api_key, &prompt, cancellation_token),
+        provider,
+        || {
+            execute_polish_request_cancellable(
+                provider,
+                client,
+                &url,
+                api_key,
+                &prompt,
+                cancellation_token,
+            )
+        },
         cancellation_token,
     )
 }
@@ -222,13 +312,14 @@ pub(crate) fn polish_text_with_cancellation(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_context_section, build_polish_request_body, build_prompt, classify_gemini_status,
-        extract_gemini_text, map_gemini_error, polish_text_with_cancellation,
-        run_polish_with_retry, GeminiResponse,
+        build_context_section, build_polish_request_body, build_prompt, classify_status,
+        extract_gemini_text, extract_openai_text, map_provider_error, polish_text_with_cancellation,
+        run_polish_with_retry, GeminiResponse, OpenAiResponse,
     };
     use crate::cancellation::CancellationToken;
     use crate::error::CoreError;
     use crate::retry::HttpResult;
+    use crate::LlmProvider;
     use reqwest::StatusCode;
     use secrecy::SecretString;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -321,8 +412,11 @@ mod tests {
     }
 
     #[test]
-    fn map_gemini_error_should_map_cancelled_variant() {
-        let result = map_gemini_error("Operation cancelled".to_string());
+    fn map_provider_error_should_map_cancelled_variant() {
+        let result = map_provider_error(
+            LlmProvider::GoogleAiStudio,
+            "Operation cancelled".to_string(),
+        );
         assert!(matches!(result, CoreError::Cancelled));
     }
 
@@ -337,9 +431,20 @@ mod tests {
 
     #[test]
     fn build_polish_request_body_should_embed_prompt_as_user_text() {
-        let body = build_polish_request_body("hello");
+        let body = build_polish_request_body(LlmProvider::GoogleAiStudio, "hello");
         assert_eq!(body["contents"][0]["role"], "user");
         assert_eq!(body["contents"][0]["parts"][0]["text"], "hello");
+    }
+
+    #[test]
+    fn build_polish_request_body_should_support_openai_provider() {
+        let body = build_polish_request_body(LlmProvider::Openai, "hello");
+
+        assert_eq!(body["model"], "gpt-5.4-nano");
+        assert_eq!(body["messages"][0]["role"], "system");
+        assert_eq!(body["messages"][0]["content"], "You are a professional text editor. Output only the polished text.");
+        assert_eq!(body["messages"][1]["role"], "user");
+        assert_eq!(body["messages"][1]["content"], "hello");
     }
 
     #[test]
@@ -373,34 +478,65 @@ mod tests {
     }
 
     #[test]
-    fn classify_gemini_status_should_retry_on_server_errors() {
-        let result = classify_gemini_status(StatusCode::SERVICE_UNAVAILABLE);
+    fn extract_openai_text_should_return_success_when_payload_contains_text() {
+        let payload: OpenAiResponse = serde_json::from_value(serde_json::json!({
+            "choices": [{"message": {"content": "  polished output  "}}]
+        }))
+        .expect("valid payload");
+        let result = extract_openai_text(payload);
+        assert!(matches!(result, HttpResult::Success(value) if value == "polished output"));
+    }
+
+    #[test]
+    fn extract_openai_text_should_return_empty_response_when_choices_are_missing() {
+        let payload: OpenAiResponse = serde_json::from_value(serde_json::json!({
+            "choices": []
+        }))
+        .expect("valid payload");
+        let result = extract_openai_text(payload);
+        assert!(matches!(result, HttpResult::NonRetryable(msg) if msg == "Empty response"));
+    }
+
+    #[test]
+    fn classify_status_should_retry_on_server_errors() {
+        let result = classify_status(LlmProvider::GoogleAiStudio, StatusCode::SERVICE_UNAVAILABLE);
         assert!(matches!(result, HttpResult::Retryable));
     }
 
     #[test]
-    fn classify_gemini_status_should_map_client_error_to_non_retryable() {
-        let result = classify_gemini_status(StatusCode::UNAUTHORIZED);
+    fn classify_status_should_map_client_error_to_non_retryable() {
+        let result = classify_status(LlmProvider::GoogleAiStudio, StatusCode::UNAUTHORIZED);
         assert!(
             matches!(result, HttpResult::NonRetryable(msg) if msg == "Gemini API error: HTTP 401 Unauthorized")
         );
     }
 
     #[test]
-    fn map_gemini_error_should_map_empty_response_variant() {
-        let result = map_gemini_error("Empty response".to_string());
+    fn classify_status_should_map_openai_client_error_to_non_retryable() {
+        let result = classify_status(LlmProvider::Openai, StatusCode::FORBIDDEN);
+        assert!(
+            matches!(result, HttpResult::NonRetryable(msg) if msg == "OpenAI API error: HTTP 403 Forbidden")
+        );
+    }
+
+    #[test]
+    fn map_provider_error_should_map_empty_response_variant() {
+        let result = map_provider_error(LlmProvider::GoogleAiStudio, "Empty response".to_string());
         assert!(matches!(result, CoreError::EmptyResponse));
     }
 
     #[test]
-    fn map_gemini_error_should_map_api_variant() {
-        let result = map_gemini_error("Gemini API error: HTTP 403 Forbidden".to_string());
+    fn map_provider_error_should_map_api_variant() {
+        let result = map_provider_error(
+            LlmProvider::GoogleAiStudio,
+            "Gemini API error: HTTP 403 Forbidden".to_string(),
+        );
         assert!(matches!(result, CoreError::Api(_)));
     }
 
     #[test]
-    fn map_gemini_error_should_map_http_variant() {
-        let result = map_gemini_error("request timeout".to_string());
+    fn map_provider_error_should_map_http_variant() {
+        let result = map_provider_error(LlmProvider::GoogleAiStudio, "request timeout".to_string());
         assert!(matches!(result, CoreError::Http(_)));
     }
 
@@ -409,6 +545,7 @@ mod tests {
         let attempts = AtomicU32::new(0);
 
         let result = run_polish_with_retry(
+            LlmProvider::GoogleAiStudio,
             || {
                 let attempt = attempts.fetch_add(1, Ordering::SeqCst);
                 if attempt < 2 {
@@ -429,6 +566,7 @@ mod tests {
         let attempts = AtomicU32::new(0);
 
         let result = run_polish_with_retry(
+            LlmProvider::GoogleAiStudio,
             || {
                 attempts.fetch_add(1, Ordering::SeqCst);
                 HttpResult::Retryable
@@ -448,6 +586,7 @@ mod tests {
         token.cancel();
 
         let result = polish_text_with_cancellation(
+            LlmProvider::GoogleAiStudio,
             &SecretString::from("test-key".to_string()),
             "raw input",
             None,

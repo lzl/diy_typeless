@@ -16,13 +16,16 @@ public protocol ValidateApiKeyUseCaseProtocol: Sendable {
 public final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
     private let groqRepository: ApiKeyValidationRepository
     private let geminiRepository: ApiKeyValidationRepository
+    private let openAIRepository: ApiKeyValidationRepository
 
     public init(
         groqRepository: ApiKeyValidationRepository,
-        geminiRepository: ApiKeyValidationRepository
+        geminiRepository: ApiKeyValidationRepository,
+        openAIRepository: ApiKeyValidationRepository
     ) {
         self.groqRepository = groqRepository
         self.geminiRepository = geminiRepository
+        self.openAIRepository = openAIRepository
     }
 
     public func execute(key: String, for provider: ApiProvider) async throws {
@@ -31,6 +34,8 @@ public final class ValidateApiKeyUseCase: ValidateApiKeyUseCaseProtocol {
             try await groqRepository.validate(key: key)
         case .gemini:
             try await geminiRepository.validate(key: key)
+        case .openai:
+            try await openAIRepository.validate(key: key)
         }
     }
 }

@@ -19,7 +19,7 @@ enum OnboardingWelcomeContent {
         .init(
             systemName: "key.fill",
             title: "Add API keys",
-            detail: "Enter your Groq and Gemini keys."
+            detail: "Required to transcribe your voice and polish text."
         )
     ]
 }

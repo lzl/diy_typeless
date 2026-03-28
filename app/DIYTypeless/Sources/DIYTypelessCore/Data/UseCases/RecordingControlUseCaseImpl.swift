@@ -16,11 +16,11 @@ public final class RecordingControlUseCaseImpl: RecordingControlUseCaseProtocol 
         }
     }
 
-    public func warmupConnections() async {
+    public func warmupConnections(llmProvider: ApiProvider) async {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .background).async {
                 _ = try? CoreFFIRuntime.warmupGroqConnection()
-                _ = try? CoreFFIRuntime.warmupGeminiConnection()
+                _ = try? CoreFFIRuntime.warmupLLMConnection(provider: llmProvider)
                 continuation.resume()
             }
         }

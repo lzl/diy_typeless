@@ -24,8 +24,8 @@ func configureCoreFFIRuntimeIfNeeded() {
             warmupGroqConnection: {
                 try warmupGroqConnection()
             },
-            warmupGeminiConnection: {
-                try warmupGeminiConnection()
+            warmupLLMConnection: { provider in
+                try warmupLlmConnection(provider: try ffiLlmProvider(from: provider))
             },
             transcribeAudioBytesCancellable: { apiKey, audioBytes, language, cancellationToken in
                 try withBridgedCancellation(cancellationToken: cancellationToken) { ffiCancellationToken in
@@ -41,10 +41,11 @@ func configureCoreFFIRuntimeIfNeeded() {
                     }
                 }
             },
-            polishTextCancellable: { apiKey, rawText, context, cancellationToken in
+            polishTextCancellable: { provider, apiKey, rawText, context, cancellationToken in
                 try withBridgedCancellation(cancellationToken: cancellationToken) { ffiCancellationToken in
                     do {
                         return try polishTextCancellable(
+                            provider: try ffiLlmProvider(from: provider),
                             apiKey: apiKey,
                             rawText: rawText,
                             context: context,
@@ -55,10 +56,11 @@ func configureCoreFFIRuntimeIfNeeded() {
                     }
                 }
             },
-            processTextWithLlmCancellable: { apiKey, prompt, systemInstruction, temperature, cancellationToken in
+            processTextWithLlmCancellable: { provider, apiKey, prompt, systemInstruction, temperature, cancellationToken in
                 try withBridgedCancellation(cancellationToken: cancellationToken) { ffiCancellationToken in
                     do {
                         return try processTextWithLlmCancellable(
+                            provider: try ffiLlmProvider(from: provider),
                             apiKey: apiKey,
                             prompt: prompt,
                             systemInstruction: systemInstruction,
@@ -74,6 +76,17 @@ func configureCoreFFIRuntimeIfNeeded() {
     )
 
     coreFFIRuntimeConfigured = true
+}
+
+private func ffiLlmProvider(from provider: DIYTypelessCore.ApiProvider) throws -> DIYTypeless.LlmProvider {
+    switch provider {
+    case .gemini:
+        return .googleAiStudio
+    case .openai:
+        return .openai
+    case .groq:
+        throw DIYTypelessCore.CoreError.Config("Groq is not a valid LLM provider.")
+    }
 }
 
 private func withBridgedCancellation<T>(

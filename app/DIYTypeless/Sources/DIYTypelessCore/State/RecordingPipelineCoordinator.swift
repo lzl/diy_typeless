@@ -2,20 +2,23 @@ import Foundation
 
 public struct RecordingPipelineRequest: Sendable {
     public let groqKey: String
-    public let geminiKey: String
+    public let llmProvider: ApiProvider
+    public let llmApiKey: String
     public let selectedTextContext: SelectedTextContext
     public let appContext: String?
     public let cancellationToken: CancellationToken?
 
     public init(
         groqKey: String,
-        geminiKey: String,
+        llmProvider: ApiProvider,
+        llmApiKey: String,
         selectedTextContext: SelectedTextContext,
         appContext: String?,
         cancellationToken: CancellationToken?
     ) {
         self.groqKey = groqKey
-        self.geminiKey = geminiKey
+        self.llmProvider = llmProvider
+        self.llmApiKey = llmApiKey
         self.selectedTextContext = selectedTextContext
         self.appContext = appContext
         self.cancellationToken = cancellationToken
@@ -83,7 +86,8 @@ public final class RecordingPipelineCoordinator: RecordingPipelineCoordinating {
             let result = try await processVoiceCommandUseCase.execute(
                 transcription: rawText,
                 selectedText: selectedText,
-                geminiKey: request.geminiKey,
+                provider: request.llmProvider,
+                apiKey: request.llmApiKey,
                 cancellationToken: request.cancellationToken
             )
             return .voiceCommand(result)
@@ -92,7 +96,8 @@ public final class RecordingPipelineCoordinator: RecordingPipelineCoordinating {
         await onProgress(.polishing)
         let polishedText = try await polishTextUseCase.execute(
             rawText: rawText,
-            apiKey: request.geminiKey,
+            provider: request.llmProvider,
+            apiKey: request.llmApiKey,
             context: request.appContext,
             cancellationToken: request.cancellationToken
         )

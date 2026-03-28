@@ -18,19 +18,22 @@ private struct RuntimeSnapshot {
     var startRecordingCalls = 0
     var stopRecordingCalls = 0
     var warmupGroqCalls = 0
-    var warmupGeminiCalls = 0
+    var warmupLLMCalls = 0
     var transcribeCalls = 0
     var polishCalls = 0
     var llmCalls = 0
 
+    var lastWarmupLLMProvider: ApiProvider?
     var lastTranscribeApiKey: String?
     var lastTranscribeAudioBytes: Data?
     var lastTranscribeLanguage: String?
 
+    var lastPolishProvider: ApiProvider?
     var lastPolishApiKey: String?
     var lastPolishRawText: String?
     var lastPolishContext: String?
 
+    var lastLlmProvider: ApiProvider?
     var lastLlmApiKey: String?
     var lastLlmPrompt: String?
     var lastLlmSystemInstruction: String?
@@ -60,7 +63,7 @@ private struct RuntimeBehavior {
     var stopRecordingResult = DomainAudioData(bytes: Data([9, 8, 7]), durationSeconds: 1.25)
     var stopRecordingError: Error?
     var warmupGroqError: Error?
-    var warmupGeminiError: Error?
+    var warmupLLMError: Error?
 
     var transcribeResult = "transcribed"
     var transcribeError: Error?
@@ -97,9 +100,12 @@ private func configureRuntime(
                     throw error
                 }
             },
-            warmupGeminiConnection: {
-                recorder.mutate { $0.warmupGeminiCalls += 1 }
-                if let error = behavior.warmupGeminiError {
+            warmupLLMConnection: { provider in
+                recorder.mutate {
+                    $0.warmupLLMCalls += 1
+                    $0.lastWarmupLLMProvider = provider
+                }
+                if let error = behavior.warmupLLMError {
                     throw error
                 }
             },
@@ -115,9 +121,10 @@ private func configureRuntime(
                 }
                 return behavior.transcribeResult
             },
-            polishTextCancellable: { apiKey, rawText, context, _ in
+            polishTextCancellable: { provider, apiKey, rawText, context, _ in
                 recorder.mutate {
                     $0.polishCalls += 1
+                    $0.lastPolishProvider = provider
                     $0.lastPolishApiKey = apiKey
                     $0.lastPolishRawText = rawText
                     $0.lastPolishContext = context
@@ -127,9 +134,10 @@ private func configureRuntime(
                 }
                 return behavior.polishResult
             },
-            processTextWithLlmCancellable: { apiKey, prompt, systemInstruction, temperature, _ in
+            processTextWithLlmCancellable: { provider, apiKey, prompt, systemInstruction, temperature, _ in
                 recorder.mutate {
                     $0.llmCalls += 1
+                    $0.lastLlmProvider = provider
                     $0.lastLlmApiKey = apiKey
                     $0.lastLlmPrompt = prompt
                     $0.lastLlmSystemInstruction = systemInstruction
@@ -182,7 +190,7 @@ final class RecordingControlUseCaseImplTests: XCTestCase {
         }
     }
 
-    func testWarmupConnections_whenGroqFails_stillWarmsGemini() async {
+    func testWarmupConnections_whenGroqFails_stillWarmsSelectedProvider() async {
         await CoreFFIRuntimeTestLock.shared.run {
             let recorder = RuntimeRecorder()
             configureRuntime(
@@ -193,11 +201,12 @@ final class RecordingControlUseCaseImplTests: XCTestCase {
             )
             let sut = RecordingControlUseCaseImpl()
 
-            await sut.warmupConnections()
+            await sut.warmupConnections(llmProvider: .openai)
 
             let snapshot = recorder.snapshot()
             XCTAssertEqual(snapshot.warmupGroqCalls, 1)
-            XCTAssertEqual(snapshot.warmupGeminiCalls, 1)
+            XCTAssertEqual(snapshot.warmupLLMCalls, 1)
+            XCTAssertEqual(snapshot.lastWarmupLLMProvider, .openai)
         }
     }
 }
@@ -335,6 +344,7 @@ final class PolishTextUseCaseImplTests: XCTestCase {
             do {
                 _ = try await sut.execute(
                     rawText: "",
+                    provider: .gemini,
                     apiKey: "gem-key",
                     context: nil,
                     cancellationToken: nil
@@ -361,6 +371,7 @@ final class PolishTextUseCaseImplTests: XCTestCase {
             do {
                 _ = try await sut.execute(
                     rawText: "hello",
+                    provider: .gemini,
                     apiKey: "gem-key",
                     context: "notes",
                     cancellationToken: nil
@@ -385,6 +396,7 @@ final class PolishTextUseCaseImplTests: XCTestCase {
 
             let result = try await sut.execute(
                 rawText: "raw text",
+                provider: .openai,
                 apiKey: "gem-key",
                 context: "mail",
                 cancellationToken: nil
@@ -393,6 +405,7 @@ final class PolishTextUseCaseImplTests: XCTestCase {
             let snapshot = recorder.snapshot()
             XCTAssertEqual(result, "polished output")
             XCTAssertEqual(snapshot.polishCalls, 1)
+            XCTAssertEqual(snapshot.lastPolishProvider, .openai)
             XCTAssertEqual(snapshot.lastPolishApiKey, "gem-key")
             XCTAssertEqual(snapshot.lastPolishRawText, "raw text")
             XCTAssertEqual(snapshot.lastPolishContext, "mail")
@@ -411,6 +424,7 @@ final class GeminiLLMRepositoryTests: XCTestCase {
             let sut = GeminiLLMRepository()
 
             let result = try await sut.generate(
+                provider: .openai,
                 apiKey: "gem-key",
                 prompt: "prompt",
                 temperature: nil,
@@ -420,6 +434,7 @@ final class GeminiLLMRepositoryTests: XCTestCase {
             let snapshot = recorder.snapshot()
             XCTAssertEqual(result, "done")
             XCTAssertEqual(snapshot.llmCalls, 1)
+            XCTAssertEqual(snapshot.lastLlmProvider, .openai)
             XCTAssertEqual(snapshot.lastLlmApiKey, "gem-key")
             XCTAssertEqual(snapshot.lastLlmPrompt, "prompt")
             XCTAssertEqual(snapshot.lastLlmSystemInstruction, nil)
@@ -434,6 +449,7 @@ final class GeminiLLMRepositoryTests: XCTestCase {
             let sut = GeminiLLMRepository()
 
             _ = try await sut.generate(
+                provider: .gemini,
                 apiKey: "gem-key",
                 prompt: "prompt",
                 temperature: 0.9,
@@ -455,6 +471,7 @@ final class GeminiLLMRepositoryTests: XCTestCase {
 
             do {
                 _ = try await sut.generate(
+                    provider: .gemini,
                     apiKey: "gem-key",
                     prompt: "prompt",
                     temperature: nil,
@@ -481,6 +498,7 @@ final class GeminiLLMRepositoryTests: XCTestCase {
 
             do {
                 _ = try await sut.generate(
+                    provider: .gemini,
                     apiKey: "gem-key",
                     prompt: "prompt",
                     temperature: nil,

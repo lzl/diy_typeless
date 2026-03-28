@@ -13,7 +13,8 @@ public final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCasePro
     public func execute(
         transcription: String,
         selectedText: String,
-        geminiKey: String,
+        provider: ApiProvider,
+        apiKey: String,
         cancellationToken: CancellationToken?
     ) async throws -> VoiceCommandResult {
         if cancellationToken?.isCancelled() == true {
@@ -27,7 +28,8 @@ public final class ProcessVoiceCommandUseCaseImpl: ProcessVoiceCommandUseCasePro
         do {
             // Call LLM
             let response = try await llmRepository.generate(
-                apiKey: geminiKey,
+                provider: provider,
+                apiKey: apiKey,
                 prompt: prompt,
                 temperature: 0.3,
                 cancellationToken: cancellationToken

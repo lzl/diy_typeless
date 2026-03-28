@@ -20,6 +20,15 @@ pub use error::CoreError;
 use secrecy::SecretString;
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+/// Supported LLM providers for polish and generic text-processing flows.
+pub enum LlmProvider {
+    /// Google AI Studio Gemini API.
+    GoogleAiStudio,
+    /// OpenAI Chat Completions API.
+    Openai,
+}
+
 #[uniffi::export]
 /// Start microphone capture.
 ///
@@ -69,26 +78,34 @@ pub fn transcribe_audio_bytes_cancellable(
 }
 
 #[uniffi::export]
-/// Polish raw transcript text with Gemini API.
+/// Polish raw transcript text with the selected LLM provider.
 pub fn polish_text(
+    provider: LlmProvider,
     api_key: String,
     raw_text: String,
     context: Option<String>,
 ) -> Result<String, CoreError> {
-    polish::polish_text(&SecretString::from(api_key), &raw_text, context.as_deref())
+    polish::polish_text(
+        provider,
+        &SecretString::from(api_key),
+        &raw_text,
+        context.as_deref(),
+    )
 }
 
 #[uniffi::export]
-/// Polish raw transcript text with Gemini API.
+/// Polish raw transcript text with the selected LLM provider.
 ///
 /// Supports cooperative cancellation using a shared cancellation token.
 pub fn polish_text_cancellable(
+    provider: LlmProvider,
     api_key: String,
     raw_text: String,
     context: Option<String>,
     cancellation_token: Arc<CancellationToken>,
 ) -> Result<String, CoreError> {
     polish::polish_text_with_cancellation(
+        provider,
         &SecretString::from(api_key),
         &raw_text,
         context.as_deref(),
@@ -111,32 +128,33 @@ pub fn warmup_groq_connection() -> Result<(), CoreError> {
     http_client::warmup_groq_connection()
 }
 
-/// Warm up TLS connection to Gemini API
+/// Warm up TLS connection to the selected LLM provider.
 ///
 /// Call this at the start of recording to eliminate TLS handshake latency.
-/// See [`http_client::warmup_gemini_connection`] for detailed timing considerations.
 ///
 /// # Important
 /// - The connection pool has a 300-second idle timeout
 /// - For long recording sessions, consider re-warming before polish
 /// - This should be called immediately before or at the start of recording
 #[uniffi::export]
-/// Warm up TLS connection to Gemini API.
-pub fn warmup_gemini_connection() -> Result<(), CoreError> {
-    http_client::warmup_gemini_connection()
+/// Warm up TLS connection to the selected LLM provider.
+pub fn warmup_llm_connection(provider: LlmProvider) -> Result<(), CoreError> {
+    http_client::warmup_llm_connection(provider)
 }
 
-/// Process text with LLM (Gemini API)
+/// Process text with the selected LLM provider.
 /// Generic function for processing text with custom prompts
 #[uniffi::export]
-/// Process arbitrary text with Gemini API and optional system instruction.
+/// Process arbitrary text with the selected LLM provider and optional system instruction.
 pub fn process_text_with_llm(
+    provider: LlmProvider,
     api_key: String,
     prompt: String,
     system_instruction: Option<String>,
     temperature: Option<f32>,
 ) -> Result<String, CoreError> {
     llm_processor::process_text_with_llm(
+        provider,
         &SecretString::from(api_key),
         &prompt,
         system_instruction.as_deref(),
@@ -145,10 +163,11 @@ pub fn process_text_with_llm(
 }
 
 #[uniffi::export]
-/// Process arbitrary text with Gemini API and optional system instruction.
+/// Process arbitrary text with the selected LLM provider and optional system instruction.
 ///
 /// Supports cooperative cancellation using a shared cancellation token.
 pub fn process_text_with_llm_cancellable(
+    provider: LlmProvider,
     api_key: String,
     prompt: String,
     system_instruction: Option<String>,
@@ -156,6 +175,7 @@ pub fn process_text_with_llm_cancellable(
     cancellation_token: Arc<CancellationToken>,
 ) -> Result<String, CoreError> {
     llm_processor::process_text_with_llm_with_cancellation(
+        provider,
         &SecretString::from(api_key),
         &prompt,
         system_instruction.as_deref(),

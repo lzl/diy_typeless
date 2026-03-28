@@ -1,15 +1,15 @@
 //! Diagnostic commands for CLI
 
 use anyhow::{anyhow, Context, Result};
-use diy_typeless_core::{start_recording, stop_recording, CancellationToken, CoreError};
+use diy_typeless_core::{start_recording, stop_recording, CancellationToken, CoreError, LlmProvider};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use crate::commands::utils::{
-    ensure_flac_bytes, format_duration, print_binary_status, print_key_status, resolve_gemini_key,
-    resolve_groq_key, resolve_output_dir, timestamp,
+    ensure_flac_bytes, format_duration, print_binary_status, print_key_status, resolve_groq_key,
+    resolve_llm_key, resolve_output_dir, timestamp,
 };
 
 /// Run environment diagnostics
@@ -29,6 +29,7 @@ pub(crate) fn run_diagnose_env() -> Result<()> {
 
     print_key_status("GROQ_API_KEY");
     print_key_status("GEMINI_API_KEY");
+    print_key_status("OPENAI_API_KEY");
 
     print_binary_status("pbcopy");
     print_binary_status("tccutil");
@@ -78,13 +79,14 @@ pub(crate) fn run_diagnose_audio(duration_seconds: u64, output: Option<PathBuf>)
 /// Run LLM diagnostics
 pub(crate) fn run_diagnose_llm(
     prompt: String,
-    gemini_key: Option<String>,
+    provider: LlmProvider,
+    llm_key: Option<String>,
     system_instruction: Option<String>,
     temperature: Option<f32>,
     cancel_immediately: bool,
 ) -> Result<()> {
     let use_placeholder_key = cancel_immediately
-        && match gemini_key.as_deref().map(str::trim) {
+        && match llm_key.as_deref().map(str::trim) {
             Some(value) => value.is_empty(),
             None => true,
         };
@@ -93,7 +95,9 @@ pub(crate) fn run_diagnose_llm(
         "cancelled-before-request".to_string()
     } else {
         use secrecy::ExposeSecret;
-        resolve_gemini_key(gemini_key)?.expose_secret().to_string()
+        resolve_llm_key(provider, llm_key)?
+            .expose_secret()
+            .to_string()
     };
 
     let token = CancellationToken::new();
@@ -106,6 +110,7 @@ pub(crate) fn run_diagnose_llm(
 
     let start = Instant::now();
     let result = diy_typeless_core::process_text_with_llm_cancellable(
+        provider,
         api_key,
         prompt,
         system_instruction,
@@ -136,7 +141,8 @@ pub(crate) fn run_diagnose_pipeline(
     file: PathBuf,
     output_dir: Option<PathBuf>,
     groq_key: Option<String>,
-    gemini_key: Option<String>,
+    provider: LlmProvider,
+    llm_key: Option<String>,
     language: Option<String>,
     transcribe_only: bool,
     context: Option<String>,
@@ -180,11 +186,15 @@ pub(crate) fn run_diagnose_pipeline(
         return Ok(());
     }
 
-    let gemini_key = resolve_gemini_key(gemini_key)?;
+    let llm_key = resolve_llm_key(provider, llm_key)?;
     let polish_start = Instant::now();
-    let polished_text =
-        diy_typeless_core::polish_text(gemini_key.expose_secret().to_string(), raw_text, context)
-            .context("Polish step failed")?;
+    let polished_text = diy_typeless_core::polish_text(
+        provider,
+        llm_key.expose_secret().to_string(),
+        raw_text,
+        context,
+    )
+    .context("Polish step failed")?;
     let polish_elapsed = polish_start.elapsed();
     let polished_path = output_dir.join(format!("{}_polished.txt", base));
     fs::write(&polished_path, &polished_text)?;

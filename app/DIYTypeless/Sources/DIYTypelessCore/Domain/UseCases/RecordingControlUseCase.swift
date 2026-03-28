@@ -2,5 +2,5 @@ import Foundation
 
 public protocol RecordingControlUseCaseProtocol: Sendable {
     func startRecording() async throws
-    func warmupConnections() async
+    func warmupConnections(llmProvider: ApiProvider) async
 }

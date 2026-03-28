@@ -17,8 +17,10 @@ struct ProviderConsoleLink: View {
                     .underline(isHovered)
             }
             .font(.system(size: 13, weight: .medium))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onHover { isHovered in
             self.isHovered = isHovered
             if isHovered {

@@ -13,8 +13,9 @@ struct ValidationStatusView: View {
         case .validating:
             HStack(spacing: 7) {
                 ProgressView()
-                    .scaleEffect(0.65)
                     .progressViewStyle(CircularProgressViewStyle(tint: .brandAccent))
+                    .controlSize(.small)
+                    .frame(width: 12, height: 12)
                 Text("Validating...")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.textSecondary)
