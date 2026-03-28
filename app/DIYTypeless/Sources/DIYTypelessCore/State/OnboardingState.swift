@@ -227,9 +227,12 @@ public final class OnboardingState {
         guard provider.isLLMProvider else { return }
         guard selectedLLMProvider != provider else { return }
 
+        let shouldPreserveCurrentStep = step == .llmProvider
         selectedLLMProvider = provider
         preferredLLMProviderRepository.saveProvider(provider)
-        syncStep()
+        if !shouldPreserveCurrentStep {
+            syncStep()
+        }
         revalidationSessionID += 1
         revalidateStoredKeys(sessionID: revalidationSessionID)
     }

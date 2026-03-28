@@ -152,6 +152,61 @@ final class OnboardingStateTests: XCTestCase {
         XCTAssertEqual(sut.activeLLMValidation, .success)
     }
 
+    func testSelectLLMProvider_whenUserIsOnProviderStepAndTargetProviderIsAlreadyValidated_staysOnProviderStep() async {
+        UserDefaults.standard.set(true, forKey: hasCompletedWelcomeKey)
+
+        let permissionRepository = MockPermissionRepository(
+            currentStatus: PermissionStatus(accessibility: true, microphone: true)
+        )
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq-key"
+        apiKeyRepository.keys[.gemini] = "gemini-key"
+        apiKeyRepository.keys[.openai] = "openai-key"
+        let providerRepository = MockPreferredLLMProviderRepository(provider: .gemini)
+
+        let (sut, _) = makeSUT(
+            permissionRepository: permissionRepository,
+            apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: providerRepository
+        )
+        sut.step = .llmProvider
+
+        sut.selectLLMProvider(.openai)
+        await Task.yield()
+
+        XCTAssertEqual(sut.selectedLLMProvider, .openai)
+        XCTAssertEqual(sut.step, .llmProvider)
+        XCTAssertEqual(sut.activeLLMValidation, .success)
+        XCTAssertTrue(sut.canProceed)
+    }
+
+    func testSelectLLMProvider_whenUserIsOnProviderStepAndTargetProviderHasNoKey_staysOnProviderStepAndDisablesContinue() async {
+        UserDefaults.standard.set(true, forKey: hasCompletedWelcomeKey)
+
+        let permissionRepository = MockPermissionRepository(
+            currentStatus: PermissionStatus(accessibility: true, microphone: true)
+        )
+        let apiKeyRepository = MockApiKeyRepository()
+        apiKeyRepository.keys[.groq] = "groq-key"
+        apiKeyRepository.keys[.gemini] = "gemini-key"
+        let providerRepository = MockPreferredLLMProviderRepository(provider: .gemini)
+
+        let (sut, _) = makeSUT(
+            permissionRepository: permissionRepository,
+            apiKeyRepository: apiKeyRepository,
+            preferredLLMProviderRepository: providerRepository
+        )
+        sut.step = .llmProvider
+
+        sut.selectLLMProvider(.openai)
+        await Task.yield()
+
+        XCTAssertEqual(sut.selectedLLMProvider, .openai)
+        XCTAssertEqual(sut.step, .llmProvider)
+        XCTAssertEqual(sut.activeLLMValidation, .idle)
+        XCTAssertFalse(sut.canProceed)
+    }
+
     func testEditingKey_resetsValidationStateToIdle() async {
         let (sut, _) = makeSUT()
         sut.groqKey = "first"
