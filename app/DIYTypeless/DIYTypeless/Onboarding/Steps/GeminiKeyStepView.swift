@@ -35,8 +35,8 @@ struct GeminiKeyStepView: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "LLM Provider",
-            subtitle: "Choose where polishing and text commands should run."
+            title: "AI Provider",
+            subtitle: "Powers text polishing and smart commands."
         ) {
             OnboardingIconBadge(systemName: "sparkles")
         } content: {

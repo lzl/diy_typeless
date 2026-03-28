@@ -18,7 +18,7 @@ public enum ApiProvider: String, Sendable, CaseIterable {
         case .groq:
             return "Groq"
         case .gemini:
-            return "Google AI Studio"
+            return "Google (Gemini)"
         case .openai:
             return "OpenAI"
         }
