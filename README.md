@@ -37,6 +37,9 @@ cargo run -p diy_typeless_cli -- full --duration-seconds 4
 
 # Verify macOS app build without launching
 ./scripts/dev-loop-build.sh --testing
+
+# Codex-compatible local build/run entrypoint
+./script/build_and_run.sh --verify
 ```
 
 For full CLI diagnostics, debug loops, and agent/developer workflow rules, see [AGENTS.md](AGENTS.md).
