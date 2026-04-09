@@ -350,6 +350,14 @@ ContentView()
 
 When working with the macOS app, use `xcodebuild` command line tool instead of opening the Xcode GUI. This enables automated error collection and debugging.
 
+For Codex app integration, the default run entrypoint is:
+
+```bash
+./script/build_and_run.sh
+```
+
+This wrapper delegates to `./scripts/dev-loop-build.sh`, preserves the existing install path under `~/Applications`, and adds standard `--debug`, `--logs`, `--telemetry`, and `--verify` modes expected by shell-first macOS build/run tooling.
+
 ### Quick Build Verification
 
 To verify the app builds successfully without launching it or modifying permissions:
